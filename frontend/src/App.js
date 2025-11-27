@@ -378,7 +378,7 @@ const App = () => {
         showToast('Erro ao salvar lead', 'error');
         return;
       }
-      await loadLeads();
+      await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
       showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
@@ -399,7 +399,7 @@ const App = () => {
         showToast('Erro ao excluir lead', 'error');
         return;
       }
-      await loadLeads();
+      await Promise.all([loadLeads(), loadStats()]);
       showToast('Lead excluído', 'success');
     } catch (err) {
       console.error('Erro ao excluir lead:', err);
@@ -440,7 +440,7 @@ const App = () => {
         showToast(data.error || 'Erro ao atualizar contato', 'error');
         return;
       }
-      await loadLeads();
+      await Promise.all([loadLeads(), loadStats()]);
       showToast('Contato marcado como feito', 'success');
     } catch (err) {
       console.error('Erro ao atualizar contato:', err);
@@ -987,6 +987,7 @@ const App = () => {
                 <tr className="border-b text-left text-slate-500">
                   <th className="py-2 px-2">Nome</th>
                   <th className="py-2 px-2">Email</th>
+                  <th className="py-2 px-2">Telefone</th>
                   <th className="py-2 px-2">Canal</th>
                   <th className="py-2 px-2">Status</th>
                   <th className="py-2 px-2">Responsável</th>
@@ -998,6 +999,7 @@ const App = () => {
                   <tr key={lead.id} className="border-b last:border-none">
                     <td className="py-2 px-2">{lead.name}</td>
                     <td className="py-2 px-2">{lead.email}</td>
+                    <td className="py-2 px-2">{lead.phone || '-'}</td>
                     <td className="py-2 px-2">{lead.channel_name || '-'}</td>
                     <td className="py-2 px-2">{lead.status}</td>
                     <td className="py-2 px-2">
@@ -1022,7 +1024,7 @@ const App = () => {
                 {filteredLeads.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-4 text-center text-slate-500 text-xs"
                     >
                       Nenhum lead cadastrado
@@ -1065,6 +1067,19 @@ const App = () => {
                     value={leadForm.email}
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, email: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Telefone
+                  </label>
+                  <input
+                    type="text"
+                    value={leadForm.phone || ''}
+                    onChange={(e) =>
+                      setLeadForm({ ...leadForm, phone: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
