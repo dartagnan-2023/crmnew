@@ -29,9 +29,22 @@ let pool = null;
 const initPool = async () => {
   if (pool) return pool;
   const url = new URL(DATABASE_URL);
-  const { address } = await dns.lookup(url.hostname, { family: 4 });
+  let host = url.hostname;
+
+  try {
+    const addresses = await dns.lookup(url.hostname, { all: true });
+    const ipv4 = addresses.find((a) => a.family === 4);
+    if (ipv4) {
+      host = ipv4.address;
+    } else if (addresses[0]) {
+      host = addresses[0].address; // fallback (pode ser IPv6)
+    }
+  } catch (err) {
+    console.warn('Aviso: nao foi possivel resolver IPv4, usando hostname direto', err.message);
+  }
+
   pool = new Pool({
-    host: address,
+    host,
     port: Number(url.port) || 5432,
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
