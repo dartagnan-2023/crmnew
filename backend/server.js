@@ -1,15 +1,14 @@
 // ===============================================
-// BACKEND - server.js
+// BACKEND - server.js (Postgres/Supabase)
 // ===============================================
 // Dependencias:
-// npm init -y
-// npm install express cors bcryptjs jsonwebtoken sqlite3 dotenv
+// npm install express cors bcryptjs jsonwebtoken pg dotenv
 
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
@@ -18,451 +17,333 @@ const JWT_SECRET = process.env.JWT_SECRET || 'seu_secret_key_super_seguro_aqui';
 const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
+const DATABASE_URL = process.env.DATABASE_URL;
 
-// Middlewares
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL nao definido. Configure a URL do Postgres/Supabase.');
+  process.exit(1);
+}
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
 app.use(cors());
 app.use(express.json());
-
-// Database Setup
-const db = new sqlite3.Database('./crm.db', (err) => {
-  if (err) console.error('Erro ao conectar ao banco:', err);
-  else console.log('Conectado ao banco de dados SQLite');
-});
-
-// Utilitario para garantir colunas em tabelas existentes (migrations simples)
-const ensureColumn = (table, columnName, definition) => {
-  db.all(`PRAGMA table_info(${table})`, (err, rows) => {
-    if (err) {
-      console.error(`Erro ao inspecionar tabela ${table}:`, err);
-      return;
-    }
-    const cols = rows.map((r) => r.name);
-    if (!cols.includes(columnName)) {
-      db.run(`ALTER TABLE ${table} ADD COLUMN ${definition}`, (alterErr) => {
-        if (alterErr) {
-          console.error(`Erro ao adicionar coluna ${columnName} em ${table}:`, alterErr);
-        }
-      });
-    }
-  });
-};
-
-// Gancho futuro: estrutura basica de alerta de agenda via WhatsApp (nao envia nada agora)
-const buildAgendaAlertPayload = (user, agendaItem) => ({
-  userId: user?.id,
-  phone: user?.phone,
-  name: user?.name,
-  agendaItem,
-});
 
 const normalizeValue = (val) => {
   const num = Number(val);
   return Number.isFinite(num) ? num : 0;
 };
 
-// Criar tabelas e dados padrao
-db.serialize(() => {
-  // Tabela de usuarios
-  db.run(`
+const query = async (text, params = []) => {
+  const client = await pool.connect();
+  try {
+    return await client.query(text, params);
+  } finally {
+    client.release();
+  }
+};
+
+// Inicializar schema
+const ensureSchema = async () => {
+  await query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       phone TEXT,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'vendedor',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
-  // Garantir colunas extras em bancos ja existentes
-  ensureColumn('users', 'phone', 'phone TEXT');
-
-  // Tabela de canais
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS channels (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
-      active INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+      active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
-  // Tabela de leads
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS leads (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       contact TEXT,
       owner TEXT,
       origin TEXT,
       stage_detail TEXT,
-      next_contact TEXT,
+      next_contact DATE,
       email TEXT NOT NULL,
       phone TEXT,
-      channel_id INTEGER,
+      channel_id INTEGER REFERENCES channels(id),
       campaign TEXT,
       status TEXT DEFAULT 'novo',
       value REAL DEFAULT 0,
       notes TEXT,
-      user_id INTEGER,
-      is_private INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (channel_id) REFERENCES channels(id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
+      user_id INTEGER REFERENCES users(id),
+      is_private BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
-  // Garantir colunas extras em bancos ja existentes
-  ensureColumn('leads', 'contact', 'contact TEXT');
-  ensureColumn('leads', 'owner', 'owner TEXT');
-  ensureColumn('leads', 'origin', 'origin TEXT');
-  ensureColumn('leads', 'stage_detail', 'stage_detail TEXT');
-  ensureColumn('leads', 'next_contact', 'next_contact TEXT');
-  ensureColumn('leads', 'is_private', 'is_private INTEGER DEFAULT 0');
+  // Colunas idempotentes
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS value REAL DEFAULT 0;`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT FALSE;`);
+  await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`);
+};
 
-  // Inserir canais padrao
-  db.get('SELECT COUNT(*) as count FROM channels', (err, row) => {
-    if (err) {
-      console.error('Erro ao contar canais:', err);
-      return;
+const seedDefaults = async () => {
+  const channels = ['Google Ads', 'Facebook Ads', 'Instagram Ads', 'LinkedIn Ads', 'TikTok Ads'];
+  const count = await query('SELECT COUNT(*) AS count FROM channels');
+  if (Number(count.rows[0].count) === 0) {
+    for (const c of channels) {
+      await query('INSERT INTO channels (name) VALUES ($1)', [c]);
     }
-    if ((row?.count || 0) === 0) {
-      const channels = ['Google Ads', 'Facebook Ads', 'Instagram Ads', 'LinkedIn Ads', 'TikTok Ads'];
-      const stmt = db.prepare('INSERT INTO channels (name) VALUES (?)');
-      channels.forEach((channel) => stmt.run(channel));
-      stmt.finalize();
-      console.log('Canais padrao inseridos');
-    }
-  });
+    console.log('Canais padrao inseridos');
+  }
 
-  // Garantir admin padrao
-  db.get('SELECT id, role, phone FROM users WHERE email = ?', [ADMIN_EMAIL], async (err, row) => {
-    if (err) {
-      console.error('Erro ao garantir admin padrao:', err);
-      return;
-    }
+  const adminRow = await query('SELECT id, role, phone FROM users WHERE email = $1', [ADMIN_EMAIL]);
+  if (adminRow.rowCount > 0) {
+    const admin = adminRow.rows[0];
+    if (admin.role !== 'admin') await query('UPDATE users SET role = $1 WHERE id = $2', ['admin', admin.id]);
+    if (!admin.phone) await query('UPDATE users SET phone = $1 WHERE id = $2', [ADMIN_DEFAULT_PHONE, admin.id]);
+    return;
+  }
 
-    if (row) {
-      if (row.role !== 'admin') {
-        db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', row.id]);
-      }
-      if (!row.phone) {
-        db.run('UPDATE users SET phone = ? WHERE id = ?', [ADMIN_DEFAULT_PHONE, row.id]);
-      }
-      return;
-    }
+  const hashed = await bcrypt.hash(ADMIN_DEFAULT_PASSWORD, 10);
+  await query(
+    'INSERT INTO users (name, phone, email, password, role) VALUES ($1,$2,$3,$4,$5)',
+    ['Marketing', ADMIN_DEFAULT_PHONE, ADMIN_EMAIL, hashed, 'admin']
+  );
+  console.log('Admin padrao criado para', ADMIN_EMAIL);
+};
 
-    try {
-      const hashed = await bcrypt.hash(ADMIN_DEFAULT_PASSWORD, 10);
-      db.run(
-        'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-        ['Marketing', ADMIN_DEFAULT_PHONE, ADMIN_EMAIL, hashed, 'admin'],
-        function (insertErr) {
-          if (insertErr) {
-            console.error('Erro ao criar admin padrao:', insertErr);
-          } else {
-            console.log('Admin padrao criado para', ADMIN_EMAIL);
-          }
-        }
-      );
-    } catch (hashErr) {
-      console.error('Erro ao gerar senha do admin padrao:', hashErr);
-    }
-  });
+const bootstrap = async () => {
+  await ensureSchema();
+  await seedDefaults();
+};
+
+bootstrap().catch((err) => {
+  console.error('Erro ao inicializar schema:', err);
+  process.exit(1);
 });
 
-// Middleware de autenticacao
+// Middlewares de auth
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Token nao fornecido' });
-  }
-
+  if (!token) return res.status(401).json({ error: 'Token nao fornecido' });
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Token invalido' });
-    }
+    if (err) return res.status(403).json({ error: 'Token invalido' });
     req.user = user;
     next();
   });
 };
 
-// Middleware para rotas de admin
-const ensureAdmin = (req, res, next) => {
-  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, row) => {
-    if (err || !row) {
-      return res.status(403).json({ error: 'Permissao negada' });
-    }
-    if (row.role !== 'admin') {
+const ensureAdmin = async (req, res, next) => {
+  try {
+    const row = await query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    if (row.rowCount === 0 || row.rows[0].role !== 'admin') {
       return res.status(403).json({ error: 'Apenas administradores podem executar esta acao' });
     }
     next();
-  });
+  } catch {
+    return res.status(403).json({ error: 'Permissao negada' });
+  }
 };
 
 // ===============================================
-// ROTAS DE AUTENTICACAO
+// AUTENTICACAO
 // ===============================================
 
-// Registro de novo usuario
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
-
     if (!name || !email || !phone || !password) {
       return res.status(400).json({ error: 'Nome, email, telefone e senha sao obrigatorios' });
     }
+    if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter no minimo 6 caracteres' });
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Senha deve ter no minimo 6 caracteres' });
-    }
+    const existing = await query('SELECT 1 FROM users WHERE email = $1', [email]);
+    if (existing.rowCount > 0) return res.status(400).json({ error: 'Email ja cadastrado' });
 
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao buscar usuario' });
-      }
-      if (row) {
-        return res.status(400).json({ error: 'Email ja cadastrado' });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      db.run(
-        'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-        [name, phone, email, hashedPassword, 'vendedor'],
-        function (insertErr) {
-          if (insertErr) {
-            return res.status(500).json({ error: 'Erro ao criar usuario' });
-          }
-
-          const token = jwt.sign(
-            { id: this.lastID, email, name, phone, role: 'vendedor' },
-            JWT_SECRET,
-            {
-              expiresIn: '7d',
-            }
-          );
-
-          res.status(201).json({
-            message: 'Usuario criado com sucesso',
-            token,
-            user: { id: this.lastID, name, phone, email, role: 'vendedor' },
-          });
-        }
-      );
-    });
+    const hashed = await bcrypt.hash(password, 10);
+    const inserted = await query(
+      'INSERT INTO users (name, phone, email, password, role) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [name, phone, email, hashed, 'vendedor']
+    );
+    const userId = inserted.rows[0].id;
+    const token = jwt.sign({ id: userId, email, name, phone, role: 'vendedor' }, JWT_SECRET, { expiresIn: '7d' });
+    res.status(201).json({ message: 'Usuario criado com sucesso', token, user: { id: userId, name, phone, email, role: 'vendedor' } });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
+    const userRow = await query('SELECT * FROM users WHERE email = $1', [email]);
+    if (userRow.rowCount === 0) return res.status(401).json({ error: 'Credenciais invalidas' });
+    const user = userRow.rows[0];
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: 'Credenciais invalidas' });
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
-    }
-
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, userRow) => {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao buscar usuario' });
-      }
-      if (!userRow) {
-        return res.status(401).json({ error: 'Credenciais invalidas' });
-      }
-
-      const validPassword = await bcrypt.compare(password, userRow.password);
-      if (!validPassword) {
-        return res.status(401).json({ error: 'Credenciais invalidas' });
-      }
-
-      const token = jwt.sign(
-        {
-          id: userRow.id,
-          email: userRow.email,
-          name: userRow.name,
-          phone: userRow.phone,
-          role: userRow.role,
-        },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      res.json({
-        message: 'Login realizado com sucesso',
-        token,
-        user: {
-          id: userRow.id,
-          name: userRow.name,
-          phone: userRow.phone,
-          email: userRow.email,
-          role: userRow.role,
-        },
-      });
-    });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ message: 'Login realizado com sucesso', token, user: { id: user.id, name: user.name, phone: user.phone, email: user.email, role: user.role } });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
 
-// Verificar token
-app.get('/api/auth/me', authenticateToken, (req, res) => {
-  db.get('SELECT id, name, phone, email, role FROM users WHERE id = ?', [req.user.id], (err, userRow) => {
-    if (err || !userRow) {
-      return res.status(404).json({ error: 'Usuario nao encontrado' });
-    }
-    res.json(userRow);
-  });
-});
-
-// ===============================================
-// ROTAS DE CANAIS
-// ===============================================
-
-// Listar canais
-app.get('/api/channels', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM channels WHERE active = 1 ORDER BY name', (err, channels) => {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao buscar canais' });
-    }
-    res.json(channels);
-  });
-});
-
-// Criar canal
-app.post('/api/channels', authenticateToken, (req, res) => {
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ error: 'Nome do canal e obrigatorio' });
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const row = await query('SELECT id, name, phone, email, role FROM users WHERE id = $1', [req.user.id]);
+    if (row.rowCount === 0) return res.status(404).json({ error: 'Usuario nao encontrado' });
+    res.json(row.rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Erro no servidor' });
   }
-
-  db.run('INSERT INTO channels (name) VALUES (?)', [name], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao criar canal' });
-    }
-    res.status(201).json({ id: this.lastID, name, active: 1 });
-  });
 });
 
-// Atualizar canal
-app.put('/api/channels/:id', authenticateToken, (req, res) => {
+// ===============================================
+// CANAIS
+// ===============================================
+
+app.get('/api/channels', authenticateToken, async (_req, res) => {
+  try {
+    const result = await query('SELECT * FROM channels WHERE active = TRUE ORDER BY name');
+    res.json(result.rows);
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar canais' });
+  }
+});
+
+app.post('/api/channels', authenticateToken, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nome do canal e obrigatorio' });
+  try {
+    const inserted = await query('INSERT INTO channels (name) VALUES ($1) RETURNING id,name,active', [name]);
+    res.status(201).json(inserted.rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Erro ao criar canal' });
+  }
+});
+
+app.put('/api/channels/:id', authenticateToken, async (req, res) => {
   const { name, active } = req.body;
   const { id } = req.params;
-
-  db.run('UPDATE channels SET name = ?, active = ? WHERE id = ?', [name, active, id], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao atualizar canal' });
-    }
+  try {
+    await query('UPDATE channels SET name=$1, active=$2 WHERE id=$3', [name, active, id]);
     res.json({ message: 'Canal atualizado com sucesso' });
-  });
+  } catch {
+    res.status(500).json({ error: 'Erro ao atualizar canal' });
+  }
 });
 
-// Deletar canal (soft delete)
-app.delete('/api/channels/:id', authenticateToken, (req, res) => {
+app.delete('/api/channels/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-
-  db.run('UPDATE channels SET active = 0 WHERE id = ?', [id], function (err) {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao deletar canal' });
-    }
+  try {
+    await query('UPDATE channels SET active=FALSE WHERE id=$1', [id]);
     res.json({ message: 'Canal deletado com sucesso' });
-  });
+  } catch {
+    res.status(500).json({ error: 'Erro ao deletar canal' });
+  }
 });
 
 // ===============================================
-// ROTAS DE LEADS
+// LEADS
 // ===============================================
 
-// Listar leads
-app.get('/api/leads', authenticateToken, (req, res) => {
+app.get('/api/leads', authenticateToken, async (req, res) => {
   const { status, search } = req.query;
+  try {
+    const roleRow = await query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    const isAdmin = roleRow.rows[0]?.role === 'admin';
+    const params = [];
+    let where = 'WHERE 1=1';
 
-  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, userRow) => {
-    if (err || !userRow) {
-      return res.status(500).json({ error: 'Erro ao identificar usuario' });
+    if (!isAdmin) {
+      params.push(req.user.id);
+      where += ` AND (COALESCE(l.is_private, FALSE) = FALSE OR l.user_id = $${params.length})`;
+    }
+    if (status && status !== 'todos') {
+      params.push(status);
+      where += ` AND l.status = $${params.length}`;
+    }
+    if (search) {
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      where += ` AND (l.name ILIKE $${params.length - 2} OR l.email ILIKE $${params.length - 1} OR l.campaign ILIKE $${params.length})`;
     }
 
-    const isAdmin = userRow.role === 'admin';
-
-    let query = `
+    const result = await query(
+      `
       SELECT l.*, c.name as channel_name, u.name as user_name, COALESCE(l.owner, u.name) as responsible_name
       FROM leads l
       LEFT JOIN channels c ON l.channel_id = c.id
       LEFT JOIN users u ON l.user_id = u.id
-      WHERE 1 = 1
-    `;
-    const params = [];
-
-    if (!isAdmin) {
-      query += ' AND (COALESCE(l.is_private, 0) = 0 OR l.user_id = ?)';
-      params.push(req.user.id);
-    }
-
-    if (status && status !== 'todos') {
-      query += ' AND l.status = ?';
-      params.push(status);
-    }
-
-    if (search) {
-      query += ' AND (l.name LIKE ? OR l.email LIKE ? OR l.campaign LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-
-    query += ' ORDER BY l.created_at DESC';
-
-    db.all(query, params, (err2, leads) => {
-      if (err2) {
-        return res.status(500).json({ error: 'Erro ao buscar leads' });
-      }
-      res.json(leads);
-    });
-  });
+      ${where}
+      ORDER BY l.created_at DESC
+    `,
+      params
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar leads' });
+  }
 });
 
-// Criar lead
-app.post('/api/leads', authenticateToken, (req, res) => {
-  const {
-    name,
-    contact,
-    owner,
-    ownerId,
-    origin,
-    stage_detail,
-    next_contact,
-    email,
-    phone,
-    channel_id,
-    campaign,
-    status,
-    value,
-    notes,
-    is_private,
-  } = req.body;
+app.post('/api/leads', authenticateToken, async (req, res) => {
+  try {
+    const {
+      name,
+      contact,
+      owner,
+      ownerId,
+      origin,
+      stage_detail,
+      next_contact,
+      email,
+      phone,
+      channel_id,
+      campaign,
+      status,
+      value,
+      notes,
+      is_private,
+    } = req.body;
 
-  if (!name || !email) {
-    return res.status(400).json({ error: 'Nome e email sao obrigatorios' });
-  }
+    if (!name || !email) return res.status(400).json({ error: 'Nome e email sao obrigatorios' });
 
-  const numericValue = normalizeValue(value);
+    const numericValue = normalizeValue(value);
+    const targetOwnerId = ownerId || req.user.id;
+    const ownerRow = await query('SELECT id,name FROM users WHERE id=$1', [targetOwnerId]);
+    const responsibleName = owner || ownerRow.rows[0]?.name || req.user.name;
+    const responsibleId = ownerRow.rowCount > 0 ? ownerRow.rows[0].id : req.user.id;
 
-  const targetOwnerId = ownerId || req.user.id;
-
-  const insertLead = (responsibleName, responsibleId) => {
-    db.run(
+    const inserted = await query(
       `
-        INSERT INTO leads (
-          name, contact, owner, origin, stage_detail, next_contact,
-          email, phone, channel_id, campaign, status, value, notes, user_id, is_private
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
+      INSERT INTO leads (
+        name, contact, owner, origin, stage_detail, next_contact,
+        email, phone, channel_id, campaign, status, value, notes, user_id, is_private
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      RETURNING *
+    `,
       [
         name,
         contact || null,
@@ -472,400 +353,237 @@ app.post('/api/leads', authenticateToken, (req, res) => {
         next_contact || null,
         email,
         phone,
-        channel_id,
-        campaign,
+        channel_id || null,
+        campaign || null,
         status || 'novo',
         numericValue,
-        notes,
-        responsibleId || req.user.id,
-        is_private ? 1 : 0,
-      ],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ error: 'Erro ao criar lead' });
-        }
-        res.status(201).json({
-          id: this.lastID,
-          name,
-          contact: contact || null,
-          owner: responsibleName || null,
-          origin: origin || null,
-          stage_detail: stage_detail || null,
-          next_contact: next_contact || null,
-          email,
-          phone,
-          channel_id,
-          campaign,
-          status: status || 'novo',
-          value: numericValue,
-          notes,
-          user_id: responsibleId || req.user.id,
-          is_private: is_private ? 1 : 0,
-        });
-      }
+        notes || null,
+        responsibleId,
+        !!is_private,
+      ]
     );
-  };
-
-  db.get('SELECT id, name FROM users WHERE id = ?', [targetOwnerId], (err, ownerRow) => {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao identificar responsavel' });
-    }
-    if (!ownerRow) {
-      return insertLead(req.user.name, req.user.id);
-    }
-    return insertLead(owner || ownerRow.name, ownerRow.id);
-  });
+    res.status(201).json(inserted.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao criar lead' });
+  }
 });
 
-// Atualizar lead
-app.put('/api/leads/:id', authenticateToken, (req, res) => {
-  const {
-    name,
-    contact,
-    owner,
-    ownerId,
-    origin,
-    stage_detail,
-    next_contact,
-    email,
-    phone,
-    channel_id,
-    campaign,
-    status,
-    value,
-    notes,
-    is_private,
-  } = req.body;
-  const { id } = req.params;
+app.put('/api/leads/:id', authenticateToken, async (req, res) => {
+  try {
+    const {
+      name,
+      contact,
+      owner,
+      ownerId,
+      origin,
+      stage_detail,
+      next_contact,
+      email,
+      phone,
+      channel_id,
+      campaign,
+      status,
+      value,
+      notes,
+      is_private,
+    } = req.body;
+    const { id } = req.params;
 
-  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, row) => {
-    if (err || !row) {
-      return res.status(500).json({ error: 'Erro ao identificar usuario' });
+    const roleRow = await query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    const isAdmin = roleRow.rows[0]?.role === 'admin';
+
+    const leadRow = await query('SELECT id, user_id, is_private FROM leads WHERE id = $1', [id]);
+    if (leadRow.rowCount === 0) return res.status(404).json({ error: 'Lead nao encontrado' });
+    const lead = leadRow.rows[0];
+
+    if (!isAdmin && lead.is_private && lead.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Lead privado de outro usuario' });
     }
-    const isAdmin = row.role === 'admin';
 
-    db.get('SELECT id, user_id, is_private FROM leads WHERE id = ?', [id], (leadErr, leadRow) => {
-      if (leadErr) {
-        return res.status(500).json({ error: 'Erro ao carregar lead' });
-      }
-      if (!leadRow) {
-        return res.status(404).json({ error: 'Lead nao encontrado' });
-      }
-      if (!isAdmin && leadRow.is_private && leadRow.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Lead privado de outro usuario' });
-      }
+    const numericValue = normalizeValue(value);
+    const targetOwnerId = ownerId || lead.user_id || req.user.id;
+    const ownerRow = await query('SELECT id,name FROM users WHERE id = $1', [targetOwnerId]);
+    const responsibleName = owner || ownerRow.rows[0]?.name || req.user.name;
+    const responsibleId = ownerRow.rowCount > 0 ? ownerRow.rows[0].id : req.user.id;
 
-      const numericValue = normalizeValue(value);
-      const targetOwnerId = ownerId || leadRow.user_id || req.user.id;
+    const result = await query(
+      `
+      UPDATE leads
+      SET name=$1, contact=$2, owner=$3, origin=$4, stage_detail=$5, next_contact=$6,
+          email=$7, phone=$8, channel_id=$9, campaign=$10,
+          status=$11, value=$12, notes=$13, is_private=$14, updated_at=NOW(), user_id=$15
+      WHERE id=$16
+      RETURNING *
+    `,
+      [
+        name,
+        contact || null,
+        responsibleName || null,
+        origin || null,
+        stage_detail || null,
+        next_contact || null,
+        email,
+        phone,
+        channel_id || null,
+        campaign || null,
+        status,
+        numericValue,
+        notes || null,
+        !!is_private,
+        responsibleId,
+        id,
+      ]
+    );
 
-      const runUpdate = (responsibleName, responsibleId) => {
-        const query = `
-          UPDATE leads
-          SET name = ?, contact = ?, owner = ?, origin = ?, stage_detail = ?, next_contact = ?,
-              email = ?, phone = ?, channel_id = ?, campaign = ?,
-              status = ?, value = ?, notes = ?, is_private = ?, updated_at = CURRENT_TIMESTAMP,
-              user_id = ?
-          WHERE id = ?
-        `;
-
-        const params = [
-          name,
-          contact || null,
-          responsibleName || null,
-          origin || null,
-          stage_detail || null,
-          next_contact || null,
-          email,
-          phone,
-          channel_id,
-          campaign,
-          status,
-          numericValue,
-          notes,
-          is_private ? 1 : 0,
-          responsibleId || leadRow.user_id || req.user.id,
-          id,
-        ];
-
-        db.run(query, params, function (updateErr) {
-          if (updateErr) {
-            return res.status(500).json({ error: 'Erro ao atualizar lead' });
-          }
-          if (this.changes === 0) {
-            return res.status(404).json({ error: 'Lead nao encontrado' });
-          }
-          res.json({ message: 'Lead atualizado com sucesso' });
-        });
-      };
-
-      db.get('SELECT id, name FROM users WHERE id = ?', [targetOwnerId], (ownerErr, ownerRow) => {
-        if (ownerErr) {
-          return res.status(500).json({ error: 'Erro ao identificar responsavel' });
-        }
-        if (!ownerRow) {
-          return runUpdate(req.user.name, req.user.id);
-        }
-        return runUpdate(owner || ownerRow.name, ownerRow.id);
-      });
-    });
-  });
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Lead nao encontrado' });
+    res.json({ message: 'Lead atualizado com sucesso' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao atualizar lead' });
+  }
 });
 
-// Deletar lead
-app.delete('/api/leads/:id', authenticateToken, (req, res) => {
+app.delete('/api/leads/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
+  try {
+    const roleRow = await query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    const isAdmin = roleRow.rows[0]?.role === 'admin';
 
-  db.get('SELECT role FROM users WHERE id = ?', [req.user.id], (err, row) => {
-    if (err || !row) {
-      return res.status(500).json({ error: 'Erro ao identificar usuario' });
+    const leadRow = await query('SELECT id, user_id, is_private FROM leads WHERE id = $1', [id]);
+    if (leadRow.rowCount === 0) return res.status(404).json({ error: 'Lead nao encontrado' });
+    const lead = leadRow.rows[0];
+
+    if (!isAdmin && lead.is_private && lead.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Lead privado de outro usuario' });
     }
-    const isAdmin = row.role === 'admin';
 
-    db.get('SELECT id, user_id, is_private FROM leads WHERE id = ?', [id], (leadErr, leadRow) => {
-      if (leadErr) {
-        return res.status(500).json({ error: 'Erro ao carregar lead' });
-      }
-      if (!leadRow) {
-        return res.status(404).json({ error: 'Lead nao encontrado' });
-      }
-      if (!isAdmin && leadRow.is_private && leadRow.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Lead privado de outro usuario' });
-      }
-
-      let query = 'DELETE FROM leads WHERE id = ?';
-      const params = [id];
-
-      if (!isAdmin && leadRow.user_id) {
-        query += ' AND user_id = ?';
-        params.push(req.user.id);
-      }
-
-      db.run(query, params, function (deleteErr) {
-        if (deleteErr) {
-          return res.status(500).json({ error: 'Erro ao deletar lead' });
-        }
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Lead nao encontrado' });
-        }
-        res.json({ message: 'Lead deletado com sucesso' });
-      });
-    });
-  });
+    await query('DELETE FROM leads WHERE id = $1', [id]);
+    res.json({ message: 'Lead deletado com sucesso' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao deletar lead' });
+  }
 });
 
 // ===============================================
-// ROTAS DE USUARIOS
+// USUARIOS
 // ===============================================
 
-// Listar usuarios
-app.get('/api/users', authenticateToken, (req, res) => {
-  db.all('SELECT id, name, phone, email, role FROM users ORDER BY name', [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao buscar usuarios' });
-    }
-    res.json(rows);
-  });
+app.get('/api/users', authenticateToken, async (_req, res) => {
+  try {
+    const result = await query('SELECT id, name, phone, email, role FROM users ORDER BY name');
+    res.json(result.rows);
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar usuarios' });
+  }
 });
 
-// Criar usuario (somente admin)
 app.post('/api/users', authenticateToken, ensureAdmin, async (req, res) => {
   try {
     const { name, phone, email, password, role = 'vendedor' } = req.body;
+    if (!name || !phone || !email || !password) return res.status(400).json({ error: 'Nome, telefone, email e senha sao obrigatorios' });
+    if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
 
-    if (!name || !phone || !email || !password) {
-      return res.status(400).json({ error: 'Nome, telefone, email e senha sao obrigatorios' });
-    }
+    const existing = await query('SELECT 1 FROM users WHERE email = $1', [email]);
+    if (existing.rowCount > 0) return res.status(400).json({ error: 'Email ja cadastrado' });
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
-    }
-
-    db.get('SELECT id FROM users WHERE email = ?', [email], async (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao buscar usuario' });
-      }
-      if (row) {
-        return res.status(400).json({ error: 'Email ja cadastrado' });
-      }
-
-      const hashed = await bcrypt.hash(password, 10);
-      const userRole = role === 'admin' ? 'admin' : 'vendedor';
-
-      db.run(
-        'INSERT INTO users (name, phone, email, password, role) VALUES (?, ?, ?, ?, ?)',
-        [name, phone, email, hashed, userRole],
-        function (insertErr) {
-          if (insertErr) {
-            return res.status(500).json({ error: 'Erro ao criar usuario' });
-          }
-          res.status(201).json({
-            id: this.lastID,
-            name,
-            phone,
-            email,
-            role: userRole,
-          });
-        }
-      );
-    });
+    const hashed = await bcrypt.hash(password, 10);
+    const userRole = role === 'admin' ? 'admin' : 'vendedor';
+    const inserted = await query(
+      'INSERT INTO users (name, phone, email, password, role) VALUES ($1,$2,$3,$4,$5) RETURNING id,name,phone,email,role',
+      [name, phone, email, hashed, userRole]
+    );
+    res.status(201).json(inserted.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Erro no servidor' });
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao criar usuario' });
   }
 });
 
-// Excluir usuario (somente admin)
-app.delete('/api/users/:id', authenticateToken, ensureAdmin, (req, res) => {
+app.delete('/api/users/:id', authenticateToken, ensureAdmin, async (req, res) => {
   const { id } = req.params;
-
-  if (Number(id) === req.user.id) {
-    return res.status(400).json({ error: 'Nao e possivel remover o proprio usuario logado' });
+  if (Number(id) === req.user.id) return res.status(400).json({ error: 'Nao e possivel remover o proprio usuario logado' });
+  try {
+    const row = await query('SELECT role FROM users WHERE id = $1', [id]);
+    if (row.rowCount === 0) return res.status(404).json({ error: 'Usuario nao encontrado' });
+    if (row.rows[0].role === 'admin') return res.status(400).json({ error: 'Nao e possivel remover um administrador' });
+    await query('UPDATE leads SET user_id = NULL WHERE user_id = $1', [id]);
+    await query('DELETE FROM users WHERE id = $1', [id]);
+    res.json({ message: 'Usuario removido com sucesso' });
+  } catch {
+    res.status(500).json({ error: 'Erro ao excluir usuario' });
   }
-
-  db.get('SELECT role FROM users WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao buscar usuario' });
-    }
-    if (!row) {
-      return res.status(404).json({ error: 'Usuario nao encontrado' });
-    }
-    if (row.role === 'admin') {
-      return res.status(400).json({ error: 'Nao e possivel remover um administrador' });
-    }
-
-    db.run('UPDATE leads SET user_id = NULL WHERE user_id = ?', [id]);
-
-    db.run('DELETE FROM users WHERE id = ?', [id], function (deleteErr) {
-      if (deleteErr) {
-        return res.status(500).json({ error: 'Erro ao excluir usuario' });
-      }
-      res.json({ message: 'Usuario removido com sucesso' });
-    });
-  });
 });
 
-// Atualizar dados do proprio usuario
 app.put('/api/users/me', authenticateToken, async (req, res) => {
   try {
     const { name, phone, email, password } = req.body;
+    if (!name || !phone || !email) return res.status(400).json({ error: 'Nome, telefone e email sao obrigatorios' });
 
-    if (!name || !phone || !email) {
-      return res.status(400).json({ error: 'Nome, telefone e email sao obrigatorios' });
+    const existing = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, req.user.id]);
+    if (existing.rowCount > 0) return res.status(400).json({ error: 'Email ja cadastrado' });
+
+    const updates = [name, phone, email];
+    let setClause = 'name = $1, phone = $2, email = $3';
+    let idx = 4;
+    if (password) {
+      if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+      const hashed = await bcrypt.hash(password, 10);
+      updates.push(hashed);
+      setClause += `, password = $${idx++}`;
     }
+    updates.push(req.user.id);
 
-    // Garantir email unico
-    db.get('SELECT id FROM users WHERE email = ? AND id != ?', [email, req.user.id], async (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao validar email' });
-      }
-      if (row) {
-        return res.status(400).json({ error: 'Email ja cadastrado' });
-      }
-
-      const updates = [name, phone, email];
-      let setClause = 'name = ?, phone = ?, email = ?';
-
-      if (password) {
-        if (password.length < 6) {
-          return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
-        }
-        const hashed = await bcrypt.hash(password, 10);
-        setClause += ', password = ?';
-        updates.push(hashed);
-      }
-
-      updates.push(req.user.id);
-
-      db.run(`UPDATE users SET ${setClause} WHERE id = ?`, updates, function (updateErr) {
-        if (updateErr) {
-          return res.status(500).json({ error: 'Erro ao atualizar usuario' });
-        }
-        if (this.changes === 0) {
-          return res.status(404).json({ error: 'Usuario nao encontrado' });
-        }
-
-        db.get('SELECT id, name, phone, email, role FROM users WHERE id = ?', [req.user.id], (getErr, updated) => {
-          if (getErr || !updated) {
-            return res.status(500).json({ error: 'Erro ao carregar usuario atualizado' });
-          }
-
-          const token = jwt.sign(
-            { id: updated.id, email: updated.email, name: updated.name, phone: updated.phone, role: updated.role },
-            JWT_SECRET,
-            { expiresIn: '7d' }
-          );
-
-          res.json({ message: 'Dados atualizados', user: updated, token });
-        });
-      });
-    });
+    await query(`UPDATE users SET ${setClause} WHERE id = $${idx}`, updates);
+    const updated = await query('SELECT id, name, phone, email, role FROM users WHERE id = $1', [req.user.id]);
+    const user = updated.rows[0];
+    const token = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, phone: user.phone, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ message: 'Dados atualizados', user, token });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
 
-// Atualizar usuario (admin pode editar qualquer um)
 app.put('/api/users/:id', authenticateToken, ensureAdmin, async (req, res) => {
   try {
     const { name, phone, email, password, role } = req.body;
     const { id } = req.params;
-
-    if (!name || !phone || !email) {
-      return res.status(400).json({ error: 'Nome, telefone e email sao obrigatorios' });
-    }
+    if (!name || !phone || !email) return res.status(400).json({ error: 'Nome, telefone e email sao obrigatorios' });
 
     const targetId = Number(id);
-    if (!targetId) {
-      return res.status(400).json({ error: 'ID invalido' });
+    if (!targetId) return res.status(400).json({ error: 'ID invalido' });
+
+    const found = await query('SELECT id FROM users WHERE id = $1', [targetId]);
+    if (found.rowCount === 0) return res.status(404).json({ error: 'Usuario nao encontrado' });
+
+    const existing = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, targetId]);
+    if (existing.rowCount > 0) return res.status(400).json({ error: 'Email ja cadastrado' });
+
+    const updates = [name, phone, email];
+    let setClause = 'name = $1, phone = $2, email = $3, role = $4';
+    let idx = 5;
+    const newRole = role === 'admin' ? 'admin' : 'vendedor';
+    updates.push(newRole);
+
+    if (password) {
+      if (password.length < 6) return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+      const hashed = await bcrypt.hash(password, 10);
+      setClause += `, password = $${idx++}`;
+      updates.push(hashed);
     }
+    updates.push(targetId);
 
-    db.get('SELECT id FROM users WHERE id = ?', [targetId], (findErr, found) => {
-      if (findErr || !found) {
-        return res.status(404).json({ error: 'Usuario nao encontrado' });
-      }
-
-      db.get('SELECT id FROM users WHERE email = ? AND id != ?', [email, targetId], async (err, row) => {
-        if (err) {
-          return res.status(500).json({ error: 'Erro ao validar email' });
-        }
-        if (row) {
-          return res.status(400).json({ error: 'Email ja cadastrado' });
-        }
-
-        const updates = [name, phone, email];
-        let setClause = 'name = ?, phone = ?, email = ?';
-        const newRole = role === 'admin' ? 'admin' : 'vendedor';
-        setClause += ', role = ?';
-        updates.push(newRole);
-
-        if (password) {
-          if (password.length < 6) {
-            return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
-          }
-          const hashed = await bcrypt.hash(password, 10);
-          setClause += ', password = ?';
-          updates.push(hashed);
-        }
-
-        updates.push(targetId);
-
-        db.run(`UPDATE users SET ${setClause} WHERE id = ?`, updates, function (updateErr) {
-          if (updateErr) {
-            return res.status(500).json({ error: 'Erro ao atualizar usuario' });
-          }
-          if (this.changes === 0) {
-            return res.status(404).json({ error: 'Usuario nao encontrado' });
-          }
-
-          db.get('SELECT id, name, phone, email, role FROM users WHERE id = ?', [targetId], (getErr, updated) => {
-            if (getErr || !updated) {
-              return res.status(500).json({ error: 'Erro ao carregar usuario atualizado' });
-            }
-            res.json({ message: 'Usuario atualizado', user: updated });
-          });
-        });
-      });
-    });
+    await query(`UPDATE users SET ${setClause} WHERE id = $${idx}`, updates);
+    const updated = await query('SELECT id, name, phone, email, role FROM users WHERE id = $1', [targetId]);
+    res.json({ message: 'Usuario atualizado', user: updated.rows[0] });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
@@ -874,103 +592,59 @@ app.put('/api/users/:id', authenticateToken, ensureAdmin, async (req, res) => {
 // ESTATISTICAS
 // ===============================================
 
-app.get('/api/stats', authenticateToken, (req, res) => {
-  const isAdminQuery = req.query.scope === 'all' && req.user?.role === 'admin';
-  const targetUserId = req.user.role === 'admin' && req.query.userId ? Number(req.query.userId) : req.user.id;
+app.get('/api/stats', authenticateToken, async (req, res) => {
+  try {
+    const isAdminQuery = req.query.scope === 'all' && req.user?.role === 'admin';
+    const targetUserId = req.user.role === 'admin' && req.query.userId ? Number(req.query.userId) : req.user.id;
 
-  const filterClause = isAdminQuery ? '' : 'WHERE user_id = ?';
-  const params = isAdminQuery ? [] : [targetUserId];
+    const whereUser = isAdminQuery ? '' : 'WHERE user_id = $1';
+    const params = isAdminQuery ? [] : [targetUserId];
 
-  const queries = {
-    total: `SELECT COUNT(*) as count FROM leads ${filterClause}`,
-    novos: `SELECT COUNT(*) as count FROM leads ${filterClause ? `${filterClause} AND status = 'novo'` : "WHERE status = 'novo'"}`,
-    convertidos: `SELECT COUNT(*) as count FROM leads ${filterClause ? `${filterClause} AND status = 'ganho'` : "WHERE status = 'ganho'"}`,
-    valorTotal: `SELECT SUM(value) as total FROM leads ${filterClause ? `${filterClause} AND status = 'ganho'` : "WHERE status = 'ganho'"}`,
-  };
+    const total = await query(`SELECT COUNT(*) AS count FROM leads ${whereUser}`, params);
+    const novos = await query(
+      `SELECT COUNT(*) AS count FROM leads ${whereUser ? `${whereUser} AND status = 'novo'` : "WHERE status = 'novo'"}`,
+      params
+    );
+    const convertidos = await query(
+      `SELECT COUNT(*) AS count FROM leads ${whereUser ? `${whereUser} AND status = 'ganho'` : "WHERE status = 'ganho'"}`,
+      params
+    );
+    const valorTotal = await query(
+      `SELECT COALESCE(SUM(value),0) AS total FROM leads ${
+        whereUser ? `${whereUser} AND status = 'ganho'` : "WHERE status = 'ganho'"
+      }`,
+      params
+    );
 
-  const stats = {};
-  let completed = 0;
-
-  Object.keys(queries).forEach((key) => {
-    db.get(queries[key], params, (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: 'Erro ao calcular estatisticas' });
-      }
-      if (key === 'valorTotal') {
-        stats[key] = row?.total || 0;
-      } else {
-        stats[key] = row?.count || 0;
-      }
-
-      completed++;
-      if (completed === Object.keys(queries).length) {
-        stats.taxaConversao = stats.total > 0 ? ((stats.convertidos / stats.total) * 100).toFixed(1) : 0;
-        res.json(stats);
-      }
-    });
-  });
+    const stats = {
+      total: Number(total.rows[0].count || 0),
+      novos: Number(novos.rows[0].count || 0),
+      convertidos: Number(convertidos.rows[0].count || 0),
+      valorTotal: Number(valorTotal.rows[0].total || 0),
+    };
+    stats.taxaConversao = stats.total > 0 ? ((stats.convertidos / stats.total) * 100).toFixed(1) : 0;
+    res.json(stats);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao calcular estatisticas' });
+  }
 });
 
-// Performance por campanha
-app.get('/api/campaigns/performance', authenticateToken, (req, res) => {
-  const query = `
-    SELECT 
-      campaign,
-      COUNT(*) as total,
-      SUM(CASE WHEN status = 'ganho' THEN 1 ELSE 0 END) as convertidos,
-      SUM(CASE WHEN status = 'ganho' THEN value ELSE 0 END) as valor
-    FROM leads
-    WHERE user_id = ? AND campaign IS NOT NULL AND campaign != ''
-    GROUP BY campaign
-    ORDER BY total DESC
-  `;
-
-  db.all(query, [req.user.id], (err, campaigns) => {
-    if (err) {
-      return res.status(500).json({ error: 'Erro ao buscar performance' });
-    }
-    res.json(campaigns);
-  });
-});
-
-// Rota simples para visualizar o backend no navegador
-app.get('/', (req, res) => {
+// ===============================================
+// STATUS
+// ===============================================
+app.get('/', (_req, res) => {
   res.send(`
     <html>
-      <head>
-        <title>CRM Backend API</title>
-        <style>
-          body { font-family: sans-serif; padding: 24px; background: #0f172a; color: #e5e7eb; }
-          .card { max-width: 640px; margin: 0 auto; background: #020617; border-radius: 16px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(15,23,42,0.8); border: 1px solid #1e293b; }
-          h1 { font-size: 24px; margin-bottom: 12px; }
-          p { font-size: 14px; margin: 6px 0; }
-          code { background: #020617; padding: 2px 6px; border-radius: 4px; color: #38bdf8; }
-          ul { margin-top: 12px; padding-left: 18px; font-size: 13px; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>CRM Backend API</h1>
-          <p>Servidor rodando. Esta API e usada pelo frontend React.</p>
-          <p>Acesse a interface do sistema em <code>http://localhost:3000</code> (frontend).</p>
-          <ul>
-            <li>Leads: <code>GET /api/leads</code></li>
-            <li>Usuarios: <code>GET /api/users</code></li>
-            <li>Canais: <code>GET /api/channels</code></li>
-          </ul>
-        </div>
+      <head><title>CRM Backend API</title></head>
+      <body style="font-family: sans-serif; padding: 24px;">
+        <h1>CRM Backend API</h1>
+        <p>Servidor rodando. API pronta.</p>
       </body>
     </html>
   `);
 });
 
-// Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
-
-// ===============================================
-// ARQUIVO .env (exemplo)
-// ===============================================
-// PORT=3001
-// JWT_SECRET=seu_secret_key_super_seguro_mude_isso_em_producao
