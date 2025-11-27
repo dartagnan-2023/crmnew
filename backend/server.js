@@ -307,13 +307,23 @@ app.delete('/api/channels/:id', authMiddleware, async (req, res) => {
 });
 
 // ===================== LEADS =====================
+// Admin enxerga tudo (ou filtra por userId se enviado).
+// Não-admin vê todos os leads públicos e os privados dele.
 const filterLeadsByUser = (leads, user, query) => {
   if (isAdmin(user)) {
-    if (query.scope === 'all') return leads;
     if (query.userId) return leads.filter((l) => String(l.ownerId) === String(query.userId));
-    return leads.filter((l) => String(l.ownerId) === String(user.id));
+    return leads; // padrão: todos
   }
-  return leads.filter((l) => String(l.ownerId) === String(user.id));
+
+  const userId = String(user.id);
+  return leads.filter((l) => {
+    const isPrivate = String(l.is_private || '') === 'true';
+    const ownerMatch = String(l.ownerId) === userId;
+    // privados só para o dono; públicos para todos
+    if (isPrivate && !ownerMatch) return false;
+    if (query.userId) return String(l.ownerId) === String(query.userId) && (!isPrivate || ownerMatch);
+    return true;
+  });
 };
 
 const hydrateLeads = (leads, channels) => {
