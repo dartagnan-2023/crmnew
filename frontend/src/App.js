@@ -834,6 +834,20 @@ const App = () => {
               R$ {(stats.valorTotal || 0).toLocaleString('pt-BR')}
             </p>
           </div>
+          <div className="bg-white rounded-xl shadow p-4">
+            <p className="text-xs text-slate-500">Perdidos</p>
+            <p className="text-2xl font-bold text-slate-900">{stats.perdidos || 0}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Valor perdido: R$ {(stats.valorPerdido || 0).toLocaleString('pt-BR')}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow p-4">
+            <p className="text-xs text-slate-500">Em negociaÇõÇœo</p>
+            <p className="text-2xl font-bold text-slate-900">{stats.qtdNegociacao || 0}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Valor em neg.: R$ {(stats.valorNegociacao || 0).toLocaleString('pt-BR')}
+            </p>
+          </div>
         </section>
 
         <div className="bg-white rounded-xl shadow p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

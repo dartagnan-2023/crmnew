@@ -456,14 +456,20 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
   ]);
   const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
   const total = filtered.length;
+  const negotiationStatuses = ['negociacao', 'proposta'];
   const statusCount = filtered.reduce(
     (acc, lead) => {
       const status = (lead.status || '').toLowerCase();
       acc[status] = (acc[status] || 0) + 1;
       if (status === 'ganho') acc.valorTotal += Number(lead.value || 0);
+      if (status === 'perdido') acc.valorPerdido += Number(lead.value || 0);
+      if (negotiationStatuses.includes(status)) {
+        acc.qtdNegociacao += 1;
+        acc.valorNegociacao += Number(lead.value || 0);
+      }
       return acc;
     },
-    { valorTotal: 0 }
+    { valorTotal: 0, valorPerdido: 0, qtdNegociacao: 0, valorNegociacao: 0 }
   );
   const ganhos = statusCount.ganho || 0;
   const taxaConversao = total ? Math.round((ganhos / total) * 100) : 0;
@@ -472,6 +478,9 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
     novos: statusCount.novo || 0,
     ganhos,
     perdidos: statusCount.perdido || 0,
+    valorPerdido: statusCount.valorPerdido || 0,
+    qtdNegociacao: statusCount.qtdNegociacao || 0,
+    valorNegociacao: statusCount.valorNegociacao || 0,
     taxaConversao,
     valorTotal: statusCount.valorTotal || 0,
   });
