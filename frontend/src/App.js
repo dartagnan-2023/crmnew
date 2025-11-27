@@ -281,15 +281,19 @@ const App = () => {
   };
 
   const filteredLeads = useMemo(() => {
-    let base = leads;
+    let base = leads.map((l) => ({
+      ...l,
+      _ownerId: l.ownerId ?? l.user_id,
+      _status: (l.status || '').toLowerCase(),
+    }));
     if (ownerFilter === 'me') {
-      base = base.filter((l) => l.user_id === user?.id);
+      base = base.filter((l) => String(l._ownerId) === String(user?.id));
     } else if (ownerFilter !== 'all') {
-      base = base.filter((l) => l.user_id === Number(ownerFilter));
+      base = base.filter((l) => String(l._ownerId) === String(ownerFilter));
     }
 
     if (statusFilter !== 'todos') {
-      base = base.filter((l) => l.status === statusFilter);
+      base = base.filter((l) => l._status === statusFilter);
     }
 
     if (urgencyFilter !== 'all') {
