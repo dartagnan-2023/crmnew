@@ -11,6 +11,15 @@ const STATUS_OPTIONS = [
   { value: 'perdido', label: 'Perdido' },
 ];
 
+// Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
+const formatPhone = (value) => {
+  const digits = (value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
 const emptyLead = {
   name: '',
   contact: '',
@@ -1079,8 +1088,9 @@ const App = () => {
                     type="text"
                     value={leadForm.phone || ''}
                     onChange={(e) =>
-                      setLeadForm({ ...leadForm, phone: e.target.value })
+                      setLeadForm({ ...leadForm, phone: formatPhone(e.target.value) })
                     }
+                    maxLength={16}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
                 </div>
