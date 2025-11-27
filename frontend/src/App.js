@@ -297,11 +297,14 @@ const App = () => {
     } else if (ownerFilter !== 'all') {
       const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
       const targetName = (targetUser?.name || '').toLowerCase();
+      const targetId = String(ownerFilter);
       base = base.filter((l) => {
         const oid = l._ownerId ? String(l._ownerId) : '';
         const oname = (l.owner || l.responsible_name || '').toLowerCase();
-        if (oid) return oid === String(ownerFilter);
-        return targetName && oname === targetName;
+        if (oid) return oid === targetId;
+        if (targetName) return oname === targetName;
+        // fallback: compare owner name with raw filter value (caso venha nome no select/planilha antiga)
+        return oname === targetId.toLowerCase();
       });
     }
 
