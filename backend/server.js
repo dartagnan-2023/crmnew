@@ -9,6 +9,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
+const dns = require('dns').promises;
 require('dotenv').config();
 
 const app = express();
@@ -24,10 +25,21 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+let pool = null;
+const initPool = async () => {
+  if (pool) return pool;
+  const url = new URL(DATABASE_URL);
+  const { address } = await dns.lookup(url.hostname, { family: 4 });
+  pool = new Pool({
+    host: address,
+    port: Number(url.port) || 5432,
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace('/', ''),
+    ssl: { rejectUnauthorized: false },
+  });
+  return pool;
+};
 
 app.use(cors());
 app.use(express.json());
@@ -38,6 +50,7 @@ const normalizeValue = (val) => {
 };
 
 const query = async (text, params = []) => {
+  if (!pool) await initPool();
   const client = await pool.connect();
   try {
     return await client.query(text, params);
