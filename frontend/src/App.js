@@ -813,7 +813,7 @@ const App = () => {
           </div>
         </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Total de Leads</p>
             <p className="text-2xl font-bold text-slate-900">{stats.total || 0}</p>
@@ -842,7 +842,7 @@ const App = () => {
             </p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
-            <p className="text-xs text-slate-500">Em negociaÇõÇœo</p>
+            <p className="text-xs text-slate-500">Em negociação</p>
             <p className="text-2xl font-bold text-slate-900">{stats.qtdNegociacao || 0}</p>
             <p className="text-xs text-slate-500 mt-1">
               Valor em neg.: R$ {(stats.valorNegociacao || 0).toLocaleString('pt-BR')}
