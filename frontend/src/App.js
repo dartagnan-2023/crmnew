@@ -283,13 +283,26 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      _ownerId: l.ownerId ?? l.user_id,
+      _ownerId: l.ownerId ?? l.user_id ?? l.userId ?? l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
     if (ownerFilter === 'me') {
-      base = base.filter((l) => String(l._ownerId) === String(user?.id));
+      base = base.filter((l) => {
+        const oid = l._ownerId ? String(l._ownerId) : '';
+        const oname = (l.owner || l.responsible_name || '').toLowerCase();
+        const uname = (user?.name || '').toLowerCase();
+        if (oid) return oid === String(user?.id);
+        return uname && oname === uname;
+      });
     } else if (ownerFilter !== 'all') {
-      base = base.filter((l) => String(l._ownerId) === String(ownerFilter));
+      const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
+      const targetName = (targetUser?.name || '').toLowerCase();
+      base = base.filter((l) => {
+        const oid = l._ownerId ? String(l._ownerId) : '';
+        const oname = (l.owner || l.responsible_name || '').toLowerCase();
+        if (oid) return oid === String(ownerFilter);
+        return targetName && oname === targetName;
+      });
     }
 
     if (statusFilter !== 'todos') {
