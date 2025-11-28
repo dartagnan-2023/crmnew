@@ -386,6 +386,7 @@ const hydrateLeads = (leads, channels) => {
     const channel = channels.find((c) => String(c.id) === String(l.channel_id));
     return {
       ...l,
+      ownerId: l.ownerId || l.user_id || l.owner_id || '',
       value: Number(l.value || 0),
       channel_name: l.channel_name || channel?.name || '',
       created_at: l.created_at || '',
