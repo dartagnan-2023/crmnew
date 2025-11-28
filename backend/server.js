@@ -22,6 +22,13 @@ const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
 
+const normalizeName = (val) =>
+  (val || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -363,11 +370,11 @@ const filterLeadsByUser = (leads, user, query) => {
   }
 
   const userId = String(user.id);
-  const userName = (user.name || '').toLowerCase();
+  const userNameNorm = normalizeName(user.name);
   return leads.filter((l) => {
     const isPrivate = String(l.is_private || '') === 'true';
     const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
-    const ownerMatchName = (l.owner || l.responsible_name || '').toLowerCase() === userName;
+    const ownerMatchName = normalizeName(l.owner || l.responsible_name) === userNameNorm;
 
     const ownerMatches = ownerMatchId || ownerMatchName;
 
