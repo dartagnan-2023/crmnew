@@ -57,6 +57,7 @@ const SHEETS_CONFIG = {
     'channel_id',
     'channel_name',
     'value',
+    'first_contact',
     'next_contact',
     'notes',
     'created_at',
@@ -407,6 +408,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
     next_contact = '',
     notes = '',
     is_private = false,
+    first_contact = '',
   } = req.body;
 
   if (!name || !email) return res.status(400).json({ error: 'Nome e email sao obrigatorios' });
@@ -428,6 +430,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
     channel_id,
     channel_name: channelName,
     value: Number(value || 0),
+    first_contact: first_contact || '',
     next_contact: next_contact || '',
     notes: notes || '',
     created_at: now,
@@ -453,6 +456,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     next_contact,
     notes,
     is_private,
+    first_contact,
   } = req.body;
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
@@ -471,6 +475,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (channel_id !== undefined) leads[idx].channel_id = channel_id;
   if (channel_name !== undefined) leads[idx].channel_name = channel_name;
   if (value !== undefined) leads[idx].value = Number(value);
+  if (first_contact !== undefined) leads[idx].first_contact = first_contact;
   if (next_contact !== undefined) leads[idx].next_contact = next_contact;
   if (notes !== undefined) leads[idx].notes = notes;
   if (is_private !== undefined) leads[idx].is_private = Boolean(is_private);

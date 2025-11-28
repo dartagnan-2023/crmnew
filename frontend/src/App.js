@@ -36,6 +36,7 @@ const emptyLead = {
   value: 0,
   notes: '',
   is_private: false,
+  first_contact: '',
 };
 
 const App = () => {
@@ -254,6 +255,7 @@ const App = () => {
       'Campanha',
       'Canal',
       'Valor',
+      'Primeiro Contato',
       'Proximo Contato',
       'Criado em',
       'Notas',
@@ -268,6 +270,7 @@ const App = () => {
       l.campaign || '',
       l.channel_name || '',
       Number(l.value || 0),
+      l.first_contact || '',
       l.next_contact || '',
       l.created_at || '',
       `"${(l.notes || '').replace(/"/g, '""')}"`,
@@ -394,6 +397,7 @@ const App = () => {
     const payload = {
       ...leadForm,
       ownerId: leadForm.ownerId || user?.id || null,
+      first_contact: leadForm.first_contact || '',
       value: Number(leadForm.value) || 0,
     };
     try {
