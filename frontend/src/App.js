@@ -761,7 +761,7 @@ const App = () => {
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
           <h1 className="text-2xl font-bold text-slate-900 mb-4 text-center">
-            CRM Leads
+            Leads - BHS Eletr?nica
           </h1>
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
@@ -898,7 +898,7 @@ const App = () => {
 
         <header className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">CRM Leads</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Leads - BHS Eletr?nica</h1>
             <p className="text-sm text-slate-600">Bem-vindo(a), {user.name}</p>
           </div>
           <div className="flex gap-3 flex-wrap justify-end">
