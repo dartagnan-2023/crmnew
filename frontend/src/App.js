@@ -1091,10 +1091,10 @@ const App = () => {
                     setShowLeadModal(false);
                     setEditingLead(null);
                   }}
-                  className="text-slate-500 hover:text-slate-700 text-xl leading-none"
+                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
                   aria-label="Fechar"
                 >
-                  ×
+                  Fechar
                 </button>
               </div>
               <div className="p-4 space-y-3">
