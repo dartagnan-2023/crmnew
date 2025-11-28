@@ -1082,10 +1082,20 @@ const App = () => {
         {showLeadModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-slate-200">
+              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">
                   {editingLead ? 'Editar Lead' : 'Novo Lead'}
                 </h2>
+                <button
+                  onClick={() => {
+                    setShowLeadModal(false);
+                    setEditingLead(null);
+                  }}
+                  className="text-slate-500 hover:text-slate-700 text-xl leading-none"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
               </div>
               <div className="p-4 space-y-3">
                 <div>
