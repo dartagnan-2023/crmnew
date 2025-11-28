@@ -355,6 +355,38 @@ const App = () => {
   const agendaLeads = useMemo(() => {
     return showAllAgenda ? agendaBase : agendaBase.slice(0, 5);
   }, [agendaBase, showAllAgenda]);
+  const localStats = useMemo(() => {
+    const negotiationStatuses = ['negociacao', 'proposta'];
+    const acc = {
+      total: filteredLeads.length,
+      novos: 0,
+      ganhos: 0,
+      perdidos: 0,
+      valorTotal: 0,
+      valorPerdido: 0,
+      qtdNegociacao: 0,
+      valorNegociacao: 0,
+    };
+    filteredLeads.forEach((lead) => {
+      const status = (lead.status || '').toLowerCase();
+      if (status === 'novo') acc.novos += 1;
+      if (status === 'ganho') {
+        acc.ganhos += 1;
+        acc.valorTotal += Number(lead.value || 0);
+      }
+      if (status === 'perdido') {
+        acc.perdidos += 1;
+        acc.valorPerdido += Number(lead.value || 0);
+      }
+      if (negotiationStatuses.includes(status)) {
+        acc.qtdNegociacao += 1;
+        acc.valorNegociacao += Number(lead.value || 0);
+      }
+    });
+    acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
+    return acc;
+  }, [filteredLeads]);
+
 
   const followUpLeads = useMemo(() => {
     const now = new Date();
@@ -895,11 +927,11 @@ const App = () => {
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Total de Leads</p>
-            <p className="text-2xl font-bold text-slate-900">{stats.total || 0}</p>
+            <p className="text-2xl font-bold text-slate-900">{localStats.total || 0}</p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Novos</p>
-            <p className="text-2xl font-bold text-slate-900">{stats.novos || 0}</p>
+            <p className="text-2xl font-bold text-slate-900">{localStats.novos || 0}</p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Taxa de Conversão</p>
