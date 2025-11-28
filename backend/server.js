@@ -21,6 +21,7 @@ const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
 const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
+const MANYCHAT_SECRET = process.env.MANYCHAT_SECRET || process.env.MANYCHAT_TOKEN || '';
 
 const normalizeName = (val) =>
   (val || '')
@@ -551,6 +552,53 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
     taxaConversao,
     valorTotal: statusCount.valorTotal || 0,
   });
+});
+
+// ===================== MANYCHAT WEBHOOK =====================
+// Simples endpoint para receber leads do Manychat sem exigir login do app.
+// Protegido por token em MANYCHAT_SECRET.
+app.post('/api/webhook/manychat', async (req, res) => {
+  if (!MANYCHAT_SECRET) return res.status(500).json({ error: 'MANYCHAT_SECRET nao configurado' });
+  const { secret, name, phone, email } = req.body || {};
+  if (!secret || secret !== MANYCHAT_SECRET) return res.status(401).json({ error: 'Token invalido' });
+  if (!phone && !email) return res.status(400).json({ error: 'Informe phone ou email' });
+
+  const [{ items: leads }, { items: users }] = await Promise.all([
+    loadTable('leads'),
+    loadTable('users'),
+  ]);
+
+  // Seleciona aleatoriamente entre Ines e Victor (se existirem)
+  const pool = users.filter((u) => {
+    const uname = (u.username || u.name || '').toLowerCase();
+    return uname.includes('ines') || uname.includes('victor');
+  });
+  const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+
+  const id = nextId(leads);
+  const now = new Date().toISOString();
+  const lead = {
+    id,
+    name: name || 'Lead Manychat',
+    email: email || '',
+    phone: phone || '',
+    status: 'novo',
+    owner: chosen?.name || '',
+    ownerId: chosen?.id || '',
+    campaign: 'manychat',
+    channel_id: '',
+    channel_name: 'Manychat',
+    value: 0,
+    first_contact: now,
+    next_contact: '',
+    notes: 'Capturado via Manychat',
+    created_at: now,
+    is_private: false,
+  };
+
+  leads.push(lead);
+  await saveTable('leads', leads);
+  return res.json({ success: true, lead });
 });
 
 const bootstrap = async () => {
