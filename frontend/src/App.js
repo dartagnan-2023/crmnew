@@ -75,6 +75,7 @@ const App = () => {
   const [userForm, setUserForm] = useState({
     id: null,
     name: '',
+    username: '',
     phone: '',
     email: '',
     password: '',
@@ -539,6 +540,7 @@ const App = () => {
         setUserForm({
           id: editing.id,
           name: editing.name || '',
+          username: editing.username || '',
           phone: editing.phone || '',
           email: editing.email || '',
           password: '',
@@ -548,6 +550,7 @@ const App = () => {
         setUserForm({
           id: null,
           name: '',
+          username: '',
           phone: '',
           email: '',
           password: '',
@@ -593,6 +596,7 @@ const App = () => {
     setUserForm({
       id: null,
       name: '',
+      username: '',
       phone: '',
       email: '',
       password: '',
@@ -606,6 +610,7 @@ const App = () => {
     setUserForm({
       id: u.id,
       name: u.name || '',
+      username: u.username || '',
       phone: u.phone || '',
       email: u.email || '',
       password: '',
@@ -626,6 +631,7 @@ const App = () => {
     }
     const payload = {
       name: userForm.name,
+      username: userForm.username || userForm.email.split('@')[0],
       phone: userForm.phone,
       email: userForm.email,
       role: userForm.role,
@@ -1443,6 +1449,18 @@ const App = () => {
                         value={userForm.name}
                         onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Usuário (login)</label>
+                      <input
+                        type="text"
+                        value={userForm.username}
+                        onChange={(e) =>
+                          setUserForm({ ...userForm, username: e.target.value.toLowerCase() })
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        placeholder="ex: leandro, ines..."
                       />
                     </div>
                     <div>
