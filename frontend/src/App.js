@@ -356,6 +356,28 @@ const App = () => {
     return showAllAgenda ? agendaBase : agendaBase.slice(0, 5);
   }, [agendaBase, showAllAgenda]);
 
+  const followUpLeads = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return filteredLeads
+      .map((l) => {
+        const baseDate = l.first_contact || l.created_at;
+        const d = baseDate ? new Date(baseDate) : null;
+        const days = d && !Number.isNaN(d.getTime()) ? Math.floor((now - d) / (1000 * 60 * 60 * 24)) : null;
+        return {
+          ...l,
+          _daysSince: days,
+        };
+      })
+      .filter(
+        (l) =>
+          (l._status === 'novo' || (l.status || '').toLowerCase() === 'novo') &&
+          l._daysSince !== null &&
+          l._daysSince >= 10
+      )
+      .sort((a, b) => (b._daysSince || 0) - (a._daysSince || 0));
+  }, [filteredLeads]);
+
   const openNewLeadModal = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
@@ -952,11 +974,11 @@ const App = () => {
           </div>
         </div>
 
-        {agendaLeads.length > 0 && (
-          <section className="bg-white rounded-xl shadow p-4">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl shadow p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-slate-900">
-                Agenda - Próximos Contatos
+                Agenda - Próximos contatos
               </h2>
               {agendaBase.length > 5 && (
                 <button
@@ -968,6 +990,9 @@ const App = () => {
               )}
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
+              {agendaLeads.length === 0 && (
+                <p className="text-xs text-slate-500">Nenhum contato agendado.</p>
+              )}
               {agendaLeads.map((lead) => {
                 const now = new Date();
                 now.setHours(0, 0, 0, 0);
@@ -1040,8 +1065,44 @@ const App = () => {
                 );
               })}
             </div>
-          </section>
-        )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-slate-900">Follow-up (10+ dias em Novo)</h2>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {followUpLeads.length === 0 && (
+                <p className="text-xs text-slate-500">Nenhum lead pendente de follow-up.</p>
+              )}
+              {followUpLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className="flex items-center justify-between px-3 py-2 border rounded-lg text-sm cursor-pointer border-amber-200 bg-amber-50 hover:bg-amber-100"
+                  onClick={() => openEditLeadModal(lead)}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-800">
+                      {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {lead.owner || lead.responsible_name || 'Sem responsável'}
+                    </p>
+                    {lead.first_contact && (
+                      <p className="text-[11px] text-slate-500">
+                        Primeiro contato: {new Date(lead.first_contact).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-600">{lead._daysSince || 0} dias</p>
+                    <p className="text-[11px] text-slate-500">{lead.status || '-'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <section className="bg-white rounded-xl shadow p-4">
           <div className="flex items-center justify-between mb-4">
