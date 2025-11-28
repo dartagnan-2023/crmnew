@@ -936,27 +936,27 @@ const App = () => {
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Taxa de Conversão</p>
             <p className="text-2xl font-bold text-slate-900">
-              {stats.taxaConversao || 0}%
+              {localStats.taxaConversao || 0}%
             </p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Valor Convertido</p>
             <p className="text-2xl font-bold text-slate-900">
-              R$ {(stats.valorTotal || 0).toLocaleString('pt-BR')}
+              R$ {(localStats.valorTotal || 0).toLocaleString('pt-BR')}
             </p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Perdidos</p>
-            <p className="text-2xl font-bold text-slate-900">{stats.perdidos || 0}</p>
+            <p className="text-2xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
             <p className="text-xs text-slate-500 mt-1">
-              Valor perdido: R$ {(stats.valorPerdido || 0).toLocaleString('pt-BR')}
+              Valor perdido: R$ {(localStats.valorPerdido || 0).toLocaleString('pt-BR')}
             </p>
           </div>
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500">Em negociação</p>
-            <p className="text-2xl font-bold text-slate-900">{stats.qtdNegociacao || 0}</p>
+            <p className="text-2xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
             <p className="text-xs text-slate-500 mt-1">
-              Valor em neg.: R$ {(stats.valorNegociacao || 0).toLocaleString('pt-BR')}
+              Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
             </p>
           </div>
         </section>
@@ -973,8 +973,7 @@ const App = () => {
               }}
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
             >
-              {isAdmin && <option value="all">Todos os responsáveis</option>}
-              <option value="me">Meus</option>
+              <option value="all">Todos os responsáveis</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} ({u.role})
