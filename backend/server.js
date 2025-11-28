@@ -18,6 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
+const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
 
@@ -42,7 +43,7 @@ app.use(cors());
 app.use(express.json());
 
 const SHEETS_CONFIG = {
-  users: ['id', 'name', 'email', 'phone', 'password', 'role'],
+  users: ['id', 'name', 'username', 'email', 'phone', 'password', 'role'],
   channels: ['id', 'name'],
   leads: [
     'id',
@@ -168,6 +169,7 @@ const ensureDefaultAdmin = async () => {
     users.push({
       id,
       name: 'Administrador',
+      username: ADMIN_USERNAME,
       email: ADMIN_EMAIL,
       phone: ADMIN_DEFAULT_PHONE,
       password: hashed,
@@ -180,17 +182,36 @@ const ensureDefaultAdmin = async () => {
 
 // ===================== AUTH =====================
 app.post('/api/auth/register', async (req, res) => {
-  const { name, email, phone, password } = req.body;
+  const { name, email, phone, password, username } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Dados obrigatorios faltando' });
   }
   const { items: users } = await loadTable('users');
-  const exists = users.find((u) => (u.email || '').toLowerCase() === email.toLowerCase());
-  if (exists) return res.status(400).json({ error: 'Usuario ja existe' });
+
+  const emailLower = (email || '').toLowerCase();
+  const usernameInput = (username || '').trim().toLowerCase();
+
+  const emailExists = users.find((u) => (u.email || '').toLowerCase() === emailLower);
+  if (emailExists) return res.status(400).json({ error: 'Email ja existe' });
+
+  let finalUsername = usernameInput || emailLower.split('@')[0];
+  let suffix = 1;
+  while (users.find((u) => (u.username || '').toLowerCase() === finalUsername)) {
+    finalUsername = `${usernameInput || emailLower.split('@')[0]}${suffix}`;
+    suffix += 1;
+  }
 
   const id = nextId(users);
   const hashed = await bcrypt.hash(password, 10);
-  const user = { id, name, email, phone: phone || '', password: hashed, role: 'vendedor' };
+  const user = {
+    id,
+    name,
+    username: finalUsername,
+    email,
+    phone: phone || '',
+    password: hashed,
+    role: 'vendedor',
+  };
   users.push(user);
   await saveTable('users', users);
   const token = jwt.sign(sanitizeUser(user), JWT_SECRET, { expiresIn: '7d' });
@@ -198,10 +219,17 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email e senha necessarios' });
+  const { email, password, login } = req.body; // login pode ser username ou email
+  const loginValue = (login || email || '').trim();
+  if (!loginValue || !password) return res.status(400).json({ error: 'Login e senha necessarios' });
+
   const { items: users } = await loadTable('users');
-  const user = users.find((u) => (u.email || '').toLowerCase() === email.toLowerCase());
+  const isEmail = loginValue.includes('@');
+  const findUser = (u) => {
+    if (isEmail) return (u.email || '').toLowerCase() === loginValue.toLowerCase();
+    return (u.username || '').toLowerCase() === loginValue.toLowerCase();
+  };
+  const user = users.find(findUser);
   if (!user) return res.status(401).json({ error: 'Credenciais invalidas' });
   const ok = await bcrypt.compare(password, user.password || '');
   if (!ok) return res.status(401).json({ error: 'Credenciais invalidas' });
@@ -234,13 +262,23 @@ app.put('/api/users/me', authMiddleware, async (req, res) => {
 
 app.post('/api/users', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { name, email, phone, password, role } = req.body;
+  const { name, email, phone, password, role, username } = req.body;
   const { items: users } = await loadTable('users');
   const exists = users.find((u) => (u.email || '').toLowerCase() === (email || '').toLowerCase());
   if (exists) return res.status(400).json({ error: 'Usuario ja existe' });
+  const existsUser = users.find((u) => (u.username || '').toLowerCase() === (username || '').toLowerCase());
+  if (existsUser) return res.status(400).json({ error: 'Username ja existe' });
   const id = nextId(users);
   const hashed = await bcrypt.hash(password || '123456', 10);
-  const user = { id, name, email, phone: phone || '', password: hashed, role: role || 'vendedor' };
+  const user = {
+    id,
+    name,
+    username: username || email?.split('@')[0] || `user${id}`,
+    email,
+    phone: phone || '',
+    password: hashed,
+    role: role || 'vendedor',
+  };
   users.push(user);
   await saveTable('users', users);
   return res.json(sanitizeUser(user));
@@ -248,10 +286,17 @@ app.post('/api/users', authMiddleware, async (req, res) => {
 
 app.put('/api/users/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { name, email, phone, password, role } = req.body;
+  const { name, email, phone, password, role, username } = req.body;
   const { items: users } = await loadTable('users');
   const idx = users.findIndex((u) => String(u.id) === String(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Usuario nao encontrado' });
+  if (username) {
+    const clash = users.find(
+      (u, i) => i !== idx && (u.username || '').toLowerCase() === username.toLowerCase()
+    );
+    if (clash) return res.status(400).json({ error: 'Username ja existe' });
+    users[idx].username = username;
+  }
   if (name) users[idx].name = name;
   if (email) users[idx].email = email;
   if (phone) users[idx].phone = phone;

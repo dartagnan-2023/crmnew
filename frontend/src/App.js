@@ -42,7 +42,7 @@ const App = () => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
-  const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', username: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -129,16 +129,17 @@ const App = () => {
     setLoading(true);
     setError('');
     try {
-      const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-      const body =
-        authMode === 'login'
-          ? { email: authForm.email, password: authForm.password }
-          : {
-              name: authForm.name,
-              email: authForm.email,
-              phone: authForm.phone,
-              password: authForm.password,
-            };
+    const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+    const body =
+      authMode === 'login'
+        ? { login: authForm.email, password: authForm.password }
+        : {
+            name: authForm.name,
+            email: authForm.email,
+            phone: authForm.phone,
+            username: authForm.username,
+            password: authForm.password,
+          };
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -152,7 +153,7 @@ const App = () => {
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser(data.user);
-      setAuthForm({ name: '', email: '', phone: '', password: '' });
+      setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -718,43 +719,60 @@ const App = () => {
           </div>
           <form onSubmit={handleAuth} className="space-y-4">
             {authMode === 'register' && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Nome
-                </label>
-                <input
-                  type="text"
-                  value={authForm.name}
-                  onChange={(e) =>
-                    setAuthForm({ ...authForm, name: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  required
-                />
-              </div>
-            )}
-            {authMode === 'register' && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  Telefone
-                </label>
-                <input
-                  type="tel"
-                  value={authForm.phone}
-                  onChange={(e) =>
-                    setAuthForm({ ...authForm, phone: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  required
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Nome
+                  </label>
+                  <input
+                    type="text"
+                    value={authForm.name}
+                    onChange={(e) =>
+                      setAuthForm({ ...authForm, name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Usuário (login)
+                  </label>
+                  <input
+                    type="text"
+                    value={authForm.username}
+                    onChange={(e) =>
+                      setAuthForm({
+                        ...authForm,
+                        username: e.target.value.toLowerCase(),
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    placeholder="ex: leandro, ines..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Telefone
+                  </label>
+                  <input
+                    type="tel"
+                    value={authForm.phone}
+                    onChange={(e) =>
+                      setAuthForm({ ...authForm, phone: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    required
+                  />
+                </div>
+              </>
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Email
+                {authMode === 'login' ? 'Email ou usuário' : 'Email'}
               </label>
               <input
-                type="email"
+                type={authMode === 'login' ? 'text' : 'email'}
                 value={authForm.email}
                 onChange={(e) =>
                   setAuthForm({ ...authForm, email: e.target.value })
