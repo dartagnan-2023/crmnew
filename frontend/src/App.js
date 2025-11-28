@@ -399,7 +399,7 @@ const App = () => {
       name: lead.name || '',
       contact: lead.contact || '',
       owner: lead.owner || lead.responsible_name || '',
-      ownerId: lead.user_id || user?.id || null,
+      ownerId: lead.ownerId || lead.user_id || user?.id || null,
       origin: lead.origin || '',
       stage_detail: lead.stage_detail || '',
       next_contact: nextContact,
