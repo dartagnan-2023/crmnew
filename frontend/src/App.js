@@ -129,6 +129,11 @@ const App = () => {
   };
 
   useEffect(() => {
+    // Pré-aquecer backend (ping público) para reduzir delay inicial
+    fetch(`${API_URL}/ping`).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     verifyToken();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);

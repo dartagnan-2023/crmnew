@@ -250,6 +250,11 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   return res.json(req.user);
 });
 
+// Ping público (mantém container acordado e usado pelo front para pré-aquecer)
+app.get('/api/ping', async (req, res) => {
+  res.json({ ok: true, at: new Date().toISOString() });
+});
+
 // ===================== USERS =====================
 app.get('/api/users', authMiddleware, async (req, res) => {
   const { items: users } = await loadTable('users');
