@@ -355,6 +355,7 @@ app.delete('/api/channels/:id', authMiddleware, async (req, res) => {
 // ===================== LEADS =====================
 // Admin enxerga tudo (ou filtra por userId se enviado).
 // Não-admin vê todos os leads públicos e os privados dele.
+// Fallback: se não houver ownerId, compara pelo nome do responsável.
 const filterLeadsByUser = (leads, user, query) => {
   if (isAdmin(user)) {
     if (query.userId) return leads.filter((l) => String(l.ownerId) === String(query.userId));
@@ -362,13 +363,21 @@ const filterLeadsByUser = (leads, user, query) => {
   }
 
   const userId = String(user.id);
+  const userName = (user.name || '').toLowerCase();
   return leads.filter((l) => {
     const isPrivate = String(l.is_private || '') === 'true';
-    const ownerMatch = String(l.ownerId) === userId;
-    // privados só para o dono; públicos para todos
-    if (isPrivate && !ownerMatch) return false;
-    if (query.userId) return String(l.ownerId) === String(query.userId) && (!isPrivate || ownerMatch);
-    return true;
+    const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
+    const ownerMatchName = (l.owner || l.responsible_name || '').toLowerCase() === userName;
+
+    const ownerMatches = ownerMatchId || ownerMatchName;
+
+    if (isPrivate && !ownerMatches) return false;
+
+    if (query.userId) {
+      const target = String(query.userId);
+      return (String(l.ownerId) === target || String(l.user_id || '') === target) && (!isPrivate || ownerMatches);
+    }
+    return ownerMatches || !isPrivate; // públicos aparecem para todos
   });
 };
 
