@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
@@ -89,6 +89,9 @@ const App = () => {
     password: '',
     role: 'vendedor',
   });
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkOwnerId, setBulkOwnerId] = useState('');
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -143,10 +146,10 @@ const App = () => {
     setLoading(true);
     setError('');
     try {
-    const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+    const endpoint = authMode === 'login' Perfil '/auth/login' : '/auth/register';
     const body =
       authMode === 'login'
-        ? { login: authForm.email, password: authForm.password }
+        Perfil { login: authForm.email, password: authForm.password }
         : {
             name: authForm.name,
             email: authForm.email,
@@ -226,7 +229,7 @@ const App = () => {
           params.append('userId', ownerFilter);
         }
       }
-      const res = await fetch(`${API_URL}/stats?${params.toString()}`, {
+      const res = await fetch(`${API_URL}/statsPerfil${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -246,6 +249,10 @@ const App = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    setSelectedLeadIds([]);
+  }, [leads, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -300,23 +307,23 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      _ownerId: l.ownerId ?? l.user_id ?? l.userId ?? l.owner_id,
+      _ownerId: l.ownerId PerfilPerfil l.user_id PerfilPerfil l.userId PerfilPerfil l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
     if (ownerFilter === 'me') {
       base = base.filter((l) => {
-        const oid = l._ownerId ? String(l._ownerId) : '';
+        const oid = l._ownerId Perfil String(l._ownerId) : '';
         const oname = (l.owner || l.responsible_name || '').toLowerCase();
-        const uname = (user?.name || '').toLowerCase();
-        if (oid) return oid === String(user?.id);
+        const uname = (userPerfil.name || '').toLowerCase();
+        if (oid) return oid === String(userPerfil.id);
         return uname && oname === uname;
       });
     } else if (ownerFilter !== 'all') {
       const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
-      const targetName = (targetUser?.name || '').toLowerCase();
+      const targetName = (targetUserPerfil.name || '').toLowerCase();
       const targetId = String(ownerFilter);
       base = base.filter((l) => {
-        const oid = l._ownerId ? String(l._ownerId) : '';
+        const oid = l._ownerId Perfil String(l._ownerId) : '';
         const oname = (l.owner || l.responsible_name || '').toLowerCase();
         if (oid) return oid === targetId;
         if (targetName) return oname === targetName;
@@ -347,7 +354,19 @@ const App = () => {
     }
 
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, userPerfil.id]);
+
+  const canEditLead = useCallback(
+    (lead) => {
+      if (isAdmin) return true;
+      const leadOwnerId = lead._ownerId || lead.ownerId || lead.user_id || lead.userId;
+      if (leadOwnerId && String(leadOwnerId) === String(userPerfil.id)) return true;
+      const ownerName = (lead.owner || lead.responsible_name || '').toLowerCase().trim();
+      const userName = (userPerfil.name || '').toLowerCase().trim();
+      return ownerName && userName && ownerName === userName;
+    },
+    [isAdmin, userPerfil.id, userPerfil.name]
+  );
 
   const agendaBase = useMemo(() => {
     return filteredLeads
@@ -357,8 +376,28 @@ const App = () => {
       .sort((a, b) => a._nextDate - b._nextDate);
   }, [filteredLeads]);
 
+  const agendaStats = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return agendaBase.reduce(
+      (acc, lead) => {
+        const date = new Date(lead.next_contact);
+        if (Number.isNaN(date.getTime())) return acc;
+        const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        const today = now.getTime();
+        const diffDays = (target - today) / (1000 * 60 * 60 * 24);
+        if (diffDays < 0) acc.overdue += 1;
+        else if (diffDays === 0) acc.today += 1;
+        else if (diffDays > 0 && diffDays <= 3) acc.next3 += 1;
+        acc.total += 1;
+        return acc;
+      },
+      { total: 0, overdue: 0, today: 0, next3: 0 }
+    );
+  }, [agendaBase]);
+
   const agendaLeads = useMemo(() => {
-    return showAllAgenda ? agendaBase : agendaBase.slice(0, 5);
+    return showAllAgenda Perfil agendaBase : agendaBase.slice(0, 5);
   }, [agendaBase, showAllAgenda]);
   const localStats = useMemo(() => {
     const negotiationStatuses = ['negociacao', 'proposta'];
@@ -388,7 +427,7 @@ const App = () => {
         acc.valorNegociacao += Number(lead.value || 0);
       }
     });
-    acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
+    acc.taxaConversao = acc.total Perfil Math.round((acc.ganhos / acc.total) * 100) : 0;
     return acc;
   }, [filteredLeads]);
 
@@ -399,8 +438,8 @@ const App = () => {
     return filteredLeads
       .map((l) => {
         const baseDate = l.first_contact || l.created_at;
-        const d = baseDate ? new Date(baseDate) : null;
-        const days = d && !Number.isNaN(d.getTime()) ? Math.floor((now - d) / (1000 * 60 * 60 * 24)) : null;
+        const d = baseDate Perfil new Date(baseDate) : null;
+        const days = d && !Number.isNaN(d.getTime()) Perfil Math.floor((now - d) / (1000 * 60 * 60 * 24)) : null;
         return {
           ...l,
           _daysSince: days,
@@ -415,9 +454,33 @@ const App = () => {
       .sort((a, b) => (b._daysSince || 0) - (a._daysSince || 0));
   }, [filteredLeads]);
 
+  const editableLeadIds = useMemo(
+    () => filteredLeads.filter((l) => canEditLead(l)).map((l) => String(l.id)),
+    [filteredLeads, canEditLead]
+  );
+
+  const toggleSelectLead = (id) => {
+    const normalized = String(id);
+    if (!editableLeadIds.includes(normalized)) return;
+    setSelectedLeadIds((prev) =>
+      prev.includes(normalized) Perfil prev.filter((v) => v !== normalized) : [...prev, normalized]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const allVisible = editableLeadIds;
+    if (!allVisible.length) return;
+    const hasAll = allVisible.every((id) => selectedLeadIds.includes(id));
+    setSelectedLeadIds(hasAll Perfil [] : allVisible);
+  };
+
+  const selectedCount = selectedLeadIds.length;
+  const allEditableSelected =
+    editableLeadIds.length > 0 && editableLeadIds.every((id) => selectedLeadIds.includes(id));
+
   const openNewLeadModal = () => {
     setEditingLead(null);
-    setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
+    setLeadForm({ ...emptyLead, owner: userPerfil.name || '', ownerId: userPerfil.id || null });
     setShowLeadModal(true);
   };
 
@@ -436,7 +499,7 @@ const App = () => {
       name: lead.name || '',
       contact: lead.contact || '',
       owner: lead.owner || lead.responsible_name || '',
-      ownerId: lead.ownerId || lead.user_id || user?.id || null,
+      ownerId: lead.ownerId || lead.user_id || userPerfil.id || null,
       origin: lead.origin || '',
       stage_detail: lead.stage_detail || '',
       next_contact: nextContact,
@@ -458,13 +521,13 @@ const App = () => {
       showToast('Nome e email são obrigatórios', 'error');
       return;
     }
-    const method = editingLead ? 'PUT' : 'POST';
+    const method = editingLead Perfil 'PUT' : 'POST';
     const url = editingLead
-      ? `${API_URL}/leads/${editingLead.id}`
+      Perfil `${API_URL}/leads/${editingLead.id}`
       : `${API_URL}/leads`;
     const payload = {
       ...leadForm,
-      ownerId: leadForm.ownerId || user?.id || null,
+      ownerId: leadForm.ownerId || userPerfil.id || null,
       first_contact: leadForm.first_contact || '',
       value: Number(leadForm.value) || 0,
     };
@@ -484,7 +547,7 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
-      showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
+      showToast(editingLead Perfil 'Lead atualizado' : 'Lead criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
       showToast('Erro ao salvar lead', 'error');
@@ -492,7 +555,7 @@ const App = () => {
   };
 
   const deleteLead = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este lead?')) return;
+    if (!window.confirm('Deseja realmente excluir este leadPerfil')) return;
     try {
       const res = await fetch(`${API_URL}/leads/${id}`, {
         method: 'DELETE',
@@ -515,8 +578,8 @@ const App = () => {
       const payload = {
         name: lead.name,
         contact: lead.contact || null,
-        owner: lead.owner || lead.responsible_name || user?.name || null,
-        ownerId: lead.user_id || user?.id || null,
+        owner: lead.owner || lead.responsible_name || userPerfil.name || null,
+        ownerId: lead.user_id || userPerfil.id || null,
         origin: lead.origin || null,
         stage_detail: lead.stage_detail || null,
         next_contact: null,
@@ -579,7 +642,7 @@ const App = () => {
   };
 
   const handleDeleteChannel = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este canal?')) return;
+    if (!window.confirm('Deseja realmente excluir este canalPerfil')) return;
     try {
       const res = await fetch(`${API_URL}/channels/${id}`, {
         method: 'DELETE',
@@ -597,12 +660,102 @@ const App = () => {
     }
   };
 
+  const applyBulkUpdate = async (payloadBuilder, successMessage) => {
+    if (!selectedCount) {
+      showToast('Selecione ao menos um lead', 'error');
+      return;
+    }
+
+    const requests = selectedLeadIds.map((id) => {
+      const lead = leads.find((l) => String(l.id) === String(id));
+      if (!lead || !canEditLead(lead)) return null;
+      const payload = payloadBuilder(lead);
+      return fetch(`${API_URL}/leads/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    }).filter(Boolean);
+
+    if (!requests.length) {
+      showToast('Nenhum dos leads selecionados pode ser editado', 'error');
+      return;
+    }
+
+    try {
+      const responses = await Promise.all(requests);
+      const failed = responses.find((res) => !res.ok);
+      if (failed) {
+        showToast('Algumas atualizações falharam', 'error');
+      } else {
+        showToast(successMessage, 'success');
+      }
+      await Promise.all([loadLeads(), loadStats()]);
+      setSelectedLeadIds([]);
+    } catch (err) {
+      console.error('Erro ao aplicar bulk:', err);
+      showToast('Erro ao atualizar em massa', 'error');
+    }
+  };
+
+  const bulkChangeStatus = async () => {
+    if (!bulkStatus) {
+      showToast('Escolha um status para aplicar', 'error');
+      return;
+    }
+    await applyBulkUpdate(
+      () => ({ status: bulkStatus }),
+      'Status atualizado em massa'
+    );
+  };
+
+  const bulkReassignOwner = async () => {
+    if (!isAdmin) {
+      showToast('Apenas admin pode reatribuir em massa', 'error');
+      return;
+    }
+    if (!bulkOwnerId) {
+      showToast('Escolha um novo responsável', 'error');
+      return;
+    }
+    await applyBulkUpdate(
+      () => ({ ownerId: bulkOwnerId }),
+      'Responsável atualizado'
+    );
+  };
+
+  const bulkMarkContactDone = async () => {
+    await applyBulkUpdate(
+      (lead) => ({
+        name: lead.name,
+        contact: lead.contact || null,
+        owner: lead.owner || lead.responsible_name || userPerfil.name || null,
+        ownerId: lead.user_id || userPerfil.id || null,
+        origin: lead.origin || null,
+        stage_detail: lead.stage_detail || null,
+        next_contact: null,
+        email: lead.email,
+        phone: lead.phone || null,
+        channel_id: lead.channel_id || null,
+        campaign: lead.campaign || null,
+        status: lead.status || 'novo',
+        value: Number(lead.value) || 0,
+        notes: lead.notes || null,
+        is_private: lead.is_private || 0,
+      }),
+      'Contatos marcados como feitos'
+    );
+  };
+
   const openProfileSettings = async (tab = 'me', editing = null) => {
     setProfileTab(tab);
     setProfileForm({
-      name: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
+      name: userPerfil.name || '',
+      email: userPerfil.email || '',
+      phone: userPerfil.phone || '',
       password: '',
     });
     setShowProfileModal(true);
@@ -712,8 +865,8 @@ const App = () => {
       payload.password = userForm.password;
     }
 
-    const method = userForm.id ? 'PUT' : 'POST';
-    const endpoint = userForm.id ? `/users/${userForm.id}` : '/users';
+    const method = userForm.id Perfil 'PUT' : 'POST';
+    const endpoint = userForm.id Perfil `/users/${userForm.id}` : '/users';
 
     try {
       const res = await fetch(`${API_URL}${endpoint}`, {
@@ -730,11 +883,11 @@ const App = () => {
         return;
       }
       await loadUsers();
-      if (userForm.id === user?.id) {
+      if (userForm.id === userPerfil.id) {
         await verifyToken();
       }
       setShowProfileModal(false);
-      showToast(userForm.id ? 'Usuario atualizado' : 'Usuario criado', 'success');
+      showToast(userForm.id Perfil 'Usuario atualizado' : 'Usuario criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar usuario:', err);
       showToast('Erro ao salvar usuario', 'error');
@@ -742,7 +895,7 @@ const App = () => {
   };
 
   const deleteUser = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este usuario?')) return;
+    if (!window.confirm('Deseja realmente excluir este usuarioPerfil')) return;
     try {
       const res = await fetch(`${API_URL}/users/${id}`, {
         method: 'DELETE',
@@ -778,7 +931,7 @@ const App = () => {
               onClick={() => setAuthMode('login')}
               className={`flex-1 py-2 rounded-lg font-semibold ${
                 authMode === 'login'
-                  ? 'bg-blue-600 text-white'
+                  Perfil 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
               }`}
             >
@@ -788,7 +941,7 @@ const App = () => {
               onClick={() => setAuthMode('register')}
               className={`flex-1 py-2 rounded-lg font-semibold ${
                 authMode === 'register'
-                  ? 'bg-blue-600 text-white'
+                  Perfil 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
               }`}
             >
@@ -847,10 +1000,10 @@ const App = () => {
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                {authMode === 'login' ? 'Email ou usuário' : 'Email'}
+                {authMode === 'login' Perfil 'Email ou usuário' : 'Email'}
               </label>
               <input
-                type={authMode === 'login' ? 'text' : 'email'}
+                type={authMode === 'login' Perfil 'text' : 'email'}
                 value={authForm.email}
                 onChange={(e) =>
                   setAuthForm({ ...authForm, email: e.target.value })
@@ -878,7 +1031,7 @@ const App = () => {
               disabled={loading}
               className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold"
             >
-              {loading ? 'Aguarde...' : authMode === 'login' ? 'Entrar' : 'Criar conta'}
+              {loading Perfil 'Aguarde...' : authMode === 'login' Perfil 'Entrar' : 'Criar conta'}
             </button>
           </form>
         </div>
@@ -893,7 +1046,7 @@ const App = () => {
           <div
             className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${
               toast.type === 'error'
-                ? 'bg-red-600 text-white'
+                Perfil 'bg-red-600 text-white'
                 : 'bg-emerald-600 text-white'
             }`}
           >
@@ -912,7 +1065,7 @@ const App = () => {
               className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
               title="Configurações e perfil"
             >
-              ⚙
+              Perfil
             </button>
             <button
               onClick={() => setShowChannelModal(true)}
@@ -974,7 +1127,7 @@ const App = () => {
               onChange={(e) => {
                 const val = e.target.value;
                 setOwnerFilter(val);
-                setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
+                setAgendaOwnerFilter(val === 'all' Perfil 'todos' : val);
               }}
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
             >
@@ -1012,16 +1165,32 @@ const App = () => {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl shadow p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Agenda - Próximos contatos
-              </h2>
+            <div className="flex items-start justify-between mb-3 gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Agenda - Próximos contatos
+                </h2>
+                <div className="flex flex-wrap gap-2 mt-1 text-[11px]">
+                  <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">
+                    Vencidos: {agendaStats.overdue}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                    Hoje: {agendaStats.today}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                    Próx. 3 dias: {agendaStats.next3}
+                  </span>
+                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                    Total: {agendaStats.total}
+                  </span>
+                </div>
+              </div>
               {agendaBase.length > 5 && (
                 <button
                   onClick={() => setShowAllAgenda((v) => !v)}
                   className="text-xs text-blue-600 hover:underline"
                 >
-                  {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
+                  {showAllAgenda Perfil 'Mostrar menos' : 'Ver toda agenda'}
                 </button>
               )}
             </div>
@@ -1064,7 +1233,7 @@ const App = () => {
                   >
                     <div>
                       <p className="font-semibold text-slate-800">
-                        {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
+                        {lead.name} {lead.contact Perfil `- ${lead.contact}` : ''}
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
@@ -1076,7 +1245,7 @@ const App = () => {
                       <div className="text-right">
                         <p className="text-xs text-slate-600">
                           {lead.next_contact
-                            ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                            Perfil new Date(lead.next_contact).toLocaleDateString('pt-BR')
                             : '-'}
                         </p>
                         <p className="text-[11px] text-slate-500">
@@ -1105,7 +1274,12 @@ const App = () => {
 
           <div className="bg-white rounded-xl shadow p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">Follow-up (10+ dias em Novo)</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Follow-up (10+ dias em Novo)
+              </h2>
+              <span className="px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700">
+                {followUpLeads.length} pendente(s)
+              </span>
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {followUpLeads.length === 0 && (
@@ -1119,7 +1293,7 @@ const App = () => {
                 >
                   <div>
                     <p className="font-semibold text-slate-800">
-                      {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
+                      {lead.name} {lead.contact Perfil `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
                       {lead.owner || lead.responsible_name || 'Sem responsável'}
@@ -1140,10 +1314,10 @@ const App = () => {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl shadow p-4">
-          <div className="flex items-center justify-between mb-4">
+                <section className="bg-white/90 backdrop-blur rounded-xl shadow p-4 border border-slate-200">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
             <h2 className="text-lg font-semibold text-slate-900">Leads</h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={exportCsv}
                 className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg text-sm"
@@ -1158,50 +1332,132 @@ const App = () => {
               </button>
             </div>
           </div>
+
+          <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
+              <span className="text-slate-500">EditPerfilveis na lista: {editableLeadIds.length}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500">Status</label>
+                <select
+                  value={bulkStatus}
+                  onChange={(e) => setBulkStatus(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="">Selecionar</option>
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={bulkChangeStatus}
+                  disabled={!selectedCount || !bulkStatus}
+                  className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-50"
+                >
+                  Aplicar status
+                </button>
+              </div>
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Reatribuir</label>
+                  <select
+                    value={bulkOwnerId}
+                    onChange={(e) => setBulkOwnerId(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
+                  >
+                    <option value="">ResponsPerfilvel</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={bulkReassignOwner}
+                    disabled={!selectedCount || !bulkOwnerId}
+                    className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                  >
+                    Reatribuir
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={bulkMarkContactDone}
+                disabled={!selectedCount}
+                className="px-3 py-2 text-sm rounded-lg bg-slate-800 text-white disabled:opacity-50"
+              >
+                Contato feito
+              </button>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-slate-500">
+                  <th className="py-2 px-2 w-10">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={allEditableSelected && editableLeadIds.length > 0}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th className="py-2 px-2">Nome</th>
                   <th className="py-2 px-2">Email</th>
                   <th className="py-2 px-2">Telefone</th>
                   <th className="py-2 px-2">Canal</th>
                   <th className="py-2 px-2">Status</th>
-                  <th className="py-2 px-2">Responsável</th>
-                  <th className="py-2 px-2 text-right">Ações</th>
+                  <th className="py-2 px-2">ResponsPerfilvel</th>
+                  <th className="py-2 px-2 text-right">APerfilPerfiles</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="border-b last:border-none">
-                    <td className="py-2 px-2">{lead.name}</td>
-                    <td className="py-2 px-2">{lead.email}</td>
-                    <td className="py-2 px-2">{lead.phone || '-'}</td>
-                    <td className="py-2 px-2">{lead.channel_name || '-'}</td>
-                    <td className="py-2 px-2">{lead.status}</td>
-                    <td className="py-2 px-2">
-                      {lead.owner || lead.responsible_name || '-'}
-                    </td>
-                    <td className="py-2 px-2 text-right space-x-2">
-                      <button
-                        onClick={() => openEditLeadModal(lead)}
-                        className="text-blue-600 text-xs"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => deleteLead(lead.id)}
-                        className="text-red-600 text-xs"
-                      >
-                        Excluir
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredLeads.map((lead) => {
+                  const normalizedId = String(lead.id);
+                  const canEdit = canEditLead(lead);
+                  return (
+                    <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
+                      <td className="py-2 px-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          disabled={!canEdit}
+                          checked={selectedLeadIds.includes(normalizedId)}
+                          onChange={() => toggleSelectLead(normalizedId)}
+                        />
+                      </td>
+                      <td className="py-2 px-2">{lead.name}</td>
+                      <td className="py-2 px-2">{lead.email}</td>
+                      <td className="py-2 px-2">{lead.phone || '-'}</td>
+                      <td className="py-2 px-2">{lead.channel_name || '-'}</td>
+                      <td className="py-2 px-2">{lead.status}</td>
+                      <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
+                      <td className="py-2 px-2 text-right space-x-2">
+                        <button
+                          onClick={() => openEditLeadModal(lead)}
+                          className="text-blue-600 text-xs"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => deleteLead(lead.id)}
+                          className="text-red-600 text-xs"
+                        >
+                          Excluir
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredLeads.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-4 text-center text-slate-500 text-xs"
                     >
                       Nenhum lead cadastrado
@@ -1218,7 +1474,7 @@ const App = () => {
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
               <div className="p-4 border-b border-slate-200 flex items-start justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">
-                  {editingLead ? 'Editar Lead' : 'Novo Lead'}
+                  {editingLead Perfil 'Editar Lead' : 'Novo Lead'}
                 </h2>
                 <button
                   onClick={() => {
@@ -1279,21 +1535,21 @@ const App = () => {
                   <select
                     value={leadForm.ownerId || ''}
                     onChange={(e) => {
-                      const selectedId = e.target.value ? Number(e.target.value) : null;
+                      const selectedId = e.target.value Perfil Number(e.target.value) : null;
                       const selectedUser = users.find((u) => u.id === selectedId);
                       setLeadForm({
                         ...leadForm,
                         ownerId: selectedId,
-                        owner: selectedUser ? selectedUser.name : user?.name || '',
+                        owner: selectedUser Perfil selectedUser.name : userPerfil.name || '',
                       });
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
-                    <option value={user?.id || ''}>
-                      {user?.name ? `${user.name} (Você)` : 'Selecione'}
+                    <option value={userPerfil.id || ''}>
+                      {userPerfil.name Perfil `${user.name} (Você)` : 'Selecione'}
                     </option>
                     {users
-                      .filter((u) => u.id !== user?.id)
+                      .filter((u) => u.id !== userPerfil.id)
                       .map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.name} ({u.role})
@@ -1454,7 +1710,7 @@ const App = () => {
                   <button
                     onClick={() => setProfileTab('me')}
                     className={`px-3 py-2 text-sm rounded-lg ${
-                      profileTab === 'me' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                      profileTab === 'me' Perfil 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     Meu perfil
@@ -1475,7 +1731,7 @@ const App = () => {
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${
                         profileTab === 'users'
-                          ? 'bg-blue-600 text-white'
+                          Perfil 'bg-blue-600 text-white'
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
@@ -1555,7 +1811,7 @@ const App = () => {
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {userForm.id ? 'Editar usuário' : 'Novo usuário'}
+                      {userForm.id Perfil 'Editar usuário' : 'Novo usuário'}
                     </h3>
                     <button
                       onClick={startNewUser}
@@ -1606,14 +1862,14 @@ const App = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Senha {userForm.id ? '(opcional)' : ''}
+                        Senha {userForm.id Perfil '(opcional)' : ''}
                       </label>
                       <input
                         type="password"
                         value={userForm.password}
                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
-                        placeholder={userForm.id ? 'Deixe em branco para manter' : ''}
+                        placeholder={userForm.id Perfil 'Deixe em branco para manter' : ''}
                       />
                     </div>
                     <div>
@@ -1639,7 +1895,7 @@ const App = () => {
                       onClick={saveAdminUser}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
                     >
-                      {userForm.id ? 'Salvar alterações' : 'Criar usuário'}
+                      {userForm.id Perfil 'Salvar alterações' : 'Criar usuário'}
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
