@@ -6,10 +6,11 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contato', label: 'Em contato' },
   { value: 'proposta', label: 'Proposta enviada' },
-  { value: 'negociacao', label: 'Negociação' },
+  { value: 'negociacao', label: 'Negocia??o' },
   { value: 'ganho', label: 'Ganho' },
   { value: 'perdido', label: 'Perdido' },
 ];
+
 
 // Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
 const formatPhone = (value) => {
@@ -146,17 +147,17 @@ const App = () => {
     setLoading(true);
     setError('');
     try {
-    const endpoint = authMode === 'login' Perfil '/auth/login' : '/auth/register';
-    const body =
-      authMode === 'login'
-        Perfil { login: authForm.email, password: authForm.password }
-        : {
-            name: authForm.name,
-            email: authForm.email,
-            phone: authForm.phone,
-            username: authForm.username,
-            password: authForm.password,
-          };
+      const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+      const body =
+        authMode === 'login'
+          ? { login: authForm.email, password: authForm.password }
+          : {
+              name: authForm.name,
+              email: authForm.email,
+              phone: authForm.phone,
+              username: authForm.username,
+              password: authForm.password,
+            };
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -165,7 +166,7 @@ const App = () => {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Erro na autenticação');
+        throw new Error(data.error || 'Erro na autentica??o');
       }
       localStorage.setItem('token', data.token);
       setToken(data.token);
@@ -229,7 +230,7 @@ const App = () => {
           params.append('userId', ownerFilter);
         }
       }
-      const res = await fetch(`${API_URL}/statsPerfil${params.toString()}`, {
+      const res = await fetch(`${API_URL}/stats?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -307,23 +308,23 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      _ownerId: l.ownerId PerfilPerfil l.user_id PerfilPerfil l.userId PerfilPerfil l.owner_id,
+      _ownerId: l.ownerId ?? l.user_id ?? l.userId ?? l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
     if (ownerFilter === 'me') {
       base = base.filter((l) => {
-        const oid = l._ownerId Perfil String(l._ownerId) : '';
+        const oid = l._ownerId ? String(l._ownerId) : '';
         const oname = (l.owner || l.responsible_name || '').toLowerCase();
-        const uname = (userPerfil.name || '').toLowerCase();
-        if (oid) return oid === String(userPerfil.id);
+        const uname = (user?.name || '').toLowerCase();
+        if (oid) return oid === String(user?.id);
         return uname && oname === uname;
       });
     } else if (ownerFilter !== 'all') {
       const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
-      const targetName = (targetUserPerfil.name || '').toLowerCase();
+      const targetName = (targetUser?.name || '').toLowerCase();
       const targetId = String(ownerFilter);
       base = base.filter((l) => {
-        const oid = l._ownerId Perfil String(l._ownerId) : '';
+        const oid = l._ownerId ? String(l._ownerId) : '';
         const oname = (l.owner || l.responsible_name || '').toLowerCase();
         if (oid) return oid === targetId;
         if (targetName) return oname === targetName;
@@ -354,18 +355,18 @@ const App = () => {
     }
 
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, userPerfil.id]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id]);
 
   const canEditLead = useCallback(
     (lead) => {
       if (isAdmin) return true;
       const leadOwnerId = lead._ownerId || lead.ownerId || lead.user_id || lead.userId;
-      if (leadOwnerId && String(leadOwnerId) === String(userPerfil.id)) return true;
+      if (leadOwnerId && String(leadOwnerId) === String(user?.id)) return true;
       const ownerName = (lead.owner || lead.responsible_name || '').toLowerCase().trim();
-      const userName = (userPerfil.name || '').toLowerCase().trim();
+      const userName = (user?.name || '').toLowerCase().trim();
       return ownerName && userName && ownerName === userName;
     },
-    [isAdmin, userPerfil.id, userPerfil.name]
+    [isAdmin, user?.id, user?.name]
   );
 
   const agendaBase = useMemo(() => {
@@ -397,7 +398,7 @@ const App = () => {
   }, [agendaBase]);
 
   const agendaLeads = useMemo(() => {
-    return showAllAgenda Perfil agendaBase : agendaBase.slice(0, 5);
+    return showAllAgenda ? agendaBase : agendaBase.slice(0, 5);
   }, [agendaBase, showAllAgenda]);
   const localStats = useMemo(() => {
     const negotiationStatuses = ['negociacao', 'proposta'];
@@ -427,7 +428,7 @@ const App = () => {
         acc.valorNegociacao += Number(lead.value || 0);
       }
     });
-    acc.taxaConversao = acc.total Perfil Math.round((acc.ganhos / acc.total) * 100) : 0;
+    acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
     return acc;
   }, [filteredLeads]);
 
@@ -438,8 +439,8 @@ const App = () => {
     return filteredLeads
       .map((l) => {
         const baseDate = l.first_contact || l.created_at;
-        const d = baseDate Perfil new Date(baseDate) : null;
-        const days = d && !Number.isNaN(d.getTime()) Perfil Math.floor((now - d) / (1000 * 60 * 60 * 24)) : null;
+        const d = baseDate ? new Date(baseDate) : null;
+        const days = d && !Number.isNaN(d.getTime()) ? Math.floor((now - d) / (1000 * 60 * 60 * 24)) : null;
         return {
           ...l,
           _daysSince: days,
@@ -463,7 +464,7 @@ const App = () => {
     const normalized = String(id);
     if (!editableLeadIds.includes(normalized)) return;
     setSelectedLeadIds((prev) =>
-      prev.includes(normalized) Perfil prev.filter((v) => v !== normalized) : [...prev, normalized]
+      prev.includes(normalized) ? prev.filter((v) => v !== normalized) : [...prev, normalized]
     );
   };
 
@@ -471,7 +472,7 @@ const App = () => {
     const allVisible = editableLeadIds;
     if (!allVisible.length) return;
     const hasAll = allVisible.every((id) => selectedLeadIds.includes(id));
-    setSelectedLeadIds(hasAll Perfil [] : allVisible);
+    setSelectedLeadIds(hasAll ? [] : allVisible);
   };
 
   const selectedCount = selectedLeadIds.length;
@@ -480,7 +481,7 @@ const App = () => {
 
   const openNewLeadModal = () => {
     setEditingLead(null);
-    setLeadForm({ ...emptyLead, owner: userPerfil.name || '', ownerId: userPerfil.id || null });
+    setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
     setShowLeadModal(true);
   };
 
@@ -499,7 +500,7 @@ const App = () => {
       name: lead.name || '',
       contact: lead.contact || '',
       owner: lead.owner || lead.responsible_name || '',
-      ownerId: lead.ownerId || lead.user_id || userPerfil.id || null,
+      ownerId: lead.ownerId || lead.user_id || user?.id || null,
       origin: lead.origin || '',
       stage_detail: lead.stage_detail || '',
       next_contact: nextContact,
@@ -521,13 +522,13 @@ const App = () => {
       showToast('Nome e email são obrigatórios', 'error');
       return;
     }
-    const method = editingLead Perfil 'PUT' : 'POST';
+    const method = editingLead ? 'PUT' : 'POST';
     const url = editingLead
-      Perfil `${API_URL}/leads/${editingLead.id}`
+      ? `${API_URL}/leads/${editingLead.id}`
       : `${API_URL}/leads`;
     const payload = {
       ...leadForm,
-      ownerId: leadForm.ownerId || userPerfil.id || null,
+      ownerId: leadForm.ownerId || user?.id || null,
       first_contact: leadForm.first_contact || '',
       value: Number(leadForm.value) || 0,
     };
@@ -547,7 +548,7 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
-      showToast(editingLead Perfil 'Lead atualizado' : 'Lead criado', 'success');
+      showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
       showToast('Erro ao salvar lead', 'error');
@@ -555,7 +556,7 @@ const App = () => {
   };
 
   const deleteLead = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este leadPerfil')) return;
+    if (!window.confirm('Deseja realmente excluir este lead?')) return;
     try {
       const res = await fetch(`${API_URL}/leads/${id}`, {
         method: 'DELETE',
@@ -578,8 +579,8 @@ const App = () => {
       const payload = {
         name: lead.name,
         contact: lead.contact || null,
-        owner: lead.owner || lead.responsible_name || userPerfil.name || null,
-        ownerId: lead.user_id || userPerfil.id || null,
+        owner: lead.owner || lead.responsible_name || user?.name || null,
+        ownerId: lead.user_id || user?.id || null,
         origin: lead.origin || null,
         stage_detail: lead.stage_detail || null,
         next_contact: null,
@@ -642,7 +643,7 @@ const App = () => {
   };
 
   const handleDeleteChannel = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este canalPerfil')) return;
+    if (!window.confirm('Deseja realmente excluir este canal?')) return;
     try {
       const res = await fetch(`${API_URL}/channels/${id}`, {
         method: 'DELETE',
@@ -732,8 +733,8 @@ const App = () => {
       (lead) => ({
         name: lead.name,
         contact: lead.contact || null,
-        owner: lead.owner || lead.responsible_name || userPerfil.name || null,
-        ownerId: lead.user_id || userPerfil.id || null,
+        owner: lead.owner || lead.responsible_name || user?.name || null,
+        ownerId: lead.user_id || user?.id || null,
         origin: lead.origin || null,
         stage_detail: lead.stage_detail || null,
         next_contact: null,
@@ -753,9 +754,9 @@ const App = () => {
   const openProfileSettings = async (tab = 'me', editing = null) => {
     setProfileTab(tab);
     setProfileForm({
-      name: userPerfil.name || '',
-      email: userPerfil.email || '',
-      phone: userPerfil.phone || '',
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
       password: '',
     });
     setShowProfileModal(true);
@@ -810,7 +811,7 @@ const App = () => {
       }
       setUser(data.user);
       setShowProfileModal(false);
-      showToast('Perfil atualizado', 'success');
+      showToast('? atualizado', 'success');
     } catch (err) {
       console.error('Erro ao atualizar perfil:', err);
       showToast('Erro ao atualizar perfil', 'error');
@@ -865,8 +866,8 @@ const App = () => {
       payload.password = userForm.password;
     }
 
-    const method = userForm.id Perfil 'PUT' : 'POST';
-    const endpoint = userForm.id Perfil `/users/${userForm.id}` : '/users';
+    const method = userForm.id ? 'PUT' : 'POST';
+    const endpoint = userForm.id ? `/users/${userForm.id}` : '/users';
 
     try {
       const res = await fetch(`${API_URL}${endpoint}`, {
@@ -883,11 +884,11 @@ const App = () => {
         return;
       }
       await loadUsers();
-      if (userForm.id === userPerfil.id) {
+      if (userForm.id === user?.id) {
         await verifyToken();
       }
       setShowProfileModal(false);
-      showToast(userForm.id Perfil 'Usuario atualizado' : 'Usuario criado', 'success');
+      showToast(userForm.id ? 'Usuario atualizado' : 'Usuario criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar usuario:', err);
       showToast('Erro ao salvar usuario', 'error');
@@ -895,7 +896,7 @@ const App = () => {
   };
 
   const deleteUser = async (id) => {
-    if (!window.confirm('Deseja realmente excluir este usuarioPerfil')) return;
+    if (!window.confirm('Deseja realmente excluir este usuario?')) return;
     try {
       const res = await fetch(`${API_URL}/users/${id}`, {
         method: 'DELETE',
@@ -931,7 +932,7 @@ const App = () => {
               onClick={() => setAuthMode('login')}
               className={`flex-1 py-2 rounded-lg font-semibold ${
                 authMode === 'login'
-                  Perfil 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
               }`}
             >
@@ -941,7 +942,7 @@ const App = () => {
               onClick={() => setAuthMode('register')}
               className={`flex-1 py-2 rounded-lg font-semibold ${
                 authMode === 'register'
-                  Perfil 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
               }`}
             >
@@ -1000,10 +1001,10 @@ const App = () => {
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                {authMode === 'login' Perfil 'Email ou usuário' : 'Email'}
+                {authMode === 'login' ? 'Email ou usuário' : 'Email'}
               </label>
               <input
-                type={authMode === 'login' Perfil 'text' : 'email'}
+                type={authMode === 'login' ? 'text' : 'email'}
                 value={authForm.email}
                 onChange={(e) =>
                   setAuthForm({ ...authForm, email: e.target.value })
@@ -1031,7 +1032,7 @@ const App = () => {
               disabled={loading}
               className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold"
             >
-              {loading Perfil 'Aguarde...' : authMode === 'login' Perfil 'Entrar' : 'Criar conta'}
+              {loading ? 'Aguarde...' : authMode === 'login' ? 'Entrar' : 'Criar conta'}
             </button>
           </form>
         </div>
@@ -1046,7 +1047,7 @@ const App = () => {
           <div
             className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${
               toast.type === 'error'
-                Perfil 'bg-red-600 text-white'
+                ? 'bg-red-600 text-white'
                 : 'bg-emerald-600 text-white'
             }`}
           >
@@ -1127,7 +1128,7 @@ const App = () => {
               onChange={(e) => {
                 const val = e.target.value;
                 setOwnerFilter(val);
-                setAgendaOwnerFilter(val === 'all' Perfil 'todos' : val);
+                setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
               }}
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
             >
@@ -1190,7 +1191,7 @@ const App = () => {
                   onClick={() => setShowAllAgenda((v) => !v)}
                   className="text-xs text-blue-600 hover:underline"
                 >
-                  {showAllAgenda Perfil 'Mostrar menos' : 'Ver toda agenda'}
+                  {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
                 </button>
               )}
             </div>
@@ -1233,7 +1234,7 @@ const App = () => {
                   >
                     <div>
                       <p className="font-semibold text-slate-800">
-                        {lead.name} {lead.contact Perfil `- ${lead.contact}` : ''}
+                        {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
@@ -1245,7 +1246,7 @@ const App = () => {
                       <div className="text-right">
                         <p className="text-xs text-slate-600">
                           {lead.next_contact
-                            Perfil new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                            ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
                             : '-'}
                         </p>
                         <p className="text-[11px] text-slate-500">
@@ -1293,7 +1294,7 @@ const App = () => {
                 >
                   <div>
                     <p className="font-semibold text-slate-800">
-                      {lead.name} {lead.contact Perfil `- ${lead.contact}` : ''}
+                      {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
                       {lead.owner || lead.responsible_name || 'Sem responsável'}
@@ -1336,7 +1337,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">EditPerfilveis na lista: {editableLeadIds.length}</span>
+              <span className="text-slate-500">Edit?veis na lista: {editableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -1369,7 +1370,7 @@ const App = () => {
                     onChange={(e) => setBulkOwnerId(e.target.value)}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
                   >
-                    <option value="">ResponsPerfilvel</option>
+                    <option value="">Respons?vel</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.role})
@@ -1412,8 +1413,8 @@ const App = () => {
                   <th className="py-2 px-2">Telefone</th>
                   <th className="py-2 px-2">Canal</th>
                   <th className="py-2 px-2">Status</th>
-                  <th className="py-2 px-2">ResponsPerfilvel</th>
-                  <th className="py-2 px-2 text-right">APerfilPerfiles</th>
+                  <th className="py-2 px-2">Respons?vel</th>
+                  <th className="py-2 px-2 text-right">A??es</th>
                 </tr>
               </thead>
               <tbody>
@@ -1474,7 +1475,7 @@ const App = () => {
             <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
               <div className="p-4 border-b border-slate-200 flex items-start justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">
-                  {editingLead Perfil 'Editar Lead' : 'Novo Lead'}
+                  {editingLead ? 'Editar Lead' : 'Novo Lead'}
                 </h2>
                 <button
                   onClick={() => {
@@ -1535,21 +1536,21 @@ const App = () => {
                   <select
                     value={leadForm.ownerId || ''}
                     onChange={(e) => {
-                      const selectedId = e.target.value Perfil Number(e.target.value) : null;
+                      const selectedId = e.target.value ? Number(e.target.value) : null;
                       const selectedUser = users.find((u) => u.id === selectedId);
                       setLeadForm({
                         ...leadForm,
                         ownerId: selectedId,
-                        owner: selectedUser Perfil selectedUser.name : userPerfil.name || '',
+                        owner: selectedUser ? selectedUser.name : user?.name || '',
                       });
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
-                    <option value={userPerfil.id || ''}>
-                      {userPerfil.name Perfil `${user.name} (Você)` : 'Selecione'}
+                    <option value={user?.id || ''}>
+                      {user?.name ? `${user.name} (Você)` : 'Selecione'}
                     </option>
                     {users
-                      .filter((u) => u.id !== userPerfil.id)
+                      .filter((u) => u.id !== user?.id)
                       .map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.name} ({u.role})
@@ -1710,7 +1711,7 @@ const App = () => {
                   <button
                     onClick={() => setProfileTab('me')}
                     className={`px-3 py-2 text-sm rounded-lg ${
-                      profileTab === 'me' Perfil 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                      profileTab === 'me' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     Meu perfil
@@ -1731,7 +1732,7 @@ const App = () => {
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${
                         profileTab === 'users'
-                          Perfil 'bg-blue-600 text-white'
+                          ? 'bg-blue-600 text-white'
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
@@ -1811,7 +1812,7 @@ const App = () => {
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {userForm.id Perfil 'Editar usuário' : 'Novo usuário'}
+                      {userForm.id ? 'Editar usuário' : 'Novo usuário'}
                     </h3>
                     <button
                       onClick={startNewUser}
@@ -1862,14 +1863,14 @@ const App = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Senha {userForm.id Perfil '(opcional)' : ''}
+                        Senha {userForm.id ? '(opcional)' : ''}
                       </label>
                       <input
                         type="password"
                         value={userForm.password}
                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
-                        placeholder={userForm.id Perfil 'Deixe em branco para manter' : ''}
+                        placeholder={userForm.id ? 'Deixe em branco para manter' : ''}
                       />
                     </div>
                     <div>
@@ -1895,7 +1896,7 @@ const App = () => {
                       onClick={saveAdminUser}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
                     >
-                      {userForm.id Perfil 'Salvar alterações' : 'Criar usuário'}
+                      {userForm.id ? 'Salvar alterações' : 'Criar usuário'}
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
