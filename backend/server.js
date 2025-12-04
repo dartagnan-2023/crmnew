@@ -46,6 +46,8 @@ const auth = new google.auth.JWT(
   ['https://www.googleapis.com/auth/spreadsheets']
 );
 const sheets = google.sheets({ version: 'v4', auth });
+const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 60000);
+const cache = {};
 
 app.use(cors());
 app.use(express.json());
@@ -74,6 +76,9 @@ const SHEETS_CONFIG = {
 };
 
 const readSheet = async (sheetName) => {
+  if (cache[sheetName] && Date.now() - cache[sheetName].ts < CACHE_TTL_MS) {
+    return cache[sheetName].data;
+  }
   const range = `${sheetName}!A1:Z1000`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range }).catch((err) => {
     if (err.response?.status === 400) {
@@ -91,7 +96,9 @@ const readSheet = async (sheetName) => {
     });
     return obj;
   });
-  return { headers, rows };
+  const payload = { headers, rows };
+  cache[sheetName] = { data: payload, ts: Date.now() };
+  return payload;
 };
 
 const writeSheet = async (sheetName, headers, rows) => {
@@ -102,6 +109,7 @@ const writeSheet = async (sheetName, headers, rows) => {
     valueInputOption: 'RAW',
     requestBody: { values },
   });
+  delete cache[sheetName];
 };
 
 const ensureHeaders = async () => {
@@ -189,8 +197,39 @@ const ensureDefaultAdmin = async () => {
   }
 };
 
+let initPromise = null;
+let initStarted = false;
+let initFinished = false;
+let initError = null;
+
+const ensureInitialized = () => {
+  if (initFinished) return Promise.resolve();
+  if (initPromise) return initPromise;
+  initStarted = true;
+  initPromise = (async () => {
+    await ensureHeaders();
+    await ensureDefaultAdmin();
+    initFinished = true;
+  })().catch((err) => {
+    initError = err;
+    initPromise = null;
+    throw err;
+  });
+  return initPromise;
+};
+
+const ensureReadyMiddleware = async (req, res, next) => {
+  try {
+    await ensureInitialized();
+    return next();
+  } catch (err) {
+    console.error('Erro de inicializacao:', err);
+    return res.status(500).json({ error: 'Falha ao preparar storage' });
+  }
+};
+
 // ===================== AUTH =====================
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', ensureReadyMiddleware, async (req, res) => {
   const { name, email, phone, password, username } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Dados obrigatorios faltando' });
@@ -227,7 +266,7 @@ app.post('/api/auth/register', async (req, res) => {
   return res.json({ token, user: sanitizeUser(user) });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', ensureReadyMiddleware, async (req, res) => {
   const { email, password, login } = req.body; // login pode ser username ou email
   const loginValue = (login || email || '').trim();
   if (!loginValue || !password) return res.status(400).json({ error: 'Login e senha necessarios' });
@@ -250,11 +289,31 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   return res.json(req.user);
 });
 
-// Ping público (mantém container acordado e usado pelo front para pré-aquecer)
-app.get('/api/ping', async (req, res) => {
-  res.json({ ok: true, at: new Date().toISOString() });
+// Health/ping leves (nao tocam Google Sheets)
+app.get('/api/health', (req, res) => {
+  if (!initStarted) ensureInitialized().catch(() => {});
+  res.json({
+    ok: true,
+    ready: initFinished,
+    initStarted,
+    initError: Boolean(initError),
+    uptime: process.uptime(),
+    at: new Date().toISOString(),
+  });
 });
 
+app.get('/api/ping', (req, res) => {
+  if (!initStarted) ensureInitialized().catch(() => {});
+  res.json({ ok: true, at: new Date().toISOString(), ready: initFinished });
+});
+
+// Middleware global (exceto health/ping) para garantir inicializacao
+app.use('/api', (req, res, next) => {
+  if (req.path === '/ping' || req.path === '/health') return next();
+  return ensureReadyMiddleware(req, res, next);
+});
+
+// ===================== USERS =====================
 // ===================== USERS =====================
 app.get('/api/users', authMiddleware, async (req, res) => {
   const { items: users } = await loadTable('users');
@@ -434,7 +493,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
     first_contact = '',
   } = req.body;
 
-  if (!name || !email) return res.status(400).json({ error: 'Nome e email sao obrigatorios' });
+  if (!name || !phone) return res.status(400).json({ error: 'Nome e telefone sao obrigatorios' });
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
   const id = nextId(leads);
@@ -607,10 +666,12 @@ app.post('/api/webhook/manychat', async (req, res) => {
 });
 
 const bootstrap = async () => {
-  await ensureHeaders();
-  await ensureDefaultAdmin();
   app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
+  });
+  // Inicializa planilhas e admin em segundo plano (não bloqueia start)
+  ensureInitialized().catch((err) => {
+    console.error('Erro ao preparar storage:', err);
   });
 };
 

@@ -61,6 +61,10 @@ const App = () => {
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortKey, setSortKey] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
 
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
@@ -93,6 +97,7 @@ const App = () => {
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkOwnerId, setBulkOwnerId] = useState('');
+  const [loadingData, setLoadingData] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -241,7 +246,9 @@ const App = () => {
   };
 
   const loadAll = async () => {
+    setLoadingData(true);
     await Promise.all([loadLeads(), loadChannels(), loadUsers(), loadStats()]);
+    setLoadingData(false);
   };
 
   useEffect(() => {
@@ -354,8 +361,45 @@ const App = () => {
       });
     }
 
-    return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id]);
+    const term = searchTerm.trim().toLowerCase();
+    if (term) {
+      base = base.filter((l) => {
+        return (
+          (l.name || '').toLowerCase().includes(term) ||
+          (l.email || '').toLowerCase().includes(term) ||
+          (l.phone || '').toLowerCase().includes(term) ||
+          (l.owner || l.responsible_name || '').toLowerCase().includes(term) ||
+          (l.campaign || '').toLowerCase().includes(term)
+        );
+      });
+    }
+
+    const sorter = (a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const getVal = (lead) => {
+        switch (sortKey) {
+          case 'name':
+            return (lead.name || '').toLowerCase();
+          case 'status':
+            return (lead.status || '').toLowerCase();
+          case 'value':
+            return Number(lead.value || 0);
+          case 'next_contact':
+            return lead.next_contact ? new Date(lead.next_contact).getTime() : 0;
+          case 'created_at':
+          default:
+            return lead.created_at ? new Date(lead.created_at).getTime() : 0;
+        }
+      };
+      const va = getVal(a);
+      const vb = getVal(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    };
+
+    return base.sort(sorter);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, sortKey, sortDir]);
 
   const canEditLead = useCallback(
     (lead) => {
@@ -517,9 +561,9 @@ const App = () => {
     setShowLeadModal(true);
   };
 
-  const saveLead = async () => {
-    if (!leadForm.name || !leadForm.email) {
-      showToast('Nome e email são obrigatórios', 'error');
+const saveLead = async () => {
+    if (!leadForm.name || !leadForm.phone) {
+      showToast('Nome e telefone são obrigatórios', 'error');
       return;
     }
     const method = editingLead ? 'PUT' : 'POST';
@@ -1055,6 +1099,15 @@ const App = () => {
           </div>
         )}
 
+        {loadingData && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40">
+            <div className="bg-white rounded-xl shadow-lg px-6 py-4 text-sm text-slate-700 flex items-center gap-3">
+              <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+              <span>Carregando dados...</span>
+            </div>
+          </div>
+        )}
+
         <header className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Leads - BHS Eletronica</h1>
@@ -1120,47 +1173,101 @@ const App = () => {
           </div>
         </section>
 
-        <div className="bg-white rounded-xl shadow p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-slate-800">Filtros</div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <select
-              value={ownerFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setOwnerFilter(val);
-                setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
-              }}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-            >
-              <option value="all">Todos os responsáveis</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-            >
-              <option value="todos">Todos os status</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={urgencyFilter}
-              onChange={(e) => setUrgencyFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-            >
-              <option value="all">Toda agenda</option>
-              <option value="overdue">Vencidos</option>
-              <option value="today">Hoje</option>
-              <option value="next3">Próx. 3 dias</option>
-            </select>
+        <div className="bg-white rounded-xl shadow p-3 flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm font-semibold text-slate-800">Filtros</div>
+            <div className="flex items-center gap-2 text-sm">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 rounded-lg border text-xs ${
+                  viewMode === 'list'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                Lista
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`px-3 py-2 rounded-lg border text-xs ${
+                  viewMode === 'kanban'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                Kanban
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <select
+                value={ownerFilter}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setOwnerFilter(val);
+                  setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
+                }}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+              >
+                <option value="all">Todos os responsáveis</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.role})
+                  </option>
+                ))}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+              >
+                <option value="todos">Todos os status</option>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={urgencyFilter}
+                onChange={(e) => setUrgencyFilter(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+              >
+                <option value="all">Toda agenda</option>
+                <option value="overdue">Vencidos</option>
+                <option value="today">Hoje</option>
+                <option value="next3">Próx. 3 dias</option>
+              </select>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome, email, telefone, campanha..."
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+              >
+                <option value="created_at">Criado em</option>
+                <option value="name">Nome</option>
+                <option value="status">Status</option>
+                <option value="value">Valor</option>
+                <option value="next_contact">Próximo contato</option>
+              </select>
+              <select
+                value={sortDir}
+                onChange={(e) => setSortDir(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+              >
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1337,7 +1444,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">Edit?veis na lista: {editableLeadIds.length}</span>
+              <span className="text-slate-500">Editáveis na lista: {editableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -1370,7 +1477,7 @@ const App = () => {
                     onChange={(e) => setBulkOwnerId(e.target.value)}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
                   >
-                    <option value="">Respons?vel</option>
+                    <option value="">Responsável</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.role})
@@ -1396,78 +1503,126 @@ const App = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-slate-500">
-                  <th className="py-2 px-2 w-10">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={allEditableSelected && editableLeadIds.length > 0}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                  <th className="py-2 px-2">Nome</th>
-                  <th className="py-2 px-2">Email</th>
-                  <th className="py-2 px-2">Telefone</th>
-                  <th className="py-2 px-2">Canal</th>
-                  <th className="py-2 px-2">Status</th>
-                  <th className="py-2 px-2">Respons?vel</th>
-                  <th className="py-2 px-2 text-right">A??es</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLeads.map((lead) => {
-                  const normalizedId = String(lead.id);
-                  const canEdit = canEditLead(lead);
-                  return (
-                    <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
-                      <td className="py-2 px-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          disabled={!canEdit}
-                          checked={selectedLeadIds.includes(normalizedId)}
-                          onChange={() => toggleSelectLead(normalizedId)}
-                        />
-                      </td>
-                      <td className="py-2 px-2">{lead.name}</td>
-                      <td className="py-2 px-2">{lead.email}</td>
-                      <td className="py-2 px-2">{lead.phone || '-'}</td>
-                      <td className="py-2 px-2">{lead.channel_name || '-'}</td>
-                      <td className="py-2 px-2">{lead.status}</td>
-                      <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
-                      <td className="py-2 px-2 text-right space-x-2">
-                        <button
-                          onClick={() => openEditLeadModal(lead)}
-                          className="text-blue-600 text-xs"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => deleteLead(lead.id)}
-                          className="text-red-600 text-xs"
-                        >
-                          Excluir
-                        </button>
+          {viewMode === 'list' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-slate-500">
+                    <th className="py-2 px-2 w-10">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={allEditableSelected && editableLeadIds.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="py-2 px-2">Nome</th>
+                    <th className="py-2 px-2">Email</th>
+                    <th className="py-2 px-2">Telefone</th>
+                    <th className="py-2 px-2">Canal</th>
+                    <th className="py-2 px-2">Status</th>
+                    <th className="py-2 px-2">Responsável</th>
+                    <th className="py-2 px-2 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeads.map((lead) => {
+                    const normalizedId = String(lead.id);
+                    const canEdit = canEditLead(lead);
+                    return (
+                      <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
+                        <td className="py-2 px-2">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            disabled={!canEdit}
+                            checked={selectedLeadIds.includes(normalizedId)}
+                            onChange={() => toggleSelectLead(normalizedId)}
+                          />
+                        </td>
+                        <td className="py-2 px-2">{lead.name}</td>
+                        <td className="py-2 px-2">{lead.email}</td>
+                        <td className="py-2 px-2">{lead.phone || '-'}</td>
+                        <td className="py-2 px-2">{lead.channel_name || '-'}</td>
+                        <td className="py-2 px-2">{lead.status}</td>
+                        <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
+                        <td className="py-2 px-2 text-right space-x-2">
+                          <button
+                            onClick={() => openEditLeadModal(lead)}
+                            className="text-blue-600 text-xs"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => deleteLead(lead.id)}
+                            className="text-red-600 text-xs"
+                          >
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredLeads.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="py-4 text-center text-slate-500 text-xs"
+                      >
+                        Nenhum lead cadastrado
                       </td>
                     </tr>
-                  );
-                })}
-                {filteredLeads.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="py-4 text-center text-slate-500 text-xs"
-                    >
-                      Nenhum lead cadastrado
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {STATUS_OPTIONS.map((col) => {
+                const colLeads = filteredLeads.filter(
+                  (l) => (l.status || '').toLowerCase() === col.value
+                );
+                return (
+                  <div key={col.value} className="border border-slate-200 rounded-xl p-3 bg-slate-50/70">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-slate-800">{col.label}</h3>
+                      <span className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200">
+                        {colLeads.length}
+                      </span>
+                    </div>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {colLeads.map((lead) => (
+                        <div
+                          key={lead.id}
+                          className="p-3 rounded-lg border border-slate-200 bg-white shadow-sm cursor-pointer hover:border-blue-200"
+                          onClick={() => openEditLeadModal(lead)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-slate-900 text-sm">{lead.name}</p>
+                            <span className="text-xs text-slate-500">
+                              {lead.value ? `R$ ${Number(lead.value).toLocaleString('pt-BR')}` : ''}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600">{lead.owner || lead.responsible_name || '-'}</p>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                            <span>{lead.email || lead.phone || '-'}</span>
+                            <span>
+                              {lead.next_contact
+                                ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                                : '-'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {colLeads.length === 0 && (
+                        <p className="text-xs text-slate-500">Nenhum lead</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {showLeadModal && (
@@ -1504,7 +1659,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Email *
+                    Email
                   </label>
                   <input
                     type="email"
@@ -1517,7 +1672,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Telefone
+                    Telefone *
                   </label>
                   <input
                     type="text"
@@ -1527,6 +1682,7 @@ const App = () => {
                     }
                     maxLength={16}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    required
                   />
                 </div>
                 <div>
