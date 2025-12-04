@@ -98,6 +98,7 @@ const App = () => {
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkOwnerId, setBulkOwnerId] = useState('');
   const [loadingData, setLoadingData] = useState(false);
+  const [draggingLeadId, setDraggingLeadId] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -270,6 +271,37 @@ const App = () => {
   useEffect(() => {
     setSelectedLeadIds([]);
   }, [leads, user]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('leadFilters');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.ownerFilter) setOwnerFilter(parsed.ownerFilter);
+        if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
+        if (parsed.urgencyFilter) setUrgencyFilter(parsed.urgencyFilter);
+        if (parsed.searchTerm) setSearchTerm(parsed.searchTerm);
+        if (parsed.sortKey) setSortKey(parsed.sortKey);
+        if (parsed.sortDir) setSortDir(parsed.sortDir);
+        if (parsed.viewMode) setViewMode(parsed.viewMode);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const payload = {
+      ownerFilter,
+      statusFilter,
+      urgencyFilter,
+      searchTerm,
+      sortKey,
+      sortDir,
+      viewMode,
+    };
+    localStorage.setItem('leadFilters', JSON.stringify(payload));
+  }, [ownerFilter, statusFilter, urgencyFilter, searchTerm, sortKey, sortDir, viewMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -531,6 +563,14 @@ const App = () => {
   const selectedCount = selectedLeadIds.length;
   const allEditableSelected =
     editableLeadIds.length > 0 && editableLeadIds.every((id) => selectedLeadIds.includes(id));
+
+  const handleCardDragStart = (id) => setDraggingLeadId(id);
+  const handleCardDragEnd = () => setDraggingLeadId(null);
+  const handleDropStatus = (status) => {
+    const lead = filteredLeads.find((l) => String(l.id) === String(draggingLeadId));
+    if (!lead) return;
+    handleStatusChange(lead, status);
+  };
 
   const openNewLeadModal = () => {
     setEditingLead(null);
@@ -802,6 +842,32 @@ const saveLead = async () => {
       }),
       'Contatos marcados como feitos'
     );
+  };
+
+  const handleStatusChange = async (lead, newStatus) => {
+    if (!lead || lead.status === newStatus) return;
+    try {
+      const res = await fetch(`${API_URL}/leads/${lead.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao atualizar status', 'error');
+        return;
+      }
+      await Promise.all([loadLeads(), loadStats()]);
+      showToast('Status atualizado', 'success');
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      showToast('Erro ao atualizar status', 'error');
+    } finally {
+      setDraggingLeadId(null);
+    }
   };
 
   const openProfileSettings = async (tab = 'me', editing = null) => {
@@ -1262,7 +1328,7 @@ const saveLead = async () => {
                 onChange={(e) => setSortKey(e.target.value)}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               >
-                <option value="created_at">Criado em</option>
+                <option value="created_at">Criado (mais novo/antigo)</option>
                 <option value="name">Nome</option>
                 <option value="status">Status</option>
                 <option value="value">Valor</option>
@@ -1592,7 +1658,12 @@ const saveLead = async () => {
                   (l) => (l.status || '').toLowerCase() === col.value
                 );
                 return (
-                  <div key={col.value} className="border border-slate-200 rounded-xl p-3 bg-slate-50/70">
+                  <div
+                    key={col.value}
+                    className="border border-slate-200 rounded-xl p-3 bg-slate-50/70"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDropStatus(col.value)}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-semibold text-slate-800">{col.label}</h3>
                       <span className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200">
@@ -1605,6 +1676,9 @@ const saveLead = async () => {
                           key={lead.id}
                           className="p-3 rounded-lg border border-slate-200 bg-white shadow-sm cursor-pointer hover:border-blue-200"
                           onClick={() => openEditLeadModal(lead)}
+                          draggable
+                          onDragStart={() => handleCardDragStart(lead.id)}
+                          onDragEnd={handleCardDragEnd}
                         >
                           <div className="flex items-center justify-between">
                             <p className="font-semibold text-slate-900 text-sm">{lead.name}</p>
