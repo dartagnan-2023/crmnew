@@ -247,8 +247,11 @@ const App = () => {
 
   const loadAll = async () => {
     setLoadingData(true);
-    await Promise.all([loadLeads(), loadChannels(), loadUsers(), loadStats()]);
-    setLoadingData(false);
+    try {
+      await Promise.all([loadLeads(), loadChannels(), loadUsers(), loadStats()]);
+    } finally {
+      setLoadingData(false);
+    }
   };
 
   useEffect(() => {
