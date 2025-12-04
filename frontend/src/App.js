@@ -262,6 +262,12 @@ const App = () => {
   }, [user]);
 
   useEffect(() => {
+    if (!loadingData) return undefined;
+    const timeout = setTimeout(() => setLoadingData(false), 8000);
+    return () => clearTimeout(timeout);
+  }, [loadingData]);
+
+  useEffect(() => {
     setSelectedLeadIds([]);
   }, [leads, user]);
 
