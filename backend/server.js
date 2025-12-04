@@ -46,7 +46,8 @@ const auth = new google.auth.JWT(
   ['https://www.googleapis.com/auth/spreadsheets']
 );
 const sheets = google.sheets({ version: 'v4', auth });
-const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 60000);
+// Cache leve de leituras das planilhas (ms). Default menor para frescor sem depender de env no tier free.
+const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 15000);
 const cache = {};
 
 app.use(cors());
