@@ -70,6 +70,7 @@ const App = () => {
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
+  const [savingLead, setSavingLead] = useState(false);
 
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [newChannel, setNewChannel] = useState('');
@@ -640,7 +641,8 @@ const App = () => {
     setShowLeadModal(true);
   };
 
-const saveLead = async () => {
+  const saveLead = async () => {
+    if (savingLead) return;
     if (!leadForm.name || !leadForm.phone) {
       showToast('Nome e telefone são obrigatórios', 'error');
       return;
@@ -656,6 +658,7 @@ const saveLead = async () => {
       value: Number(leadForm.value) || 0,
     };
     try {
+      setSavingLead(true);
       const res = await fetch(url, {
         method,
         headers: {
@@ -675,6 +678,8 @@ const saveLead = async () => {
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
       showToast('Erro ao salvar lead', 'error');
+    } finally {
+      setSavingLead(false);
     }
   };
 
@@ -1995,9 +2000,10 @@ const saveLead = async () => {
                 </button>
                 <button
                   onClick={saveLead}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
+                  disabled={savingLead}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
                 >
-                  Salvar
+                  {savingLead ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </div>

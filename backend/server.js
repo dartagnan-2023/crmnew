@@ -30,6 +30,8 @@ const normalizeName = (val) =>
     .toLowerCase()
     .trim();
 
+const normalizePhone = (val) => (val || '').replace(/\D/g, '');
+
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -501,6 +503,16 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
   const ownerUser = users.find((u) => String(u.id) === String(ownerId)) || users.find((u) => String(u.id) === String(req.user.id));
   const channelName = req.body.channel_name || '';
   const now = new Date().toISOString();
+
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedEmail = (email || '').toLowerCase();
+  const duplicate = leads.find((l) => {
+    const phoneMatch = normalizedPhone && normalizePhone(l.phone) === normalizedPhone;
+    const emailMatch = normalizedEmail && (l.email || '').toLowerCase() === normalizedEmail;
+    return phoneMatch || emailMatch;
+  });
+  if (duplicate) return res.status(409).json({ error: 'Lead ja existe (email/telefone duplicado)' });
+
   const lead = {
     id,
     name,
