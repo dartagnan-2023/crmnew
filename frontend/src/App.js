@@ -414,8 +414,11 @@ const App = () => {
         );
       });
     }
+    return base;
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm]);
 
-    const sorter = (a, b) => {
+  const sorter = useCallback(
+    (a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       const getVal = (lead) => {
         switch (sortKey) {
@@ -437,10 +440,14 @@ const App = () => {
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
       return 0;
-    };
+    },
+    [sortDir, sortKey]
+  );
 
-    return base.sort(sorter);
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, sortKey, sortDir]);
+  const displayedLeads = useMemo(() => {
+    const clone = [...filteredLeads];
+    return clone.sort(sorter);
+  }, [filteredLeads, sorter]);
 
   const canEditLead = useCallback(
     (lead) => {
@@ -1149,9 +1156,15 @@ const saveLead = async () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold"
+              className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-80"
             >
-              {loading ? 'Aguarde...' : authMode === 'login' ? 'Entrar' : 'Criar conta'}
+              {loading && (
+                <span
+                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                  aria-hidden
+                />
+              )}
+              <span>{loading ? 'Aguarde' : authMode === 'login' ? 'Entrar' : 'Criar conta'}</span>
             </button>
           </form>
         </div>
@@ -1247,104 +1260,6 @@ const saveLead = async () => {
             </p>
           </div>
         </section>
-
-        <div className="bg-white rounded-xl shadow p-3 flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold text-slate-800">Filtros</div>
-            <div className="flex items-center gap-2 text-sm">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-2 rounded-lg border text-xs ${
-                  viewMode === 'list'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                Lista
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`px-3 py-2 rounded-lg border text-xs ${
-                  viewMode === 'kanban'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                Kanban
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-col lg:flex-row gap-2">
-            <div className="flex flex-col sm:flex-row gap-2 w-full">
-              <select
-                value={ownerFilter}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setOwnerFilter(val);
-                  setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
-                }}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
-              >
-                <option value="all">Todos os responsáveis</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
-              >
-                <option value="todos">Todos os status</option>
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={urgencyFilter}
-                onChange={(e) => setUrgencyFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
-              >
-                <option value="all">Toda agenda</option>
-                <option value="overdue">Vencidos</option>
-                <option value="today">Hoje</option>
-                <option value="next3">Próx. 3 dias</option>
-              </select>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nome, email, telefone, campanha..."
-                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-              />
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-              >
-                <option value="created_at">Criado (mais novo/antigo)</option>
-                <option value="name">Nome</option>
-                <option value="status">Status</option>
-                <option value="value">Valor</option>
-                <option value="next_contact">Próximo contato</option>
-              </select>
-              <select
-                value={sortDir}
-                onChange={(e) => setSortDir(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-              >
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </select>
-            </div>
-          </div>
-        </div>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl shadow p-4">
@@ -1497,10 +1412,30 @@ const saveLead = async () => {
           </div>
         </section>
 
-                <section className="bg-white/90 backdrop-blur rounded-xl shadow p-4 border border-slate-200">
+        <section className="bg-white/90 backdrop-blur rounded-xl shadow p-4 border border-slate-200">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
             <h2 className="text-lg font-semibold text-slate-900">Leads</h2>
             <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 rounded-lg border text-xs ${
+                  viewMode === 'list'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                Lista
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`px-3 py-2 rounded-lg border text-xs ${
+                  viewMode === 'kanban'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                Kanban
+              </button>
               <button
                 onClick={exportCsv}
                 className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg text-sm"
@@ -1513,6 +1448,79 @@ const saveLead = async () => {
               >
                 Novo Lead
               </button>
+            </div>
+          </div>
+
+          <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3">
+            <div className="flex flex-col lg:flex-row gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 w-full">
+                <select
+                  value={ownerFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOwnerFilter(val);
+                    setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
+                  }}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                >
+                  <option value="all">Todos os responsáveis</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                >
+                  <option value="todos">Todos os status</option>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={urgencyFilter}
+                  onChange={(e) => setUrgencyFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                >
+                  <option value="all">Toda agenda</option>
+                  <option value="overdue">Vencidos</option>
+                  <option value="today">Hoje</option>
+                  <option value="next3">Próx. 3 dias</option>
+                </select>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por nome, email, telefone, campanha..."
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+                <select
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="created_at">Criado (mais novo/antigo)</option>
+                  <option value="name">Nome</option>
+                  <option value="status">Status</option>
+                  <option value="value">Valor</option>
+                  <option value="next_contact">Próximo contato</option>
+                </select>
+                <select
+                  value={sortDir}
+                  onChange={(e) => setSortDir(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="desc">Mais novo</option>
+                  <option value="asc">Mais antigo</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1601,10 +1609,10 @@ const saveLead = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLeads.map((lead) => {
-                    const normalizedId = String(lead.id);
-                    const canEdit = canEditLead(lead);
-                    return (
+                {displayedLeads.map((lead) => {
+                  const normalizedId = String(lead.id);
+                  const canEdit = canEditLead(lead);
+                  return (
                       <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
                         <td className="py-2 px-2">
                           <input
