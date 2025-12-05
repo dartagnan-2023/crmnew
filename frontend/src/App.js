@@ -1548,17 +1548,17 @@ const App = () => {
                   <option value="value">Valor</option>
                   <option value="next_contact">Próximo contato</option>
                 </select>
-                <select
-                  value={sortDir}
-                  onChange={(e) => setSortDir(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-                >
-                  <option value="desc">Mais novo</option>
-                  <option value="asc">Mais antigo</option>
-                </select>
-              </div>
+              <select
+                value={sortDir}
+                onChange={(e) => setSortDir(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+              >
+                <option value="desc">Mais recente primeiro</option>
+                <option value="asc">Mais antigo primeiro</option>
+              </select>
             </div>
           </div>
+        </div>
 
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
