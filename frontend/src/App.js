@@ -1709,6 +1709,37 @@ const saveLead = async () => {
                         <p className="text-xs text-slate-500">Nenhum lead</p>
                       )}
                     </div>
+                    {isAdmin && colLeads.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <select
+                          value={bulkOwnerId}
+                          onChange={(e) => setBulkOwnerId(e.target.value)}
+                          className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
+                        >
+                          <option value="">Reatribuir coluna</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.role})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={async () => {
+                            if (!bulkOwnerId) {
+                              showToast('Escolha um responsável', 'error');
+                              return;
+                            }
+                            const ids = colLeads.map((l) => String(l.id));
+                            setSelectedLeadIds(ids);
+                            setOwnerFilter('all');
+                            await bulkReassignOwner();
+                          }}
+                          className="px-3 py-2 text-xs rounded-lg bg-emerald-600 text-white"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
