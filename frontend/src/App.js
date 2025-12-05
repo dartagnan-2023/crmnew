@@ -48,6 +48,7 @@ const emptyLead = {
 };
 
 const App = () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
@@ -152,45 +153,59 @@ const App = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    try {
-      const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-      const body =
-        authMode === 'login'
-          ? { login: authForm.email, password: authForm.password }
-          : {
-              name: authForm.name,
-              email: authForm.email,
-              phone: authForm.phone,
-              username: authForm.username,
-              password: authForm.password,
-            };
+    const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+    const body =
+      authMode === 'login'
+        ? { login: authForm.email, password: authForm.password }
+        : {
+            name: authForm.name,
+            email: authForm.email,
+            phone: authForm.phone,
+            username: authForm.username,
+            password: authForm.password,
+          };
 
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro na autenticação');
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        if (attempt > 1) {
+          setError(`Servidor demorou. Tentando novamente... (${attempt}/${maxAttempts})`);
+        }
+        const res = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro na autenticação');
+        }
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data.user);
+        setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
+        setError('');
+        clearTimeout(timeout);
+        setLoading(false);
+        return;
+      } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+          if (attempt < maxAttempts) {
+            await sleep(1500);
+            continue;
+          }
+          setError('Servidor demorou a responder. Tente novamente agora.');
+        } else {
+          setError(err.message);
+          break;
+        }
       }
-      localStorage.setItem('token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Servidor demorou a responder. Tente novamente em alguns segundos.');
-      } else {
-        setError(err.message);
-      }
-    } finally {
-      clearTimeout(timeout);
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const loadLeads = async () => {
