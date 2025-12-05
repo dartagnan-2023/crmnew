@@ -6,7 +6,7 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contato', label: 'Em contato' },
   { value: 'proposta', label: 'Proposta enviada' },
-  { value: 'negociacao', label: 'Negocia??o' },
+  { value: 'negociacao', label: 'Negociação' },
   { value: 'ganho', label: 'Ganho' },
   { value: 'perdido', label: 'Perdido' },
 ];
@@ -298,10 +298,6 @@ const App = () => {
   }, [leads, user]);
 
   useEffect(() => {
-    setVisibleCount(20);
-  }, [filteredLeads, sortKey, sortDir, searchTerm]);
-
-  useEffect(() => {
     try {
       const saved = localStorage.getItem('leadFilters');
       if (saved) {
@@ -480,6 +476,10 @@ const App = () => {
     const clone = [...filteredLeads];
     return clone.sort(sorter);
   }, [filteredLeads, sorter]);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [filteredLeads, sortKey, sortDir, searchTerm]);
 
   const canEditLead = useCallback(
     (lead) => {
