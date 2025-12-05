@@ -444,7 +444,7 @@ const App = () => {
 
   const sorter = useCallback(
     (a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
+      const dir = sortDir === 'asc' ? -1 : 1; // asc = mais novo primeiro
       const getVal = (lead) => {
         switch (sortKey) {
           case 'name':
@@ -1553,8 +1553,8 @@ const App = () => {
                 onChange={(e) => setSortDir(e.target.value)}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               >
-                <option value="desc">Mais recente primeiro</option>
-                <option value="asc">Mais antigo primeiro</option>
+                <option value="desc">Mais novo</option>
+                <option value="asc">Mais antigo</option>
               </select>
             </div>
           </div>
