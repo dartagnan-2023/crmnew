@@ -152,6 +152,8 @@ const App = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
       const body =
@@ -168,19 +170,25 @@ const App = () => {
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Erro na autentica??o');
+        throw new Error(data.error || 'Erro na autenticação');
       }
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser(data.user);
       setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
     } catch (err) {
-      setError(err.message);
+      if (err.name === 'AbortError') {
+        setError('Servidor demorou a responder. Tente novamente em alguns segundos.');
+      } else {
+        setError(err.message);
+      }
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };
