@@ -66,6 +66,7 @@ const App = () => {
   const [sortKey, setSortKey] = useState('created_at');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
+  const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
@@ -297,6 +298,10 @@ const App = () => {
   }, [leads, user]);
 
   useEffect(() => {
+    setVisibleCount(20);
+  }, [filteredLeads, sortKey, sortDir, searchTerm]);
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem('leadFilters');
       if (saved) {
@@ -456,7 +461,10 @@ const App = () => {
             return lead.next_contact ? new Date(lead.next_contact).getTime() : 0;
           case 'created_at':
           default:
-            return lead.created_at ? new Date(lead.created_at).getTime() : 0;
+            const dateRaw = lead.created_at || lead.first_contact || lead.next_contact || lead.updated_at;
+            const d = dateRaw ? new Date(dateRaw) : null;
+            if (d && !Number.isNaN(d.getTime())) return d.getTime();
+            return Number(lead.id) || 0;
         }
       };
       const va = getVal(a);
@@ -1615,78 +1623,90 @@ const App = () => {
           </div>
 
           {viewMode === 'list' ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
-                    <th className="py-2 px-2 w-10">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={allEditableSelected && editableLeadIds.length > 0}
-                        onChange={toggleSelectAll}
-                      />
-                    </th>
-                    <th className="py-2 px-2">Nome</th>
-                    <th className="py-2 px-2">Email</th>
-                    <th className="py-2 px-2">Telefone</th>
-                    <th className="py-2 px-2">Canal</th>
-                    <th className="py-2 px-2">Status</th>
-                    <th className="py-2 px-2">Responsável</th>
-                    <th className="py-2 px-2 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                {displayedLeads.map((lead) => {
-                  const normalizedId = String(lead.id);
-                  const canEdit = canEditLead(lead);
-                  return (
-                      <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
-                        <td className="py-2 px-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            disabled={!canEdit}
-                            checked={selectedLeadIds.includes(normalizedId)}
-                            onChange={() => toggleSelectLead(normalizedId)}
-                          />
-                        </td>
-                        <td className="py-2 px-2">{lead.name}</td>
-                        <td className="py-2 px-2">{lead.email}</td>
-                        <td className="py-2 px-2">{lead.phone || '-'}</td>
-                        <td className="py-2 px-2">{lead.channel_name || '-'}</td>
-                        <td className="py-2 px-2">{lead.status}</td>
-                        <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
-                        <td className="py-2 px-2 text-right space-x-2">
-                          <button
-                            onClick={() => openEditLeadModal(lead)}
-                            className="text-blue-600 text-xs"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => deleteLead(lead.id)}
-                            className="text-red-600 text-xs"
-                          >
-                            Excluir
-                          </button>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-slate-500">
+                      <th className="py-2 px-2 w-10">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={allEditableSelected && editableLeadIds.length > 0}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
+                      <th className="py-2 px-2">Nome</th>
+                      <th className="py-2 px-2">Email</th>
+                      <th className="py-2 px-2">Telefone</th>
+                      <th className="py-2 px-2">Canal</th>
+                      <th className="py-2 px-2">Status</th>
+                      <th className="py-2 px-2">Responsável</th>
+                      <th className="py-2 px-2 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedLeads.slice(0, visibleCount).map((lead) => {
+                      const normalizedId = String(lead.id);
+                      const canEdit = canEditLead(lead);
+                      return (
+                        <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
+                          <td className="py-2 px-2">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              disabled={!canEdit}
+                              checked={selectedLeadIds.includes(normalizedId)}
+                              onChange={() => toggleSelectLead(normalizedId)}
+                            />
+                          </td>
+                          <td className="py-2 px-2">{lead.name}</td>
+                          <td className="py-2 px-2">{lead.email}</td>
+                          <td className="py-2 px-2">{lead.phone || '-'}</td>
+                          <td className="py-2 px-2">{lead.channel_name || '-'}</td>
+                          <td className="py-2 px-2">{lead.status}</td>
+                          <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
+                          <td className="py-2 px-2 text-right space-x-2">
+                            <button
+                              onClick={() => openEditLeadModal(lead)}
+                              className="text-blue-600 text-xs"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => deleteLead(lead.id)}
+                              className="text-red-600 text-xs"
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredLeads.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-4 text-center text-slate-500 text-xs"
+                        >
+                          Nenhum lead cadastrado
                         </td>
                       </tr>
-                    );
-                  })}
-                  {filteredLeads.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="py-4 text-center text-slate-500 text-xs"
-                      >
-                        Nenhum lead cadastrado
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {visibleCount < displayedLeads.length && (
+                <div className="flex justify-center py-3">
+                  <button
+                    onClick={() => setVisibleCount((v) => v + 20)}
+                    className="px-4 py-2 text-sm bg-slate-200 rounded-lg"
+                  >
+                    Carregar mais
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {STATUS_OPTIONS.map((col) => {
