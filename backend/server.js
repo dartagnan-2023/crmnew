@@ -505,6 +505,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
   const now = new Date().toISOString();
 
   const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return res.status(400).json({ error: 'Informe telefone com DDD' });
   const normalizedEmail = (email || '').toLowerCase();
   const duplicate = leads.find((l) => {
     const phoneMatch = normalizedPhone && normalizePhone(l.phone) === normalizedPhone;
