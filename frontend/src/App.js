@@ -199,13 +199,21 @@ const App = () => {
           signal: controller.signal,
           body: JSON.stringify(body),
         });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Erro na autenticação');
-        }
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('Erro ao ler resposta de auth:', parseErr);
+      }
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro na autenticação');
+      }
+      if (!data.token || !data.user) {
+        throw new Error('Resposta de login inválida');
+      }
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
         setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
         setError('');
         clearTimeout(timeout);
