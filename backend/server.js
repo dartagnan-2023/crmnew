@@ -588,14 +588,20 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { items: leads } = await loadTable('leads');
   const targetId = String(req.params.id || '').trim();
-  const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
-  if (filtered.length === leads.length) {
-    return res.status(404).json({ error: 'Lead nao encontrado' });
+  try {
+    const { items: leads } = await loadTable('leads');
+    const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
+    if (filtered.length === leads.length) {
+      return res.status(404).json({ error: 'Lead nao encontrado' });
+    }
+    await saveTable('leads', filtered);
+    console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${filtered.length}`);
+    return res.json({ success: true, removed: leads.length - filtered.length });
+  } catch (err) {
+    console.error('Erro ao excluir lead na planilha:', err);
+    return res.status(500).json({ error: 'Erro ao excluir lead' });
   }
-  await saveTable('leads', filtered);
-  return res.json({ success: true, removed: leads.length - filtered.length });
 });
 
 // ===================== STATS =====================
