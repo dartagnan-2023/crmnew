@@ -1579,8 +1579,8 @@ const App = () => {
           </div>
 
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3">
-            <div className="flex flex-col lg:flex-row gap-2">
-              <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <select
                   value={ownerFilter}
                   onChange={(e) => {
@@ -1632,7 +1632,7 @@ const App = () => {
                   ))}
                 </select>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <input
                   type="text"
                   value={searchInput}
