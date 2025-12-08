@@ -736,7 +736,7 @@ const App = () => {
       setLeads((prev) => prev.filter((l) => String(l.id) !== String(id)));
       setSelectedLeadIds((prev) => prev.filter((l) => String(l) !== String(id)));
       await loadStats();
-      showToast('Lead excluído', 'success');
+      showToast('Lead excluido', 'success');
     } catch (err) {
       console.error('Erro ao excluir lead:', err);
       showToast('Erro ao excluir lead', 'error');
@@ -823,7 +823,7 @@ const App = () => {
         return;
       }
       await loadChannels();
-      showToast('Canal excluído', 'success');
+      showToast('Canal excluido', 'success');
     } catch (err) {
       console.error('Erro ao excluir canal:', err);
       showToast('Erro ao excluir canal', 'error');
