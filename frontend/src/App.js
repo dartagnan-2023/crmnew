@@ -651,7 +651,8 @@ const App = () => {
 
   const saveLead = async () => {
     if (savingLead) return;
-    if (!leadForm.name || !leadForm.phone) {
+    const normalizedPhone = (leadForm.phone || '').replace(/\D/g, '');
+    if (!leadForm.name || !normalizedPhone) {
       showToast('Nome e telefone são obrigatórios', 'error');
       return;
     }
@@ -675,8 +676,10 @@ const App = () => {
         },
         body: JSON.stringify(payload),
       });
+      const data = await res.json();
       if (!res.ok) {
-        showToast('Erro ao salvar lead', 'error');
+        const message = data.error || 'Erro ao salvar lead';
+        showToast(message, 'error');
         return;
       }
       await Promise.all([loadLeads(), loadStats()]);
