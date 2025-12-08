@@ -589,9 +589,13 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { items: leads } = await loadTable('leads');
-  const filtered = leads.filter((l) => String(l.id) !== String(req.params.id));
+  const targetId = String(req.params.id || '').trim();
+  const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
+  if (filtered.length === leads.length) {
+    return res.status(404).json({ error: 'Lead nao encontrado' });
+  }
   await saveTable('leads', filtered);
-  return res.json({ success: true });
+  return res.json({ success: true, removed: leads.length - filtered.length });
 });
 
 // ===================== STATS =====================
