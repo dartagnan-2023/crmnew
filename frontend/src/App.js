@@ -471,7 +471,8 @@ const App = () => {
 
   const sorter = useCallback(
     (a, b) => {
-      const dir = sortDir === 'asc' ? -1 : 1; // asc = mais novo primeiro
+      // desc = mais novo/maior primeiro; asc = mais antigo/menor primeiro
+      const dir = sortDir === 'asc' ? 1 : -1;
       const getVal = (lead) => {
         switch (sortKey) {
           case 'name':
@@ -483,11 +484,12 @@ const App = () => {
           case 'next_contact':
             return lead.next_contact ? new Date(lead.next_contact).getTime() : 0;
           case 'created_at':
-          default:
+          default: {
             const dateRaw = lead.created_at || lead.first_contact || lead.next_contact || lead.updated_at;
             const d = dateRaw ? new Date(dateRaw) : null;
             if (d && !Number.isNaN(d.getTime())) return d.getTime();
             return Number(lead.id) || 0;
+          }
         }
       };
       const va = getVal(a);
@@ -507,6 +509,21 @@ const App = () => {
   useEffect(() => {
     setVisibleCount(20);
   }, [filteredLeads, sortKey, sortDir, searchTerm]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (viewMode !== 'list') return;
+      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
+      if (nearBottom) {
+        setVisibleCount((prev) => {
+          if (prev >= displayedLeads.length) return prev;
+          return Math.min(prev + 20, displayedLeads.length);
+        });
+      }
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [viewMode, displayedLeads.length]);
 
   const canEditLead = useCallback(
     (lead) => {
@@ -1747,11 +1764,12 @@ const App = () => {
               )}
             </>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {STATUS_OPTIONS.map((col) => {
                 const colLeads = filteredLeads.filter(
                   (l) => (l.status || '').toLowerCase() === col.value
                 );
+                const colLeadsSorted = [...colLeads].sort(sorter);
                 return (
                   <div
                     key={col.value}
@@ -1766,7 +1784,7 @@ const App = () => {
                       </span>
                     </div>
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {colLeads.map((lead) => (
+                      {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
                           className="p-3 rounded-lg border border-slate-200 bg-white shadow-sm cursor-pointer hover:border-blue-200"
