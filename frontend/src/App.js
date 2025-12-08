@@ -31,6 +31,7 @@ const toDateInput = (value) => {
 const emptyLead = {
   name: '',
   contact: '',
+  company: '',
   owner: '',
   ownerId: null,
   origin: '',
@@ -372,6 +373,7 @@ const App = () => {
     const headers = [
       'ID',
       'Nome',
+      'Empresa',
       'Email',
       'Telefone',
       'Responsavel',
@@ -387,6 +389,7 @@ const App = () => {
     const rows = filteredLeads.map((l) => [
       l.id,
       `"${(l.name || '').replace(/"/g, '""')}"`,
+      `"${(l.company || '').replace(/"/g, '""')}"`,
       l.email || '',
       l.phone || '',
       l.owner || l.responsible_name || '',
@@ -463,6 +466,7 @@ const App = () => {
       base = base.filter((l) => {
         return (
           (l.name || '').toLowerCase().includes(term) ||
+          (l.company || '').toLowerCase().includes(term) ||
           (l.email || '').toLowerCase().includes(term) ||
           (l.phone || '').toLowerCase().includes(term) ||
           (l.owner || l.responsible_name || '').toLowerCase().includes(term) ||
@@ -683,6 +687,7 @@ const App = () => {
     setLeadForm({
       name: lead.name || '',
       contact: lead.contact || '',
+      company: lead.company || '',
       owner: lead.owner || lead.responsible_name || '',
       ownerId: lead.ownerId || lead.user_id || user?.id || null,
       origin: lead.origin || '',
@@ -1699,6 +1704,7 @@ const App = () => {
                         />
                       </th>
                       <th className="py-2 px-2">Nome</th>
+                      <th className="py-2 px-2">Empresa</th>
                       <th className="py-2 px-2">Email</th>
                       <th className="py-2 px-2">Telefone</th>
                       <th className="py-2 px-2">Canal</th>
@@ -1723,6 +1729,7 @@ const App = () => {
                             />
                           </td>
                           <td className="py-2 px-2">{lead.name}</td>
+                          <td className="py-2 px-2">{lead.company || '-'}</td>
                           <td className="py-2 px-2">{lead.email}</td>
                           <td className="py-2 px-2">{lead.phone || '-'}</td>
                           <td className="py-2 px-2">{lead.channel_name || '-'}</td>
@@ -1811,6 +1818,9 @@ const App = () => {
                               {lead.value ? `R$ ${Number(lead.value).toLocaleString('pt-BR')}` : ''}
                             </span>
                           </div>
+                          {lead.company && (
+                            <p className="text-xs text-slate-600">{lead.company}</p>
+                          )}
                           <p className="text-xs text-slate-600">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                             <span>{lead.email || lead.phone || '-'}</span>
@@ -1892,6 +1902,19 @@ const App = () => {
                     value={leadForm.name}
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Empresa
+                  </label>
+                  <input
+                    type="text"
+                    value={leadForm.company || ''}
+                    onChange={(e) =>
+                      setLeadForm({ ...leadForm, company: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
