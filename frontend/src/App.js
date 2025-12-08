@@ -55,6 +55,7 @@ const App = () => {
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', username: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [authHint, setAuthHint] = useState('');
 
   const [leads, setLeads] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -173,6 +174,7 @@ const App = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setAuthHint('');
     const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
     const body =
       authMode === 'login'
@@ -191,7 +193,7 @@ const App = () => {
       const timeout = setTimeout(() => controller.abort(), 15000);
       try {
         if (attempt > 1) {
-          setError(`Servidor demorou. Tentando novamente... (${attempt}/${maxAttempts})`);
+          setAuthHint(`Tentando novamente... (${attempt}/${maxAttempts})`);
         }
         const res = await fetch(`${API_URL}${endpoint}`, {
           method: 'POST',
@@ -214,15 +216,17 @@ const App = () => {
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser(data.user);
-        setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
-        setError('');
-        clearTimeout(timeout);
-        setLoading(false);
-        return;
+      setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
+      setError('');
+      setAuthHint('');
+      clearTimeout(timeout);
+      setLoading(false);
+      return;
       } catch (err) {
         clearTimeout(timeout);
         if (err.name === 'AbortError') {
           if (attempt < maxAttempts) {
+            setAuthHint('Servidor acordando... nova tentativa em instantes');
             await sleep(1500);
             continue;
           }
@@ -1256,6 +1260,9 @@ const App = () => {
               )}
               <span>{loading ? 'Aguarde' : authMode === 'login' ? 'Entrar' : 'Criar conta'}</span>
             </button>
+            {authHint && (
+              <p className="mt-2 text-xs text-blue-700 text-center">{authHint}</p>
+            )}
           </form>
         </div>
       </div>
