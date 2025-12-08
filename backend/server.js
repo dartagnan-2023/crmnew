@@ -595,9 +595,21 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
     if (filtered.length === leads.length) {
       return res.status(404).json({ error: 'Lead nao encontrado' });
     }
+
     await saveTable('leads', filtered);
-    console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${filtered.length}`);
-    return res.json({ success: true, removed: leads.length - filtered.length });
+
+    // Releitura imediata para garantir persistencia real na planilha
+    const { items: afterSave } = await loadTable('leads');
+    const stillThere = afterSave.find((l) => String(l.id || '').trim() === targetId);
+    if (stillThere) {
+      console.error(
+        `Falha ao excluir lead ${targetId}: ainda presente apos salvar. antes=${leads.length} depois=${afterSave.length}`
+      );
+      return res.status(500).json({ error: 'Falha ao excluir lead na planilha. Tente novamente.' });
+    }
+
+    console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${afterSave.length}`);
+    return res.json({ success: true, removed: leads.length - afterSave.length });
   } catch (err) {
     console.error('Erro ao excluir lead na planilha:', err);
     return res.status(500).json({ error: 'Erro ao excluir lead' });
