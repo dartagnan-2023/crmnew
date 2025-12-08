@@ -63,7 +63,7 @@ const App = () => {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortKey, setSortKey] = useState('created_at');
+  const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
   const [visibleCount, setVisibleCount] = useState(20);
@@ -475,6 +475,8 @@ const App = () => {
       const dir = sortDir === 'asc' ? 1 : -1;
       const getVal = (lead) => {
         switch (sortKey) {
+          case 'id':
+            return Number(lead.id) || 0;
           case 'name':
             return (lead.name || '').toLowerCase();
           case 'status':
@@ -485,10 +487,12 @@ const App = () => {
             return lead.next_contact ? new Date(lead.next_contact).getTime() : 0;
           case 'created_at':
           default: {
+            const idNum = Number(lead.id);
+            if (!Number.isNaN(idNum) && idNum > 0) return idNum;
             const dateRaw = lead.created_at || lead.first_contact || lead.next_contact || lead.updated_at;
             const d = dateRaw ? new Date(dateRaw) : null;
             if (d && !Number.isNaN(d.getTime())) return d.getTime();
-            return Number(lead.id) || 0;
+            return 0;
           }
         }
       };
@@ -1592,7 +1596,8 @@ const App = () => {
                   onChange={(e) => setSortKey(e.target.value)}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                 >
-                  <option value="created_at">Criado (mais novo/antigo)</option>
+                  <option value="id">ID (mais novo/antigo)</option>
+                  <option value="created_at">Data (se houver) / ID</option>
                   <option value="name">Nome</option>
                   <option value="status">Status</option>
                   <option value="value">Valor</option>
