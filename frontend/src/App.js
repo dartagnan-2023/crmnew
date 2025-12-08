@@ -64,7 +64,10 @@ const App = () => {
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [channelFilter, setChannelFilter] = useState('all');
+  const [campaignFilter, setCampaignFilter] = useState('');
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
@@ -165,6 +168,12 @@ const App = () => {
     // Pré-aquecer backend (ping público) para reduzir delay inicial
     fetch(`${API_URL}/ping`).catch(() => {});
   }, []);
+
+  // Debounce da busca
+  useEffect(() => {
+    const id = setTimeout(() => setSearchTerm(searchInput), 300);
+    return () => clearTimeout(id);
+  }, [searchInput]);
 
   useEffect(() => {
     verifyToken();
@@ -337,7 +346,12 @@ const App = () => {
         if (parsed.ownerFilter) setOwnerFilter(parsed.ownerFilter);
         if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
         if (parsed.urgencyFilter) setUrgencyFilter(parsed.urgencyFilter);
-        if (parsed.searchTerm) setSearchTerm(parsed.searchTerm);
+        if (parsed.searchTerm) {
+          setSearchTerm(parsed.searchTerm);
+          setSearchInput(parsed.searchTerm);
+        }
+        if (parsed.channelFilter) setChannelFilter(parsed.channelFilter);
+        if (parsed.campaignFilter) setCampaignFilter(parsed.campaignFilter);
         if (parsed.sortKey) setSortKey(parsed.sortKey);
         if (parsed.sortDir) setSortDir(parsed.sortDir);
         if (parsed.viewMode) setViewMode(parsed.viewMode);
@@ -352,13 +366,15 @@ const App = () => {
       ownerFilter,
       statusFilter,
       urgencyFilter,
-      searchTerm,
+      searchTerm: searchInput,
+      channelFilter,
+      campaignFilter,
       sortKey,
       sortDir,
       viewMode,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, searchTerm, sortKey, sortDir, viewMode]);
+  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, sortKey, sortDir, viewMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -444,6 +460,15 @@ const App = () => {
       base = base.filter((l) => l._status === statusFilter);
     }
 
+    if (channelFilter !== 'all') {
+      base = base.filter((l) => String(l.channel_id || '') === String(channelFilter));
+    }
+
+    if (campaignFilter.trim()) {
+      const termCamp = campaignFilter.toLowerCase();
+      base = base.filter((l) => (l.campaign || '').toLowerCase().includes(termCamp));
+    }
+
     if (urgencyFilter !== 'all') {
       const now = new Date();
       now.setHours(0, 0, 0, 0);
@@ -475,7 +500,7 @@ const App = () => {
       });
     }
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter]);
 
   const sorter = useCallback(
     (a, b) => {
@@ -1594,13 +1619,32 @@ const App = () => {
                   <option value="today">Hoje</option>
                   <option value="next3">Próx. 3 dias</option>
                 </select>
+                <select
+                  value={channelFilter}
+                  onChange={(e) => setChannelFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                >
+                  <option value="all">Todos os canais</option>
+                  {channels.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Buscar por nome, email, telefone, campanha..."
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                />
+                <input
+                  type="text"
+                  value={campaignFilter}
+                  onChange={(e) => setCampaignFilter(e.target.value)}
+                  placeholder="Filtrar campanha"
                   className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
                 />
                 <select
@@ -1761,7 +1805,7 @@ const App = () => {
                     {filteredLeads.length === 0 && (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="py-4 text-center text-slate-500 text-xs"
                         >
                           Nenhum lead cadastrado
