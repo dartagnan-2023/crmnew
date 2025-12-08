@@ -233,6 +233,7 @@ const App = () => {
     try {
       const res = await fetch(`${API_URL}/leads`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       const data = await res.json();
       setLeads(data);
@@ -719,11 +720,14 @@ const App = () => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast('Erro ao excluir lead', 'error');
+        showToast(data.error || 'Erro ao excluir lead', 'error');
         return;
       }
-      await Promise.all([loadLeads(), loadStats()]);
+      setLeads((prev) => prev.filter((l) => String(l.id) !== String(id)));
+      setSelectedLeadIds((prev) => prev.filter((l) => String(l) !== String(id)));
+      await loadStats();
       showToast('Lead excluído', 'success');
     } catch (err) {
       console.error('Erro ao excluir lead:', err);
