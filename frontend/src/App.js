@@ -1674,6 +1674,12 @@ const App = () => {
                               Editar
                             </button>
                             <button
+                              onClick={() => copyToClipboard(buildWhatsappText(lead))}
+                              className="text-emerald-600 text-xs"
+                            >
+                              Copiar WhatsApp
+                            </button>
+                            <button
                               onClick={() => deleteLead(lead.id)}
                               className="text-red-600 text-xs"
                             >
@@ -2347,3 +2353,26 @@ const App = () => {
 };
 
 export default App;
+  const buildWhatsappText = (lead) => {
+    const origem = lead.channel_name || lead.campaign || 'Não informado';
+    const empresa = lead.company || '';
+    const contato = lead.name || 'Lead';
+    const telefone = lead.phone || '';
+    const solicitacao = lead.notes || lead.campaign || lead.status || '';
+    return `*Novo Lead*\nOrigem: ${origem}\nEmpresa: ${empresa || '-'}\nContato: ${contato}\nTelefone: ${telefone}\nSolicitação: ${solicitacao || '-'}`;
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Texto copiado para área de transferência');
+    } catch (err) {
+      console.error('Erro ao copiar:', err);
+      showToast('Não foi possível copiar', 'error');
+    }
+  };
+
+  const openWhatsApp = (text) => {
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
