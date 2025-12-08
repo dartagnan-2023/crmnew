@@ -104,6 +104,14 @@ const readSheet = async (sheetName) => {
   return payload;
 };
 
+const clearTrailingRows = async (sheetName, startRow) => {
+  const range = `${sheetName}!A${startRow}:Z1000`;
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SHEET_ID,
+    range,
+  });
+};
+
 const writeSheet = async (sheetName, headers, rows) => {
   const values = [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))];
   await sheets.spreadsheets.values.update({
@@ -112,6 +120,8 @@ const writeSheet = async (sheetName, headers, rows) => {
     valueInputOption: 'RAW',
     requestBody: { values },
   });
+  // Limpa linhas residuais abaixo do novo tamanho para evitar "fantasmas" em exclusao
+  await clearTrailingRows(sheetName, rows.length + 2);
   delete cache[sheetName];
 };
 
