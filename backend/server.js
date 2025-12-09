@@ -62,6 +62,7 @@ const SHEETS_CONFIG = {
     'id',
     'name',
     'company',
+    'segment',
     'email',
     'phone',
     'status',
@@ -506,6 +507,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
     is_private = false,
     first_contact = '',
     company = '',
+    segment = '',
   } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Nome e telefone sao obrigatorios' });
@@ -530,6 +532,7 @@ app.post('/api/leads', authMiddleware, async (req, res) => {
     id,
     name,
     company: company || '',
+    segment: segment || '',
     email,
     phone: phone || '',
     status,
@@ -567,6 +570,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     is_private,
     first_contact,
     company,
+    segment,
   } = req.body;
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
@@ -579,6 +583,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 
   if (name) leads[idx].name = name;
   if (company !== undefined) leads[idx].company = company;
+  if (segment !== undefined) leads[idx].segment = segment;
   if (email) leads[idx].email = email;
   if (phone) leads[idx].phone = phone;
   if (status) leads[idx].status = status;

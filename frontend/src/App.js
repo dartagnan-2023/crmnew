@@ -28,10 +28,21 @@ const toDateInput = (value) => {
   return d.toISOString().slice(0, 10);
 };
 
+
+const SEGMENT_OPTIONS = [
+  { value: '', label: 'Sem perfil' },
+  { value: 'revendedor', label: 'Revendedor' },
+  { value: 'instalador', label: 'Instalador' },
+  { value: 'montador', label: 'Montador de Painel' },
+  { value: 'representante', label: 'Representante' },
+  { value: 'usuario_final', label: 'Usu?rio Final' },
+];
+
 const emptyLead = {
   name: '',
   contact: '',
   company: '',
+  segment: '',
   owner: '',
   ownerId: null,
   origin: '',
@@ -64,6 +75,7 @@ const App = () => {
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
+  const [segmentFilter, setSegmentFilter] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
@@ -352,6 +364,7 @@ const App = () => {
         }
         if (parsed.channelFilter) setChannelFilter(parsed.channelFilter);
         if (parsed.campaignFilter) setCampaignFilter(parsed.campaignFilter);
+        if (parsed.segmentFilter) setSegmentFilter(parsed.segmentFilter);
         if (parsed.sortKey) setSortKey(parsed.sortKey);
         if (parsed.sortDir) setSortDir(parsed.sortDir);
         if (parsed.viewMode) setViewMode(parsed.viewMode);
@@ -369,12 +382,13 @@ const App = () => {
       searchTerm: searchInput,
       channelFilter,
       campaignFilter,
+      segmentFilter,
       sortKey,
       sortDir,
       viewMode,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, sortKey, sortDir, viewMode]);
+  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, sortKey, sortDir, viewMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -460,6 +474,10 @@ const App = () => {
       base = base.filter((l) => l._status === statusFilter);
     }
 
+    if (segmentFilter !== 'all') {
+      base = base.filter((l) => (l.segment || '') === segmentFilter);
+    }
+
     if (channelFilter !== 'all') {
       base = base.filter((l) => String(l.channel_id || '') === String(channelFilter));
     }
@@ -500,7 +518,7 @@ const App = () => {
       });
     }
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter]);
 
   const sorter = useCallback(
     (a, b) => {
@@ -713,6 +731,7 @@ const App = () => {
       name: lead.name || '',
       contact: lead.contact || '',
       company: lead.company || '',
+      segment: lead.segment || '',
       owner: lead.owner || lead.responsible_name || '',
       ownerId: lead.ownerId || lead.user_id || user?.id || null,
       origin: lead.origin || '',
@@ -1659,14 +1678,26 @@ const App = () => {
                   <option value="value">Valor</option>
                   <option value="next_contact">Próximo contato</option>
                 </select>
-              <select
-                value={sortDir}
-                onChange={(e) => setSortDir(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-              >
-                <option value="desc">Mais novo</option>
-                <option value="asc">Mais antigo</option>
-              </select>
+                <select
+                  value={segmentFilter}
+                  onChange={(e) => setSegmentFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
+                >
+                  <option value="all">Todos os perfis</option>
+                  {SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={sortDir}
+                  onChange={(e) => setSortDir(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="desc">Mais novo</option>
+                  <option value="asc">Mais antigo</option>
+                </select>
             </div>
           </div>
         </div>
