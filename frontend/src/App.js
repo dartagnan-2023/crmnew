@@ -1401,6 +1401,12 @@ const App = () => {
               <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
                 Total: {localStats.total || 0}
               </span>
+              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+                Novos: {localStats.novos || 0}
+              </span>
+              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+                Tx: {localStats.taxaConversao || 0}%
+              </span>
               <span
                 className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
                 aria-hidden
