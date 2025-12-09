@@ -35,7 +35,7 @@ const SEGMENT_OPTIONS = [
   { value: 'instalador', label: 'Instalador' },
   { value: 'montador', label: 'Montador de Painel' },
   { value: 'representante', label: 'Representante' },
-  { value: 'usuario_final', label: 'Usu?rio Final' },
+  { value: 'usuario_final', label: 'Usuario Final' },
 ];
 
 const emptyLead = {
