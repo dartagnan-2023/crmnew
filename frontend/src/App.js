@@ -1386,10 +1386,28 @@ const App = () => {
         <section className="mb-3">
           <button
             onClick={() => setShowStats((prev) => !prev)}
-            className="w-full flex items-center justify-between px-4 py-2 bg-slate-800 text-white rounded-lg text-sm"
+            className="w-full flex items-center justify-between px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-lg text-sm shadow-sm hover:shadow-md transition group"
           >
-            <span>Estatisticas</span>
-            <span className={`transform transition ${showStats ? 'rotate-180' : ''}`}>▾</span>
+            <div className="flex items-center gap-2">
+              <span className="text-lg" aria-hidden>
+                📊
+              </span>
+              <div className="text-left">
+                <span className="block leading-tight">Estatisticas</span>
+                <span className="block text-[11px] text-slate-200 opacity-90">Toque para ver resumo</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+                Total: {localStats.total || 0}
+              </span>
+              <span
+                className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
+                aria-hidden
+              >
+                ▾
+              </span>
+            </div>
           </button>
           {showStats && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
