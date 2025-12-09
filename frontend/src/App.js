@@ -1461,15 +1461,6 @@ const App = () => {
                   <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
                 </div>
               ))}
-              <div className="bg-white rounded-xl shadow p-3 sm:col-span-2 lg:col-span-3 xl:col-span-4">
-                <p className="text-[11px] text-slate-500 mb-2">Agenda</p>
-                <div className="flex flex-wrap gap-2 mt-1 text-[11px]">
-                  <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
-                  <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-                  <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Próx. 3 dias: {agendaStats.next3}</span>
-                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
-                </div>
-              </div>
             </div>
           )}
         </section>
@@ -1983,7 +1974,7 @@ const App = () => {
                           onDragStart={() => handleCardDragStart(lead.id)}
                           onDragEnd={handleCardDragEnd}
                         >
-                          {statusUpdatingId === lead.id && (
+                          {statusUpdatingId && String(statusUpdatingId) === String(lead.id) && (
                             <div className="absolute top-2 right-2 w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                           )}
                           <div className="flex items-center justify-between">
