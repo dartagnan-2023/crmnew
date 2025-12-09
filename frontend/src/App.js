@@ -481,7 +481,7 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      _ownerId: l.ownerId ?? l.user_id ?? l.userId ?? l.owner_id,
+      _ownerId: l.ownerId Stats l.user_id Stats l.userId Stats l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
     if (ownerFilter === 'me') {
@@ -1066,6 +1066,7 @@ const App = () => {
       showToast('Erro ao atualizar status', 'error');
     } finally {
       setDraggingLeadId(null);
+      setStatusUpdatingId(null);
     }
   };
 
