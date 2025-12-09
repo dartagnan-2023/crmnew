@@ -1389,7 +1389,7 @@ const App = () => {
             className="w-full flex items-center justify-between px-4 py-2 bg-slate-800 text-white rounded-lg text-sm"
           >
             <span>Estatisticas</span>
-            <span className={`transform transition ${showStats ? 'rotate-180' : ''}`}>v</span>
+            <span className={`transform transition ${showStats ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {showStats && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
