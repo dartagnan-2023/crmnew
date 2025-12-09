@@ -1389,7 +1389,7 @@ const App = () => {
             className="w-full flex items-center justify-between px-4 py-2 bg-slate-800 text-white rounded-lg text-sm"
           >
             <span>Estatisticas</span>
-            <span className={`transform transition ${showStats ? 'rotate-180' : ''}`}>▼</span>
+            <span className={`transform transition ${showStats ? 'rotate-180' : ''}`}>v</span>
           </button>
           {showStats && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -1448,7 +1448,9 @@ const App = () => {
           )}
         </section>
 
-        <div className="flex items-start justify-between mb-3 gap-3">
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="flex items-start justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
                   Agenda - Próximos contatos
