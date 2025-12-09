@@ -1236,6 +1236,22 @@ const App = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Perfil
+                  </label>
+                  <select
+                    value={leadForm.segment || ''}
+                    onChange={(e) => setLeadForm({ ...leadForm, segment: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    {SEGMENT_OPTIONS.map((opt) => (
+                      <option key={opt.value || 'none'} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
                     Usuário (login)
                   </label>
