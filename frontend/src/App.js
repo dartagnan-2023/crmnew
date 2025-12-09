@@ -1761,8 +1761,12 @@ const App = () => {
                     {displayedLeads.slice(0, visibleCount).map((lead) => {
                       const normalizedId = String(lead.id);
                       const canEdit = canEditLead(lead);
+                      const hasCompany = !!lead.company;
+                      const rowClass =
+                        'border-b last:border-none hover:bg-slate-50 ' +
+                        (hasCompany ? 'bg-emerald-50/70' : '');
                       return (
-                        <tr key={lead.id} className="border-b last:border-none hover:bg-slate-50">
+                        <tr key={lead.id} className={rowClass}>
                           <td className="py-2 px-2">
                             <input
                               type="checkbox"
@@ -1772,7 +1776,16 @@ const App = () => {
                               onChange={() => toggleSelectLead(normalizedId)}
                             />
                           </td>
-                          <td className="py-2 px-2">{lead.name}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-1">
+                              {lead.name}
+                              {hasCompany && (
+                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                  Empresa
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2 px-2">{lead.company || '-'}</td>
                           <td className="py-2 px-2">{lead.email}</td>
                           <td className="py-2 px-2">{lead.phone || '-'}</td>
@@ -1850,7 +1863,9 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className="p-3 rounded-lg border border-slate-200 bg-white shadow-sm cursor-pointer hover:border-blue-200"
+                          className={`p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${
+                            lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
+                          }`}
                           onClick={() => openEditLeadModal(lead)}
                           draggable
                           onDragStart={() => handleCardDragStart(lead.id)}
