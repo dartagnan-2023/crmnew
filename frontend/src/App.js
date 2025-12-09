@@ -120,6 +120,7 @@ const App = () => {
   const [bulkOwnerId, setBulkOwnerId] = useState('');
   const [loadingData, setLoadingData] = useState(false);
   const [draggingLeadId, setDraggingLeadId] = useState(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const buildWhatsappText = (lead) => {
     const origem = lead.channel_name || lead.campaign || 'Não informado';
     const empresa = lead.company || '';
@@ -1009,6 +1010,7 @@ const App = () => {
 
   const handleStatusChange = async (lead, newStatus) => {
     if (!lead || lead.status === newStatus) return;
+    setStatusUpdatingId(lead.id);
     try {
       const res = await fetch(`${API_URL}/leads/${lead.id}`, {
         method: 'PUT',
@@ -1960,7 +1962,7 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${
+                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${
                             lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
                           }`}
                           onClick={() => openEditLeadModal(lead)}
@@ -1968,6 +1970,9 @@ const App = () => {
                           onDragStart={() => handleCardDragStart(lead.id)}
                           onDragEnd={handleCardDragEnd}
                         >
+                          {statusUpdatingId === lead.id && (
+                            <div className="absolute top-2 right-2 w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          )}
                           <div className="flex items-center justify-between">
                             <p className="font-semibold text-slate-900 text-sm">{lead.name}</p>
                             <span className="text-xs text-slate-500">
