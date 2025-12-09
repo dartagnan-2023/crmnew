@@ -121,6 +121,7 @@ const App = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [draggingLeadId, setDraggingLeadId] = useState(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [pingFailCount, setPingFailCount] = useState(0);
   const buildWhatsappText = (lead) => {
     const origem = lead.channel_name || lead.campaign || 'Não informado';
     const empresa = lead.company || '';
@@ -182,6 +183,39 @@ const App = () => {
     // Pré-aquecer backend (ping público) para reduzir delay inicial
     fetch(`${API_URL}/ping`).catch(() => {});
   }, []);
+
+  const pingServer = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/ping`, { method: 'GET' });
+      if (!res.ok) throw new Error('ping fail');
+      setPingFailCount(0);
+      return true;
+    } catch {
+      setPingFailCount((c) => c + 1);
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pingFailCount >= 2) {
+      showToast('Sessão finalizada por inatividade. Faça login novamente.', 'error');
+      handleLogout();
+    }
+  }, [pingFailCount]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (token) pingServer();
+    }, 5 * 60 * 1000);
+    const onFocus = () => {
+      if (token) pingServer();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [token, pingServer]);
 
   // Debounce da busca
   useEffect(() => {
