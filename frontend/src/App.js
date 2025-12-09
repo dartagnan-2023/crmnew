@@ -82,7 +82,7 @@ const App = () => {
   const [campaignFilter, setCampaignFilter] = useState('');
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
+  const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
