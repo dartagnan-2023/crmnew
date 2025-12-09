@@ -1847,6 +1847,8 @@ const App = () => {
                       const rowClass =
                         'border-b last:border-none hover:bg-slate-50 ' +
                         (hasCompany ? 'bg-emerald-50/70' : '');
+                      const segmentLabel =
+                        SEGMENT_OPTIONS.find((s) => s.value === (lead.segment || ''))?.label || null;
                       return (
                         <tr key={lead.id} className={rowClass}>
                           <td className="py-2 px-2">
@@ -1868,11 +1870,24 @@ const App = () => {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-2">{lead.company || '-'}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex items-center gap-1">
+                              {lead.company || '-'}
+                              {segmentLabel && (
+                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                  {segmentLabel}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2 px-2">{lead.email}</td>
                           <td className="py-2 px-2">{lead.phone || '-'}</td>
                           <td className="py-2 px-2">{lead.channel_name || '-'}</td>
-                          <td className="py-2 px-2">{lead.status}</td>
+                          <td className="py-2 px-2">
+                            <span className="px-2 py-[2px] rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">
+                              {lead.status}
+                            </span>
+                          </td>
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-right space-x-2">
                             <button
@@ -1959,10 +1974,22 @@ const App = () => {
                               {lead.value ? `R$ ${Number(lead.value).toLocaleString('pt-BR')}` : ''}
                             </span>
                           </div>
-                          {lead.company && (
-                            <p className="text-xs text-slate-600">{lead.company}</p>
-                          )}
-                          <p className="text-xs text-slate-600">{lead.owner || lead.responsible_name || '-'}</p>
+                          <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-600 mt-1">
+                            {lead.company && (
+                              <span className="px-2 py-[2px] rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                {lead.company}
+                              </span>
+                            )}
+                            {lead.segment && (
+                              <span className="px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                {
+                                  SEGMENT_OPTIONS.find((s) => s.value === lead.segment)?.label ||
+                                  lead.segment
+                                }
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                             <span>{lead.email || lead.phone || '-'}</span>
                             <span>
