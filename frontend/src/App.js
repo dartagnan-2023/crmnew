@@ -1474,6 +1474,19 @@ const App = () => {
           )}
         </section>
 
+        
+        <section className="mb-3">
+          <div className="bg-white rounded-xl shadow p-4">
+            <p className="text-xs text-slate-500 mb-2">Agenda</p>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
+              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Pr?x. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
+            </div>
+          </div>
+        </section>
+
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
           <div className="bg-white rounded-xl shadow p-4">
             <div className="flex items-start justify-between mb-3 gap-3">
