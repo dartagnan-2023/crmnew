@@ -752,10 +752,16 @@ const App = () => {
 
   const handleCardDragStart = (id) => setDraggingLeadId(id);
   const handleCardDragEnd = () => setDraggingLeadId(null);
-  const handleDropStatus = (status) => {
+  const handleDropStatus = async (status) => {
     const lead = filteredLeads.find((l) => String(l.id) === String(draggingLeadId));
-    if (!lead) return;
-    handleStatusChange(lead, status);
+    if (!lead || lead.status === status) return;
+    setStatusUpdatingId(lead.id);
+    try {
+      await handleStatusChange(lead, status);
+    } finally {
+      setStatusUpdatingId(null);
+      setDraggingLeadId(null);
+    }
   };
 
   const openNewLeadModal = () => {
