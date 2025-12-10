@@ -121,6 +121,7 @@ const App = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [draggingLeadId, setDraggingLeadId] = useState(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
   const [pingFailCount, setPingFailCount] = useState(0);
   const buildWhatsappText = (lead) => {
     const origem = lead.channel_name || lead.campaign || 'Não informado';
@@ -872,26 +873,29 @@ const App = () => {
     }
   };
 
-  const handleAgendaContactDone = async (lead) => {
-    try {
-      const payload = {
-        name: lead.name,
-        contact: lead.contact || null,
-        owner: lead.owner || lead.responsible_name || user?.name || null,
-        ownerId: lead.user_id || user?.id || null,
-        origin: lead.origin || null,
-        stage_detail: lead.stage_detail || null,
-        next_contact: null,
-        email: lead.email,
-        phone: lead.phone || null,
-        channel_id: lead.channel_id || null,
-        campaign: lead.campaign || null,
-        status: lead.status || 'novo',
-        value: Number(lead.value) || 0,
-        notes: lead.notes || null,
-        is_private: lead.is_private || 0,
-      };
+  const buildLeadUpdatePayload = (lead, overrides = {}) => ({
+    name: lead.name,
+    contact: lead.contact || null,
+    owner: lead.owner || lead.responsible_name || user?.name || null,
+    ownerId: lead.user_id || user?.id || null,
+    origin: lead.origin || null,
+    stage_detail: lead.stage_detail || null,
+    next_contact: lead.next_contact || null,
+    email: lead.email,
+    phone: lead.phone || null,
+    channel_id: lead.channel_id || null,
+    campaign: lead.campaign || null,
+    status: lead.status || 'novo',
+    value: Number(lead.value) || 0,
+    notes: lead.notes || null,
+    is_private: lead.is_private || 0,
+    ...overrides,
+  });
 
+  const handleAgendaContactDone = async (lead) => {
+    setAgendaUpdatingId(lead.id);
+    try {
+      const payload = buildLeadUpdatePayload(lead, { next_contact: null });
       const res = await fetch(`${API_URL}/leads/${lead.id}`, {
         method: 'PUT',
         headers: {
@@ -910,6 +914,8 @@ const App = () => {
     } catch (err) {
       console.error('Erro ao atualizar contato:', err);
       showToast('Erro ao atualizar contato', 'error');
+    } finally {
+      setAgendaUpdatingId(null);
     }
   };
 
