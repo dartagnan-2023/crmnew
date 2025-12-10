@@ -470,7 +470,9 @@ const App = () => {
       `"${(l.notes || '').replace(/"/g, '""')}"`,
     ]);
     const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    // prefixa BOM para Excel abrir em UTF-8 sem quebrar acentos
+    const csvWithBom = '\ufeff' + csv;
+    const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -551,7 +553,8 @@ const App = () => {
           (l.email || '').toLowerCase().includes(term) ||
           (l.phone || '').toLowerCase().includes(term) ||
           (l.owner || l.responsible_name || '').toLowerCase().includes(term) ||
-          (l.campaign || '').toLowerCase().includes(term)
+          (l.campaign || '').toLowerCase().includes(term) ||
+          (l.notes || '').toLowerCase().includes(term)
         );
       });
     }
@@ -566,12 +569,12 @@ const App = () => {
         switch (sortKey) {
           case 'id':
             return Number(lead.id) || 0;
+          case 'value':
+            return Number(lead.value || 0);
           case 'name':
             return (lead.name || '').toLowerCase();
           case 'status':
             return (lead.status || '').toLowerCase();
-          case 'value':
-            return Number(lead.value || 0);
           case 'next_contact':
             return lead.next_contact ? new Date(lead.next_contact).getTime() : 0;
           case 'created_at':
@@ -1733,28 +1736,30 @@ const App = () => {
                     </option>
                   ))}
                 </select>
-                <select
-                  value={urgencyFilter}
-                  onChange={(e) => setUrgencyFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
-                >
-                  <option value="all">Toda agenda</option>
-                  <option value="overdue">Vencidos</option>
-                  <option value="today">Hoje</option>
-                  <option value="next3">Próx. 3 dias</option>
-                </select>
-                <select
-                  value={channelFilter}
-                  onChange={(e) => setChannelFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
-                >
-                  <option value="all">Todos os canais</option>
-                  {channels.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={urgencyFilter}
+                    onChange={(e) => setUrgencyFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  >
+                    <option value="all">Toda agenda</option>
+                    <option value="overdue">Vencidos</option>
+                    <option value="today">Hoje</option>
+                    <option value="next3">Próx. 3 dias</option>
+                  </select>
+                  <select
+                    value={channelFilter}
+                    onChange={(e) => setChannelFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  >
+                    <option value="all">Todos os canais</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <input
