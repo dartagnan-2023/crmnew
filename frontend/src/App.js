@@ -84,6 +84,7 @@ const App = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [visibleCount, setVisibleCount] = useState(20);
+  const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
@@ -922,6 +923,44 @@ const App = () => {
     }
   };
 
+  const handleAgendaReschedule = async (lead, days) => {
+    if (!lead.next_contact) {
+      showToast('Contato sem data agendada', 'error');
+      return;
+    }
+    setAgendaUpdatingId(lead.id);
+    try {
+      const current = new Date(lead.next_contact);
+      if (Number.isNaN(current.getTime())) {
+        showToast('Data inválida', 'error');
+        return;
+      }
+      const next = new Date(current);
+      next.setDate(next.getDate() + days);
+      const payload = buildLeadUpdatePayload(lead, { next_contact: next.toISOString() });
+      const res = await fetch(`${API_URL}/leads/${lead.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao reagendar', 'error');
+        return;
+      }
+      await Promise.all([loadLeads(), loadStats()]);
+      showToast(`Contato reagendado para ${toDateInput(next)}`, 'success');
+    } catch (err) {
+      console.error('Erro ao reagendar contato:', err);
+      showToast('Erro ao reagendar contato', 'error');
+    } finally {
+      setAgendaUpdatingId(null);
+    }
+  };
+
   const handleAddChannel = async () => {
     if (!newChannel.trim()) {
       showToast('Nome do canal é obrigatório', 'error');
@@ -1604,18 +1643,36 @@ const App = () => {
                           {lead.status || '-'}
                         </p>
                       </div>
-                      <div
-                        className="flex items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-3 w-3 text-blue-600 border-slate-300 rounded"
-                          onChange={() => handleAgendaContactDone(lead)}
-                        />
-                        <span className="text-[11px] text-slate-600">
-                          Contato feito
-                        </span>
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3 text-blue-600 border-slate-300 rounded"
+                            onChange={() => handleAgendaContactDone(lead)}
+                            checked={agendaUpdatingId === lead.id ? true : false}
+                            disabled={agendaUpdatingId === lead.id}
+                          />
+                          Feito
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleAgendaReschedule(lead, 1)}
+                            className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                            disabled={agendaUpdatingId === lead.id}
+                          >
+                            +1d
+                          </button>
+                          <button
+                            onClick={() => handleAgendaReschedule(lead, 3)}
+                            className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                            disabled={agendaUpdatingId === lead.id}
+                          >
+                            +3d
+                          </button>
+                        </div>
+                        {agendaUpdatingId === lead.id && (
+                          <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        )}
                       </div>
                     </div>
                   </div>
