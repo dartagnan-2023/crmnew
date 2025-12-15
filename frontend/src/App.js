@@ -1574,7 +1574,7 @@ const App = () => {
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
               <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Pr?x. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Próx. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
           </div>
