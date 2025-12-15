@@ -84,7 +84,6 @@ const App = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [visibleCount, setVisibleCount] = useState(20);
-  const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
