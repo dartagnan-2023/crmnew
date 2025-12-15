@@ -186,14 +186,25 @@ const App = () => {
     fetch(`${API_URL}/ping`).catch(() => {});
   }, []);
 
-  const pingServer = useCallback(async () => {
+  const pingServer = useCallback(async (retries = 0) => {
     try {
       const res = await fetch(`${API_URL}/ping`, { method: 'GET' });
       if (!res.ok) throw new Error('ping fail');
       setPingFailCount(0);
+      setAuthHint('');
       return true;
-    } catch {
+    } catch (err) {
+      const nextRetries = retries + 1;
       setPingFailCount((c) => c + 1);
+      setAuthHint(
+        nextRetries === 1
+          ? 'Acordando servidor... tentando de novo.'
+          : `Tentando novamente (${nextRetries})...`
+      );
+      if (nextRetries < 3) {
+        await sleep(1000 * nextRetries);
+        return pingServer(nextRetries);
+      }
       return false;
     }
   }, []);
@@ -235,6 +246,7 @@ const App = () => {
     setLoading(true);
     setError('');
     setAuthHint('');
+    await pingServer();
     const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
     const body =
       authMode === 'login'
