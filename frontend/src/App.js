@@ -2122,11 +2122,22 @@ const App = () => {
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                             <span>{lead.email || lead.phone || '-'}</span>
-                            <span>
-                              {lead.next_contact
-                                ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
-                                : '-'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span>
+                                {lead.next_contact
+                                  ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                                  : '-'}
+                              </span>
+                              <button
+                                className="text-red-500 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteLead(lead.id);
+                                }}
+                              >
+                                Excluir
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
