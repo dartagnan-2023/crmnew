@@ -12,6 +12,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { google } = require('googleapis');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -22,6 +23,17 @@ const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
 const MANYCHAT_SECRET = process.env.MANYCHAT_SECRET || process.env.MANYCHAT_TOKEN || '';
+const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
+const ALERT_API_KEY = process.env.ALERT_API_KEY || '';
+const ALERT_LOOKAHEAD_MINUTES = Number(process.env.ALERT_LOOKAHEAD_MINUTES || 60);
+const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || '';
+const ALERT_SMTP_HOST = process.env.ALERT_SMTP_HOST || '';
+const ALERT_SMTP_PORT = Number(process.env.ALERT_SMTP_PORT || 587);
+const ALERT_SMTP_SECURE = process.env.ALERT_SMTP_SECURE === 'true';
+const ALERT_SMTP_USER = process.env.ALERT_SMTP_USER || '';
+const ALERT_SMTP_PASS = process.env.ALERT_SMTP_PASS || '';
+const ALERT_FROM = process.env.ALERT_FROM || '';
+const ALERT_TO_DEFAULT = process.env.ALERT_TO_DEFAULT || '';
 const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
 
 const normalizeName = (val) =>
@@ -181,6 +193,75 @@ const apiKeyLeadsMiddleware = (req, res, next) => {
     return next();
   }
   return authMiddleware(req, res, next);
+};
+
+const apiKeyAlertsMiddleware = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'] || '';
+  if (ALERT_API_KEY && apiKey && apiKey === ALERT_API_KEY) {
+    req.user = { id: 'api-key', role: 'admin', name: 'API Key Alerts' };
+    return next();
+  }
+  return authMiddleware(req, res, next);
+};
+
+const shouldAlertLead = (lead, now, windowMs) => {
+  const badStatuses = ['ganho', 'perdido'];
+  const status = (lead.status || '').toLowerCase();
+  if (badStatuses.includes(status)) return false;
+  if (!lead.next_contact) return false;
+  const d = new Date(lead.next_contact);
+  if (Number.isNaN(d.getTime())) return false;
+  const t = d.getTime();
+  const nowTs = now.getTime();
+  const limit = nowTs + windowMs;
+  return t <= limit; // inclui vencidos (t < agora) e próximos dentro da janela
+};
+
+const formatLeadsSummary = (leads) => {
+  return leads
+    .map(
+      (l) =>
+        `- ${l.name} (${l.phone || '-'}) | Status: ${l.status || '-'} | Responsável: ${
+          l.owner || l.responsible_name || '-'
+        } | Próx.: ${l.next_contact || '-'}`
+    )
+    .join('\n');
+};
+
+const sendAlertEmail = async (leads) => {
+  if (!ALERT_SMTP_HOST || !ALERT_SMTP_USER || !ALERT_SMTP_PASS || !ALERT_FROM || !ALERT_TO_DEFAULT) {
+    return { sent: false, reason: 'smtp_not_configured' };
+  }
+  const transporter = nodemailer.createTransport({
+    host: ALERT_SMTP_HOST,
+    port: ALERT_SMTP_PORT,
+    secure: ALERT_SMTP_SECURE,
+    auth: { user: ALERT_SMTP_USER, pass: ALERT_SMTP_PASS },
+  });
+  const subject = `Alertas de follow-up (${leads.length})`;
+  const text = `Leads com follow-up vencido ou próximo:\n\n${formatLeadsSummary(leads)}`;
+  await transporter.sendMail({
+    from: ALERT_FROM,
+    to: ALERT_TO_DEFAULT,
+    subject,
+    text,
+  });
+  return { sent: true };
+};
+
+const sendAlertWebhook = async (leads) => {
+  if (!ALERT_WEBHOOK_URL) return { sent: false, reason: 'webhook_not_configured' };
+  const payload = {
+    run_at: new Date().toISOString(),
+    leads,
+  };
+  const res = await fetch(ALERT_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return { sent: false, reason: `webhook_http_${res.status}` };
+  return { sent: true };
 };
 
 // Carrega tabelas
@@ -562,6 +643,42 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   leads.push(lead);
   await saveTable('leads', leads);
   return res.json(lead);
+});
+
+// Executa alerta de follow-up (via X-API-Key ou JWT)
+app.post('/api/alerts/run', apiKeyAlertsMiddleware, async (req, res) => {
+  const windowMs = ALERT_LOOKAHEAD_MINUTES * 60 * 1000;
+  const now = new Date();
+  const [{ items: leads }, { items: channels }] = await Promise.all([
+    loadTable('leads'),
+    loadTable('channels'),
+  ]);
+  const hydrated = hydrateLeads(leads, channels);
+  const candidates = hydrated.filter((l) => shouldAlertLead(l, now, windowMs));
+  if (!candidates.length) {
+    return res.json({ alerts: 0, email: 'skipped', webhook: 'skipped' });
+  }
+
+  let emailResult = { sent: false, reason: 'not_attempted' };
+  let webhookResult = { sent: false, reason: 'not_attempted' };
+  try {
+    emailResult = await sendAlertEmail(candidates);
+  } catch (err) {
+    console.error('Erro ao enviar alerta por email:', err);
+    emailResult = { sent: false, reason: 'email_error' };
+  }
+  try {
+    webhookResult = await sendAlertWebhook(candidates);
+  } catch (err) {
+    console.error('Erro ao enviar alerta via webhook:', err);
+    webhookResult = { sent: false, reason: 'webhook_error' };
+  }
+
+  return res.json({
+    alerts: candidates.length,
+    email: emailResult,
+    webhook: webhookResult,
+  });
 });
 
 app.put('/api/leads/:id', authMiddleware, async (req, res) => {
