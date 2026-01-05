@@ -22,6 +22,7 @@ const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
 const MANYCHAT_SECRET = process.env.MANYCHAT_SECRET || process.env.MANYCHAT_TOKEN || '';
+const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
 
 const normalizeName = (val) =>
   (val || '')
@@ -170,6 +171,16 @@ const authMiddleware = (req, res, next) => {
   } catch (err) {
     return res.status(401).json({ error: 'Token invalido' });
   }
+};
+
+// Permite autenticar POST /api/leads via X-API-Key (opcional, sem expiração)
+const apiKeyLeadsMiddleware = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'] || '';
+  if (API_KEY_LEADS && apiKey && apiKey === API_KEY_LEADS) {
+    req.user = { id: 'api-key', role: 'admin', name: 'API Key' };
+    return next();
+  }
+  return authMiddleware(req, res, next);
 };
 
 // Carrega tabelas
@@ -491,7 +502,7 @@ app.get('/api/leads', authMiddleware, async (req, res) => {
   return res.json(filtered);
 });
 
-app.post('/api/leads', authMiddleware, async (req, res) => {
+app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const {
     name,
     email,
