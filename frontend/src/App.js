@@ -645,6 +645,20 @@ const App = () => {
     [isAdmin, user?.id, user?.name]
   );
 
+  const canReassignLead = useCallback(
+    (lead) => {
+      if (isAdmin) return true;
+      const leadOwnerId = lead._ownerId || lead.ownerId || lead.user_id || lead.userId;
+      const isOwner = leadOwnerId && String(leadOwnerId) === String(user?.id);
+      const ownerName = (lead.owner || lead.responsible_name || '').toLowerCase().trim();
+      const userName = (user?.name || '').toLowerCase().trim();
+      const nameOwnerMatch = ownerName && userName && ownerName === userName;
+      if (isOwner || nameOwnerMatch) return true;
+      return !lead.is_private;
+    },
+    [isAdmin, user?.id, user?.name]
+  );
+
   const agendaBase = useMemo(() => {
     return filteredLeads
       .filter((lead) => lead.next_contact)
@@ -747,25 +761,30 @@ const App = () => {
     () => filteredLeads.filter((l) => canEditLead(l)).map((l) => String(l.id)),
     [filteredLeads, canEditLead]
   );
+  const selectableLeadIds = useMemo(
+    () => filteredLeads.filter((l) => canReassignLead(l)).map((l) => String(l.id)),
+    [filteredLeads, canReassignLead]
+  );
 
   const toggleSelectLead = (id) => {
     const normalized = String(id);
-    if (!editableLeadIds.includes(normalized)) return;
+    if (!selectableLeadIds.includes(normalized)) return;
     setSelectedLeadIds((prev) =>
       prev.includes(normalized) ? prev.filter((v) => v !== normalized) : [...prev, normalized]
     );
   };
 
   const toggleSelectAll = () => {
-    const allVisible = editableLeadIds;
+    const allVisible = selectableLeadIds;
     if (!allVisible.length) return;
     const hasAll = allVisible.every((id) => selectedLeadIds.includes(id));
     setSelectedLeadIds(hasAll ? [] : allVisible);
   };
 
   const selectedCount = selectedLeadIds.length;
-  const allEditableSelected =
-    editableLeadIds.length > 0 && editableLeadIds.every((id) => selectedLeadIds.includes(id));
+  const selectedEditableCount = selectedLeadIds.filter((id) => editableLeadIds.includes(id)).length;
+  const allSelectableSelected =
+    selectableLeadIds.length > 0 && selectableLeadIds.every((id) => selectedLeadIds.includes(id));
 
   const handleCardDragStart = (id) => setDraggingLeadId(id);
   const handleCardDragEnd = () => setDraggingLeadId(null);
@@ -1018,7 +1037,7 @@ const App = () => {
     }
   };
 
-  const applyBulkUpdate = async (payloadBuilder, successMessage) => {
+  const applyBulkUpdate = async (payloadBuilder, successMessage, canEditFn = canEditLead) => {
     if (!selectedCount) {
       showToast('Selecione ao menos um lead', 'error');
       return;
@@ -1026,7 +1045,7 @@ const App = () => {
 
     const requests = selectedLeadIds.map((id) => {
       const lead = leads.find((l) => String(l.id) === String(id));
-      if (!lead || !canEditLead(lead)) return null;
+      if (!lead || !canEditFn(lead)) return null;
       const payload = payloadBuilder(lead);
       return fetch(`${API_URL}/leads/${id}`, {
         method: 'PUT',
@@ -1071,17 +1090,14 @@ const App = () => {
   };
 
   const bulkReassignOwner = async () => {
-    if (!isAdmin) {
-      showToast('Apenas admin pode reatribuir em massa', 'error');
-      return;
-    }
     if (!bulkOwnerId) {
       showToast('Escolha um novo responsável', 'error');
       return;
     }
     await applyBulkUpdate(
       () => ({ ownerId: bulkOwnerId }),
-      'Responsável atualizado'
+      'Responsável atualizado',
+      canReassignLead
     );
   };
 
@@ -1883,7 +1899,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">Editáveis na lista: {editableLeadIds.length}</span>
+              <span className="text-slate-500">Selecionáveis na lista: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -1902,39 +1918,37 @@ const App = () => {
                 </select>
                 <button
                   onClick={bulkChangeStatus}
-                  disabled={!selectedCount || !bulkStatus}
+                  disabled={!selectedEditableCount || !bulkStatus}
                   className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-50"
                 >
                   Aplicar status
                 </button>
               </div>
-              {isAdmin && (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-slate-500">Reatribuir</label>
-                  <select
-                    value={bulkOwnerId}
-                    onChange={(e) => setBulkOwnerId(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
-                  >
-                    <option value="">Responsável</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.role})
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={bulkReassignOwner}
-                    disabled={!selectedCount || !bulkOwnerId}
-                    className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white disabled:opacity-50"
-                  >
-                    Reatribuir
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500">Reatribuir</label>
+                <select
+                  value={bulkOwnerId}
+                  onChange={(e) => setBulkOwnerId(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
+                >
+                  <option value="">Responsável</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={bulkReassignOwner}
+                  disabled={!selectedCount || !bulkOwnerId}
+                  className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                >
+                  Reatribuir
+                </button>
+              </div>
               <button
                 onClick={bulkMarkContactDone}
-                disabled={!selectedCount}
+                disabled={!selectedEditableCount}
                 className="px-3 py-2 text-sm rounded-lg bg-slate-800 text-white disabled:opacity-50"
               >
                 Contato feito
@@ -1952,7 +1966,7 @@ const App = () => {
                         <input
                           type="checkbox"
                           className="h-4 w-4"
-                          checked={allEditableSelected && editableLeadIds.length > 0}
+                          checked={allSelectableSelected && selectableLeadIds.length > 0}
                           onChange={toggleSelectAll}
                         />
                       </th>
@@ -1969,7 +1983,8 @@ const App = () => {
                   <tbody>
                     {displayedLeads.slice(0, visibleCount).map((lead) => {
                       const normalizedId = String(lead.id);
-                      const canEdit = canEditLead(lead);
+                        const canEdit = canEditLead(lead);
+                        const canSelect = canReassignLead(lead);
                       const hasCompany = !!lead.company;
                       const rowClass =
                         'border-b last:border-none hover:bg-slate-50 ' +
@@ -1982,7 +1997,7 @@ const App = () => {
                             <input
                               type="checkbox"
                               className="h-4 w-4"
-                              disabled={!canEdit}
+                              disabled={!canSelect}
                               checked={selectedLeadIds.includes(normalizedId)}
                               onChange={() => toggleSelectLead(normalizedId)}
                             />
