@@ -705,8 +705,53 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   const idx = leads.findIndex((l) => String(l.id) === String(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
 
-  if (!isAdmin(req.user) && String(leads[idx].ownerId) !== String(req.user.id)) {
-    return res.status(403).json({ error: 'Sem permissao' });
+  const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
+  const ownerMatchId = String(leadOwnerId) === String(req.user.id);
+  const ownerMatchName =
+    normalizeName(leads[idx].owner || leads[idx].responsible_name) ===
+    normalizeName(req.user.name);
+  const isOwner = ownerMatchId || ownerMatchName;
+
+  const hasOtherChanges = (() => {
+    const current = leads[idx];
+    if (name !== undefined && String(name) !== String(current.name || '')) return true;
+    if (email !== undefined && String(email || '') !== String(current.email || '')) return true;
+    if (phone !== undefined && String(phone || '') !== String(current.phone || '')) return true;
+    if (status !== undefined && String(status || '') !== String(current.status || '')) return true;
+    if (campaign !== undefined && String(campaign || '') !== String(current.campaign || '')) return true;
+    if (channel_id !== undefined && String(channel_id || '') !== String(current.channel_id || '')) return true;
+    if (
+      channel_name !== undefined &&
+      String(channel_name || '') !== String(current.channel_name || '')
+    ) {
+      return true;
+    }
+    if (value !== undefined && Number(value || 0) !== Number(current.value || 0)) return true;
+    if (first_contact !== undefined && String(first_contact || '') !== String(current.first_contact || '')) {
+      return true;
+    }
+    if (next_contact !== undefined && String(next_contact || '') !== String(current.next_contact || '')) {
+      return true;
+    }
+    if (notes !== undefined && String(notes || '') !== String(current.notes || '')) return true;
+    if (company !== undefined && String(company || '') !== String(current.company || '')) return true;
+    if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
+    if (
+      is_private !== undefined &&
+      Boolean(is_private) !== Boolean(current.is_private)
+    ) {
+      return true;
+    }
+    return false;
+  })();
+
+  if (!isAdmin(req.user) && !isOwner) {
+    if (Boolean(leads[idx].is_private)) {
+      return res.status(403).json({ error: 'Sem permissao' });
+    }
+    if (hasOtherChanges) {
+      return res.status(403).json({ error: 'Sem permissao para editar campos' });
+    }
   }
 
   if (name) leads[idx].name = name;
