@@ -56,6 +56,7 @@ const emptyLead = {
   value: 0,
   notes: '',
   is_private: false,
+  is_customer: false,
   first_contact: '',
 };
 
@@ -76,6 +77,7 @@ const App = () => {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
   const [segmentFilter, setSegmentFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
@@ -414,6 +416,7 @@ const App = () => {
         if (parsed.channelFilter) setChannelFilter(parsed.channelFilter);
         if (parsed.campaignFilter) setCampaignFilter(parsed.campaignFilter);
         if (parsed.segmentFilter) setSegmentFilter(parsed.segmentFilter);
+        if (parsed.customerFilter) setCustomerFilter(parsed.customerFilter);
         if (parsed.sortKey) setSortKey(parsed.sortKey);
         if (parsed.sortDir) setSortDir(parsed.sortDir);
         if (parsed.viewMode) setViewMode(parsed.viewMode);
@@ -432,12 +435,13 @@ const App = () => {
       channelFilter,
       campaignFilter,
       segmentFilter,
+      customerFilter,
       sortKey,
       sortDir,
       viewMode,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, sortKey, sortDir, viewMode]);
+  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode]);
 
   useEffect(() => {
     if (!user) return;
@@ -530,6 +534,11 @@ const App = () => {
       base = base.filter((l) => (l.segment || '') === segmentFilter);
     }
 
+    if (customerFilter !== 'all') {
+      const wantsCustomer = customerFilter === 'customer';
+      base = base.filter((l) => Boolean(l.is_customer) === wantsCustomer);
+    }
+
     if (channelFilter !== 'all') {
       base = base.filter((l) => String(l.channel_id || '') === String(channelFilter));
     }
@@ -571,7 +580,7 @@ const App = () => {
       });
     }
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
 
   const sorter = useCallback(
     (a, b) => {
@@ -836,6 +845,7 @@ const App = () => {
       value: lead.value || 0,
       notes: lead.notes || '',
       is_private: !!lead.is_private,
+      is_customer: !!lead.is_customer,
     });
     setShowLeadModal(true);
   };
@@ -1885,6 +1895,15 @@ const App = () => {
                   ))}
                 </select>
                 <select
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
+                >
+                  <option value="all">Todos (prospects e clientes)</option>
+                  <option value="prospect">Somente prospects</option>
+                  <option value="customer">Somente clientes</option>
+                </select>
+                <select
                   value={sortDir}
                   onChange={(e) => setSortDir(e.target.value)}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
@@ -2401,6 +2420,26 @@ const App = () => {
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600"
                     readOnly
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="lead-customer"
+                    checked={!!leadForm.is_customer}
+                    onChange={(e) =>
+                      setLeadForm({
+                        ...leadForm,
+                        is_customer: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                  />
+                  <label
+                    htmlFor="lead-customer"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    Já é cliente
+                  </label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

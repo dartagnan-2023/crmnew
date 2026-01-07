@@ -94,6 +94,7 @@ const SHEETS_CONFIG = {
     'notes',
     'created_at',
     'is_private',
+    'is_customer',
   ],
 };
 
@@ -574,6 +575,7 @@ const hydrateLeads = (leads, channels) => {
       channel_name: l.channel_name || channel?.name || '',
       created_at: l.created_at || '',
       is_private: normalizeBool(l.is_private),
+      is_customer: normalizeBool(l.is_customer),
     };
   });
 };
@@ -601,6 +603,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     next_contact = '',
     notes = '',
     is_private = false,
+    is_customer = false,
     first_contact = '',
     company = '',
     segment = '',
@@ -643,6 +646,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     notes: notes || '',
     created_at: now,
     is_private: normalizeBool(is_private),
+    is_customer: normalizeBool(is_customer),
   };
   leads.push(lead);
   await saveTable('leads', leads);
@@ -700,6 +704,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     next_contact,
     notes,
     is_private,
+    is_customer,
     first_contact,
     company,
     segment,
@@ -746,6 +751,12 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     ) {
       return true;
     }
+    if (
+      is_customer !== undefined &&
+      normalizeBool(is_customer) !== normalizeBool(current.is_customer)
+    ) {
+      return true;
+    }
     return false;
   })();
 
@@ -766,6 +777,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (next_contact !== undefined) leads[idx].next_contact = next_contact;
   if (notes !== undefined) leads[idx].notes = notes;
   if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
+  if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
 
   if (ownerId || owner) {
     const ownerUser = users.find((u) => String(u.id) === String(ownerId));
