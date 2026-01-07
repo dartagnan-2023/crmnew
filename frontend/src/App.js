@@ -628,21 +628,6 @@ const App = () => {
     setVisibleCount(20);
   }, [filteredLeads, sortKey, sortDir, searchTerm]);
 
-  useEffect(() => {
-    const onScroll = () => {
-      if (viewMode !== 'list') return;
-      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 200;
-      if (nearBottom) {
-        setVisibleCount((prev) => {
-          if (prev >= displayedLeads.length) return prev;
-          return Math.min(prev + 20, displayedLeads.length);
-        });
-      }
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [viewMode, displayedLeads.length]);
-
   const canEditLead = useCallback(
     (lead) => {
       if (isAdmin) return true;
@@ -2124,7 +2109,7 @@ const App = () => {
                     onClick={() => setVisibleCount((v) => v + 20)}
                     className="px-4 py-2 text-sm bg-slate-200 rounded-lg"
                   >
-                    Carregar mais
+                    + Ver mais
                   </button>
                 </div>
               )}
