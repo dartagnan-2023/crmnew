@@ -95,6 +95,7 @@ const SHEETS_CONFIG = {
     'created_at',
     'is_private',
     'is_customer',
+    'is_out_of_scope',
   ],
 };
 
@@ -550,6 +551,8 @@ const filterLeadsByUser = (leads, user, query) => {
   const userNameNorm = normalizeName(user.name);
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
+    const isOutOfScope = normalizeBool(l.is_out_of_scope);
+    if (isOutOfScope) return false;
     const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
     const ownerMatchName = normalizeName(l.owner || l.responsible_name) === userNameNorm;
 
@@ -576,6 +579,7 @@ const hydrateLeads = (leads, channels) => {
       created_at: l.created_at || '',
       is_private: normalizeBool(l.is_private),
       is_customer: normalizeBool(l.is_customer),
+      is_out_of_scope: normalizeBool(l.is_out_of_scope),
     };
   });
 };
@@ -604,6 +608,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     notes = '',
     is_private = false,
     is_customer = false,
+    is_out_of_scope = false,
     first_contact = '',
     company = '',
     segment = '',
@@ -647,6 +652,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     created_at: now,
     is_private: normalizeBool(is_private),
     is_customer: normalizeBool(is_customer),
+    is_out_of_scope: normalizeBool(is_out_of_scope),
   };
   leads.push(lead);
   await saveTable('leads', leads);
@@ -705,6 +711,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     notes,
     is_private,
     is_customer,
+    is_out_of_scope,
     first_contact,
     company,
     segment,
@@ -757,6 +764,12 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     ) {
       return true;
     }
+    if (
+      is_out_of_scope !== undefined &&
+      normalizeBool(is_out_of_scope) !== normalizeBool(current.is_out_of_scope)
+    ) {
+      return true;
+    }
     return false;
   })();
 
@@ -778,6 +791,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (notes !== undefined) leads[idx].notes = notes;
   if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
   if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
+  if (is_out_of_scope !== undefined) leads[idx].is_out_of_scope = normalizeBool(is_out_of_scope);
 
   if (ownerId || owner) {
     const ownerUser = users.find((u) => String(u.id) === String(ownerId));

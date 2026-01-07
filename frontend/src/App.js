@@ -57,6 +57,7 @@ const emptyLead = {
   notes: '',
   is_private: false,
   is_customer: false,
+  is_out_of_scope: false,
   first_contact: '',
 };
 
@@ -846,6 +847,7 @@ const App = () => {
       notes: lead.notes || '',
       is_private: !!lead.is_private,
       is_customer: !!lead.is_customer,
+      is_out_of_scope: !!lead.is_out_of_scope,
     });
     setShowLeadModal(true);
   };
@@ -2463,6 +2465,26 @@ const App = () => {
                     className="text-xs font-semibold text-slate-700"
                   >
                     Já é cliente
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="lead-out-of-scope"
+                    checked={!!leadForm.is_out_of_scope}
+                    onChange={(e) =>
+                      setLeadForm({
+                        ...leadForm,
+                        is_out_of_scope: e.target.checked,
+                      })
+                    }
+                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                  />
+                  <label
+                    htmlFor="lead-out-of-scope"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    Fora do perfil
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
