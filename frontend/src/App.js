@@ -877,9 +877,17 @@ const App = () => {
         },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
       if (!res.ok) {
-        const message = data.error || 'Erro ao salvar lead';
+        const message =
+          res.status === 429
+            ? 'Muitas requisições. Tente novamente em alguns segundos.'
+            : data.error || 'Erro ao salvar lead';
         showToast(message, 'error');
         return;
       }
@@ -1053,30 +1061,46 @@ const App = () => {
       return;
     }
 
-    const requests = selectedLeadIds.map((id) => {
-      const lead = leads.find((l) => String(l.id) === String(id));
-      if (!lead || !canEditFn(lead)) return null;
-      const payload = payloadBuilder(lead);
-      return fetch(`${API_URL}/leads/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-    }).filter(Boolean);
+    const targets = selectedLeadIds
+      .map((id) => {
+        const lead = leads.find((l) => String(l.id) === String(id));
+        if (!lead || !canEditFn(lead)) return null;
+        return { id, payload: payloadBuilder(lead) };
+      })
+      .filter(Boolean);
 
-    if (!requests.length) {
+    if (!targets.length) {
       showToast('Nenhum dos leads selecionados pode ser editado', 'error');
       return;
     }
 
     try {
-      const responses = await Promise.all(requests);
-      const failed = responses.find((res) => !res.ok);
+      const responses = [];
+      for (const target of targets) {
+        let attempt = 0;
+        let res = null;
+        while (attempt < 3) {
+          attempt += 1;
+          res = await fetch(`${API_URL}/leads/${target.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(target.payload),
+          });
+          if (res.status !== 429) break;
+          await sleep(400 * attempt);
+        }
+        responses.push(res);
+        await sleep(150);
+      }
+      const failed = responses.find((res) => !res || !res.ok);
       if (failed) {
-        showToast('Algumas atualizações falharam', 'error');
+        const message = failed?.status === 429
+          ? 'Muitas requisições. Tente novamente em alguns segundos.'
+          : 'Algumas atualizações falharam';
+        showToast(message, 'error');
       } else {
         showToast(successMessage, 'success');
       }
