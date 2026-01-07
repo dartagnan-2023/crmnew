@@ -749,14 +749,8 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     return false;
   })();
 
-  if (!isAdmin(req.user) && !isOwner) {
-    if (normalizeBool(leads[idx].is_private)) {
-      return res.status(403).json({ error: 'Sem permissao' });
-    }
-    if (hasOtherChanges) {
-      return res.status(403).json({ error: 'Sem permissao para editar campos' });
-    }
-  }
+  // Todos os usuários autenticados podem editar qualquer lead (incluindo reatribuir),
+  // conforme regra do CRM.
 
   if (name) leads[idx].name = name;
   if (company !== undefined) leads[idx].company = company;
