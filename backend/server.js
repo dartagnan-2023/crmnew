@@ -43,6 +43,11 @@ const normalizeName = (val) =>
     .trim();
 
 const normalizePhone = (val) => (val || '').replace(/\D/g, '');
+const normalizeBool = (val) => {
+  if (typeof val === 'boolean') return val;
+  const normalized = String(val || '').toLowerCase().trim();
+  return ['1', 'true', 'sim', 'yes'].includes(normalized);
+};
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -543,7 +548,7 @@ const filterLeadsByUser = (leads, user, query) => {
   const userId = String(user.id);
   const userNameNorm = normalizeName(user.name);
   return leads.filter((l) => {
-    const isPrivate = String(l.is_private || '') === 'true';
+    const isPrivate = normalizeBool(l.is_private);
     const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
     const ownerMatchName = normalizeName(l.owner || l.responsible_name) === userNameNorm;
 
@@ -568,7 +573,7 @@ const hydrateLeads = (leads, channels) => {
       value: Number(l.value || 0),
       channel_name: l.channel_name || channel?.name || '',
       created_at: l.created_at || '',
-      is_private: String(l.is_private || '') === 'true',
+      is_private: normalizeBool(l.is_private),
     };
   });
 };
@@ -637,7 +642,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     next_contact: next_contact || '',
     notes: notes || '',
     created_at: now,
-    is_private: Boolean(is_private),
+    is_private: normalizeBool(is_private),
   };
   leads.push(lead);
   await saveTable('leads', leads);
@@ -737,7 +742,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
     if (
       is_private !== undefined &&
-      Boolean(is_private) !== Boolean(current.is_private)
+      normalizeBool(is_private) !== normalizeBool(current.is_private)
     ) {
       return true;
     }
@@ -745,7 +750,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   })();
 
   if (!isAdmin(req.user) && !isOwner) {
-    if (Boolean(leads[idx].is_private)) {
+    if (normalizeBool(leads[idx].is_private)) {
       return res.status(403).json({ error: 'Sem permissao' });
     }
     if (hasOtherChanges) {
@@ -766,7 +771,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (first_contact !== undefined) leads[idx].first_contact = first_contact;
   if (next_contact !== undefined) leads[idx].next_contact = next_contact;
   if (notes !== undefined) leads[idx].notes = notes;
-  if (is_private !== undefined) leads[idx].is_private = Boolean(is_private);
+  if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
 
   if (ownerId || owner) {
     const ownerUser = users.find((u) => String(u.id) === String(ownerId));
