@@ -23,7 +23,6 @@ const ADMIN_USERNAME = 'marketing';
 const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD || 'bhseletronica123';
 const ADMIN_DEFAULT_PHONE = process.env.ADMIN_DEFAULT_PHONE || '0000000000';
 const MANYCHAT_SECRET = process.env.MANYCHAT_SECRET || process.env.MANYCHAT_TOKEN || '';
-const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
 const ALERT_API_KEY = process.env.ALERT_API_KEY || '';
 const ALERT_LOOKAHEAD_MINUTES = Number(process.env.ALERT_LOOKAHEAD_MINUTES || 60);
 const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || '';
