@@ -75,6 +75,7 @@ app.use(express.json());
 const SHEETS_CONFIG = {
   users: ['id', 'name', 'username', 'email', 'phone', 'password', 'role'],
   channels: ['id', 'name'],
+  negative_terms: ['id', 'term', 'active', 'notes', 'created_at'],
   leads: [
     'id',
     'name',
@@ -534,6 +535,46 @@ app.delete('/api/channels/:id', authMiddleware, async (req, res) => {
   const { items: channels } = await loadTable('channels');
   const filtered = channels.filter((c) => String(c.id) !== String(req.params.id));
   await saveTable('channels', filtered);
+  return res.json({ success: true });
+});
+
+// ===================== NEGATIVE TERMS =====================
+app.get('/api/negative-terms', apiKeyLeadsMiddleware, async (_req, res) => {
+  const { items } = await loadTable('negative_terms');
+  return res.json(items);
+});
+
+app.post('/api/negative-terms', apiKeyLeadsMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const { term, active = true, notes = '' } = req.body;
+  if (!term) return res.status(400).json({ error: 'Termo obrigatorio' });
+  const { items } = await loadTable('negative_terms');
+  const id = nextId(items);
+  const now = new Date().toISOString();
+  const row = { id, term, active: normalizeBool(active), notes, created_at: now };
+  items.push(row);
+  await saveTable('negative_terms', items);
+  return res.json(row);
+});
+
+app.put('/api/negative-terms/:id', apiKeyLeadsMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const { term, active, notes } = req.body;
+  const { items } = await loadTable('negative_terms');
+  const idx = items.findIndex((t) => String(t.id) === String(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Termo nao encontrado' });
+  if (term !== undefined) items[idx].term = term;
+  if (active !== undefined) items[idx].active = normalizeBool(active);
+  if (notes !== undefined) items[idx].notes = notes;
+  await saveTable('negative_terms', items);
+  return res.json(items[idx]);
+});
+
+app.delete('/api/negative-terms/:id', apiKeyLeadsMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const { items } = await loadTable('negative_terms');
+  const filtered = items.filter((t) => String(t.id) !== String(req.params.id));
+  await saveTable('negative_terms', filtered);
   return res.json({ success: true });
 });
 
