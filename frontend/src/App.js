@@ -456,7 +456,7 @@ const App = () => {
       if (showLeadModal || showProfileModal || savingLead) return;
       loadLeads();
       loadStats();
-    }, 60 * 1000);
+    }, 10 * 1000);
     return () => clearInterval(interval);
   }, [user, showLeadModal, showProfileModal, savingLead]); // eslint-disable-line react-hooks/exhaustive-deps
 
