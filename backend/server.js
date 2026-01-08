@@ -584,7 +584,7 @@ const hydrateLeads = (leads, channels) => {
   });
 };
 
-app.get('/api/leads', authMiddleware, async (req, res) => {
+app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
     loadTable('leads'),
     loadTable('channels'),
