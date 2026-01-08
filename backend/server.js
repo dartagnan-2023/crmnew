@@ -618,7 +618,16 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
   const id = nextId(leads);
-  const ownerUser = users.find((u) => String(u.id) === String(ownerId)) || users.find((u) => String(u.id) === String(req.user.id));
+  const hasOwnerInput = Boolean(ownerId || owner);
+  let ownerUser =
+    users.find((u) => String(u.id) === String(ownerId)) ||
+    users.find((u) => String(u.id) === String(req.user.id));
+  if (!hasOwnerInput) {
+    const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
+    if (candidates.length) {
+      ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+  }
   const channelName = req.body.channel_name || '';
   const now = new Date().toISOString();
 

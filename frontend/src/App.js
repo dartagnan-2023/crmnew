@@ -513,6 +513,12 @@ const App = () => {
         if (oid) return oid === String(user?.id);
         return uname && oname === uname;
       });
+    } else if (ownerFilter === 'unassigned') {
+      base = base.filter((l) => {
+        const oid = l._ownerId ? String(l._ownerId) : '';
+        const oname = (l.owner || l.responsible_name || '').trim();
+        return !oid && !oname;
+      });
     } else if (ownerFilter !== 'all') {
       const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
       const targetName = (targetUser?.name || '').toLowerCase();
@@ -1845,6 +1851,7 @@ const App = () => {
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                 >
                   <option value="all">Todos os responsáveis</option>
+                  <option value="unassigned">Sem proprietário</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
