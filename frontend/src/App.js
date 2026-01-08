@@ -1145,6 +1145,22 @@ const App = () => {
     );
   };
 
+  const clearFilters = () => {
+    setOwnerFilter('all');
+    setStatusFilter('todos');
+    setUrgencyFilter('all');
+    setSegmentFilter('all');
+    setCustomerFilter('all');
+    setChannelFilter('all');
+    setCampaignFilter('');
+    setSearchInput('');
+    setSearchTerm('');
+    setSortKey('id');
+    setSortDir('desc');
+    setVisibleCount(20);
+    setAgendaOwnerFilter('todos');
+  };
+
   const handleStatusChange = async (lead, newStatus) => {
     if (!lead || lead.status === newStatus) return;
     setStatusUpdatingId(lead.id);
@@ -1800,6 +1816,12 @@ const App = () => {
                 className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg text-sm"
               >
                 Exportar CSV
+              </button>
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 bg-white text-slate-700 rounded-lg text-sm border border-slate-200"
+              >
+                Limpar filtros
               </button>
               <button
                 onClick={openNewLeadModal}
