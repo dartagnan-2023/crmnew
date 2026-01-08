@@ -449,6 +449,17 @@ const App = () => {
     loadStats();
   }, [ownerFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!user) return undefined;
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      if (showLeadModal || showProfileModal || savingLead) return;
+      loadLeads();
+      loadStats();
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, showLeadModal, showProfileModal, savingLead]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const exportCsv = () => {
     if (!filteredLeads.length) {
       showToast('Nenhum lead para exportar', 'error');
