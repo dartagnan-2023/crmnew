@@ -2002,12 +2002,10 @@ const App = () => {
                       </th>
                       <th className="py-2 px-2">Nome</th>
                       <th className="py-2 px-2">Empresa</th>
-                      <th className="py-2 px-2">Email</th>
-                      <th className="py-2 px-2">Telefone</th>
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Status</th>
                       <th className="py-2 px-2">Responsável</th>
-                      <th className="py-2 px-2">Adicionado</th>
+                      <th className="py-2 px-2">Próximo contato</th>
                       <th className="py-2 px-2 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -2053,8 +2051,6 @@ const App = () => {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-2">{lead.email}</td>
-                          <td className="py-2 px-2">{lead.phone || '-'}</td>
                           <td className="py-2 px-2">{lead.channel_name || '-'}</td>
                           <td className="py-2 px-2">
                             <span className="px-2 py-[2px] rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">
@@ -2063,8 +2059,8 @@ const App = () => {
                           </td>
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-xs text-slate-500">
-                            {lead.created_at
-                              ? new Date(lead.created_at).toLocaleDateString('pt-BR')
+                            {lead.next_contact
+                              ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
                               : '-'}
                           </td>
                           <td className="py-2 px-2 text-right space-x-2">
