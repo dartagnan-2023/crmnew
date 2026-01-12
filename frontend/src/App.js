@@ -1705,7 +1705,7 @@ const App = () => {
                   >
                     <div>
                       <p className="font-semibold text-slate-800">
-                        {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
+                        {lead.company || lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
