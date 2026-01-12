@@ -50,6 +50,7 @@ const emptyLead = {
   next_contact: '',
   email: '',
   phone: '',
+  phone2: '',
   channel_id: '',
   campaign: '',
   status: 'novo',
@@ -127,12 +128,15 @@ const App = () => {
   const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
   const [pingFailCount, setPingFailCount] = useState(0);
   const buildWhatsappText = (lead) => {
-    const origem = lead.channel_name || lead.campaign || 'Não informado';
+    const origem = lead.channel_name || lead.campaign || 'Nao informado';
     const empresa = lead.company || '';
     const contato = lead.name || 'Lead';
     const telefone = lead.phone || '';
+    const telefone2 = lead.phone2 || '';
     const solicitacao = lead.notes || lead.campaign || lead.status || '';
-    return `*Novo Lead*\nOrigem: ${origem}\nEmpresa: ${empresa || '-'}\nContato: ${contato}\nTelefone: ${telefone}\nSolicitação: ${solicitacao || '-'}`;
+    const telefoneLinha = `Telefone: ${telefone || '-'}`;
+    const telefone2Linha = telefone2 ? `\nTelefone 2: ${telefone2}` : '';
+    return `*Novo Lead*\nOrigem: ${origem}\nEmpresa: ${empresa || '-'}\nContato: ${contato}\n${telefoneLinha}${telefone2Linha}\nSolicitacao: ${solicitacao || '-'}`;
   };
 
   const copyToClipboard = async (text) => {
@@ -471,6 +475,7 @@ const App = () => {
       'Empresa',
       'Email',
       'Telefone',
+      'Telefone 2',
       'Responsavel',
       'Status',
       'Campanha',
@@ -487,6 +492,7 @@ const App = () => {
       `"${(l.company || '').replace(/"/g, '""')}"`,
       l.email || '',
       l.phone || '',
+      l.phone2 || '',
       l.owner || l.responsible_name || '',
       l.status || '',
       l.campaign || '',
@@ -591,6 +597,7 @@ const App = () => {
           (l.company || '').toLowerCase().includes(term) ||
           (l.email || '').toLowerCase().includes(term) ||
           (l.phone || '').toLowerCase().includes(term) ||
+          (l.phone2 || '').toLowerCase().includes(term) ||
           (l.owner || l.responsible_name || '').toLowerCase().includes(term) ||
           (l.campaign || '').toLowerCase().includes(term) ||
           (l.notes || '').toLowerCase().includes(term)
@@ -842,6 +849,7 @@ const App = () => {
       first_contact: firstContact,
       email: lead.email || '',
       phone: lead.phone || '',
+      phone2: lead.phone2 || '',
       channel_id: lead.channel_id || '',
       campaign: lead.campaign || '',
       status: lead.status || 'novo',
@@ -939,6 +947,7 @@ const App = () => {
     next_contact: lead.next_contact || null,
     email: lead.email,
     phone: lead.phone || null,
+    phone2: lead.phone2 || null,
     channel_id: lead.channel_id || null,
     campaign: lead.campaign || null,
     status: lead.status || 'novo',
@@ -2332,6 +2341,20 @@ const App = () => {
                     maxLength={16}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                     required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Telefone 2
+                  </label>
+                  <input
+                    type="text"
+                    value={leadForm.phone2 || ''}
+                    onChange={(e) =>
+                      setLeadForm({ ...leadForm, phone2: formatPhone(e.target.value) })
+                    }
+                    maxLength={16}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
                 </div>
                 <div>

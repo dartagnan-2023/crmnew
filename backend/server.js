@@ -83,6 +83,7 @@ const SHEETS_CONFIG = {
     'segment',
     'email',
     'phone',
+    'phone2',
     'status',
     'owner',
     'ownerId',
@@ -639,6 +640,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     name,
     email,
     phone,
+    phone2,
     status = 'novo',
     ownerId,
     owner,
@@ -673,12 +675,17 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const now = new Date().toISOString();
 
   const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone2 = normalizePhone(phone2);
   if (!normalizedPhone) return res.status(400).json({ error: 'Informe telefone com DDD' });
   const normalizedEmail = (email || '').toLowerCase();
   const duplicate = leads.find((l) => {
-    const phoneMatch = normalizedPhone && normalizePhone(l.phone) === normalizedPhone;
+    const leadPhone = normalizePhone(l.phone);
+    const leadPhone2 = normalizePhone(l.phone2);
+    const phoneMatch = normalizedPhone && (leadPhone === normalizedPhone || leadPhone2 === normalizedPhone);
+    const phone2Match =
+      normalizedPhone2 && (leadPhone === normalizedPhone2 || leadPhone2 === normalizedPhone2);
     const emailMatch = normalizedEmail && (l.email || '').toLowerCase() === normalizedEmail;
-    return phoneMatch || emailMatch;
+    return phoneMatch || phone2Match || emailMatch;
   });
   if (duplicate) return res.status(409).json({ error: 'Lead ja existe (email/telefone duplicado)' });
 
@@ -689,6 +696,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     segment: segment || '',
     email,
     phone: phone || '',
+    phone2: phone2 || '',
     status,
     owner: ownerUser?.name || owner || '',
     ownerId: ownerUser?.id || ownerId || '',
@@ -750,6 +758,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     name,
     email,
     phone,
+    phone2,
     status,
     ownerId,
     owner,
@@ -783,6 +792,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (name !== undefined && String(name) !== String(current.name || '')) return true;
     if (email !== undefined && String(email || '') !== String(current.email || '')) return true;
     if (phone !== undefined && String(phone || '') !== String(current.phone || '')) return true;
+    if (phone2 !== undefined && String(phone2 || '') !== String(current.phone2 || '')) return true;
     if (status !== undefined && String(status || '') !== String(current.status || '')) return true;
     if (campaign !== undefined && String(campaign || '') !== String(current.campaign || '')) return true;
     if (channel_id !== undefined && String(channel_id || '') !== String(current.channel_id || '')) return true;
@@ -831,6 +841,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (segment !== undefined) leads[idx].segment = segment;
   if (email) leads[idx].email = email;
   if (phone) leads[idx].phone = phone;
+  if (phone2 !== undefined) leads[idx].phone2 = phone2;
   if (status) leads[idx].status = status;
   if (campaign !== undefined) leads[idx].campaign = campaign;
   if (channel_id !== undefined) leads[idx].channel_id = channel_id;
