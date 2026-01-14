@@ -726,6 +726,7 @@ const App = () => {
     const acc = {
       total: filteredLeads.length,
       novos: 0,
+      emContato: 0,
       ganhos: 0,
       perdidos: 0,
       valorTotal: 0,
@@ -736,6 +737,7 @@ const App = () => {
     filteredLeads.forEach((lead) => {
       const status = (lead.status || '').toLowerCase();
       if (status === 'novo') acc.novos += 1;
+      if (status === 'contato') acc.emContato += 1;
       if (status === 'ganho') {
         acc.ganhos += 1;
         acc.valorTotal += Number(lead.value || 0);
@@ -1608,6 +1610,10 @@ const App = () => {
                 <p className="text-xl font-bold text-slate-900">{localStats.novos || 0}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
+                <p className="text-[11px] text-slate-500">Em contato</p>
+                <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
+              </div>
+              <div className="bg-white rounded-xl shadow p-3">
                 <p className="text-[11px] text-slate-500">Taxa de Conversão</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
@@ -1635,7 +1641,7 @@ const App = () => {
                 <p className="text-[11px] text-slate-500">Empresas (company preenchido)</p>
                 <p className="text-xl font-bold text-slate-900">{statsSegments.empresas || 0}</p>
               </div>
-              {SEGMENT_OPTIONS.filter((s) => s.value).map((opt) => (
+              {SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
                 <div key={opt.value} className="bg-white rounded-xl shadow p-3">
                   <p className="text-[11px] text-slate-500">{opt.label}</p>
                   <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
