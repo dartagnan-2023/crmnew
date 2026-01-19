@@ -865,7 +865,6 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 });
 
 app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
-  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const targetId = String(req.params.id || '').trim();
   try {
     const { items: leads } = await loadTable('leads');
