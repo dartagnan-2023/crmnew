@@ -1,0 +1,56 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          # Ir para o diretório da aplicação (caminho real)
+          cd ${{ secrets.VPS_APP_PATH }}
+          
+          # Fazer backup do .env
+          cp backend/.env /tmp/backend.env.backup
+          
+          # Atualizar código do GitHub
+          git pull origin main
+          
+          # Restaurar .env
+          cp /tmp/backend.env.backup backend/.env
+          
+          # Atualizar backend
+          cd backend
+          
+          # Remover node_modules antigo para evitar problemas
+          rm -rf node_modules package-lock.json
+          
+          # Instalar dependências como usuário bhs-crm
+          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
+          
+          # Reiniciar PM2 como usuário bhs-crm
+          su - bhs-crm -c "pm2 restart crm-backend"
+          
+          # Atualizar frontend
+          cd ../frontend
+          
+          # Instalar e buildar como usuário bhs-crm
+          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          
+          # Recarregar Nginx
+          systemctl reload nginx
+          
+          echo "✅ Deploy concluído com sucesso!"
