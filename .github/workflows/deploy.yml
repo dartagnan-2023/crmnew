@@ -26,7 +26,11 @@ jobs:
           # Fazer backup do .env
           cp backend/.env /tmp/backend.env.backup
           
-          # Atualizar código do GitHub
+          # Corrigir permissões do git
+          git config --global --add safe.directory ${{ secrets.VPS_APP_PATH }}
+          
+          # Descartar alterações locais e atualizar código
+          git reset --hard HEAD
           git pull origin main
           
           # Restaurar .env
