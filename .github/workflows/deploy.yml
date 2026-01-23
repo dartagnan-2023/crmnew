@@ -21,50 +21,37 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 DEPLOY CORRETIVO - FIX PERMISSIONS"
-          APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
+          # Ir para o diretório oficial
+          cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br
           
-          # 1. Corrigir permissões como root logo no início
-          echo "🔒 Corrigindo permissões de diretório..."
-          chown -R bhs-crm:bhs-crm "$APP_PATH"
-          chmod -R 775 "$APP_PATH"
+          # Configurar Git
+          git config --global --add safe.directory /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br
           
-          cd "$APP_PATH" || exit 1
+          # Backup .env
+          cp backend/.env /tmp/backend.env.backup 2>/dev/null || true
           
-          # 2. Sync Código
-          git config --global --add safe.directory "$APP_PATH"
+          # Resetar código
           git reset --hard HEAD
           git pull origin main
           
-          # 3. Backend - Limpeza e Reinstalação
-          echo "⚙️ Reinstalando Backend..."
-          cd backend
-          rm -f package-lock.json
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
+          # Restaurar .env
+          cp /tmp/backend.env.backup backend/.env 2>/dev/null || true
           
-          # 4. Restart PM2 e Logs
-          echo "📊 Restarting PM2..."
+          # Backend
+          cd backend
+          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
           su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
           
-          # 5. Frontend - Limpeza e Rebuild
-          echo "🎨 Rebuildando Frontend..."
+          # Frontend
           cd ../frontend
-          # Criar teste estático
-          mkdir -p public
-          echo "<html><body><h1>CRM ONLINE - HEALTH CHECK OK ✅</h1></body></html>" > public/health.html
+          # Limpeza do build antigo
+          rm -rf build 2>/dev/null || true
+          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          rm -f package-lock.json
-          rm -rf build
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
-          
-          # Copiar para build se não foi automático
-          cp public/health.html build/health.html 2>/dev/null || true
-          
-          # 6. Permissões Finais para o Nginx
+          # Permissões
           chmod -R 755 build
           
-          # 7. Restart Nginx e Status
+          # Nginx
           systemctl restart nginx
-          echo "📊 PM2 Final Status:"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
-          echo "✅ Deploy Finalizado!"
+          
+          echo "✅ Deploy Concluído!"
