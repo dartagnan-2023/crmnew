@@ -63,4 +63,10 @@ jobs:
           # 7. Nginx final
           nginx -t && systemctl restart nginx
           
+          # 8. Capturar Logs de Erro (para ler via browser em caso de 500)
+          echo "window.NGINX_LOGS = \`" > build/static/js/error-logs.js
+          tail -n 100 /var/log/nginx/error.log >> build/static/js/error-logs.js 2>&1
+          echo "\`;" >> build/static/js/error-logs.js
+          chmod 644 build/static/js/error-logs.js
+          
           echo "✅ DEPLOY FINALIZADO COM SUCESSO!"
