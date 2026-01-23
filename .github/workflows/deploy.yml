@@ -19,6 +19,7 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
+        command_timeout: 20m
         script: |
           # Ir para o diretório da aplicação (caminho real)
           cd ${{ secrets.VPS_APP_PATH }}
