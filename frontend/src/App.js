@@ -38,6 +38,26 @@ const SEGMENT_OPTIONS = [
   { value: 'usuario_final', label: 'Usuario Final' },
 ];
 
+const HIGHLIGHTED_CATEGORIES_OPTIONS = [
+  'Automação',
+  'Baixa Tensão',
+  'Comando e Sinalização',
+  'Instrumentos e Medições',
+  'Conectividade e Proteção',
+  'Ventilação e Filtragem',
+  'Ferramentas',
+  'Pneumática',
+];
+
+const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
+
+const COOLING_REASON_OPTIONS = [
+  'Preço',
+  'Problemas técnicos',
+  'Não lembrava',
+  'Crédito/Outros',
+];
+
 const emptyLead = {
   name: '',
   contact: '',
@@ -60,6 +80,9 @@ const emptyLead = {
   is_customer: false,
   is_out_of_scope: false,
   first_contact: '',
+  highlighted_categories: '',
+  customer_type: '',
+  cooling_reason: '',
 };
 
 const App = () => {
@@ -2537,6 +2560,95 @@ const App = () => {
                     Fora do perfil
                   </label>
                 </div>
+
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Tipo de Cliente
+                  </label>
+                  <div className="flex gap-2">
+                    {CUSTOMER_TYPE_OPTIONS.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setLeadForm({ ...leadForm, customer_type: type })}
+                        className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${
+                          leadForm.customer_type === type
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Categorias em destaque (múltipla escolha)
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
+                      const selected = (leadForm.highlighted_categories || '').split(',').includes(cat);
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            let current = (leadForm.highlighted_categories || '').split(',').filter(Boolean);
+                            if (selected) {
+                              current = current.filter((c) => c !== cat);
+                            } else {
+                              current.push(cat);
+                            }
+                            setLeadForm({ ...leadForm, highlighted_categories: current.join(',') });
+                          }}
+                          className={`text-[10px] py-1 px-2 rounded-full border transition ${
+                            selected
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Motivo de esfriamento (múltipla escolha)
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {COOLING_REASON_OPTIONS.map((reason) => {
+                      const selected = (leadForm.cooling_reason || '').split(',').includes(reason);
+                      return (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => {
+                            let current = (leadForm.cooling_reason || '').split(',').filter(Boolean);
+                            if (selected) {
+                              current = current.filter((r) => r !== reason);
+                            } else {
+                              current.push(reason);
+                            }
+                            setLeadForm({ ...leadForm, cooling_reason: current.join(',') });
+                          }}
+                          className={`text-[10px] py-1 px-2 rounded-full border transition ${
+                            selected
+                              ? 'bg-amber-600 text-white border-amber-600'
+                              : 'bg-white text-slate-500 border-slate-200 hover:border-amber-300'
+                          }`}
+                        >
+                          {reason}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"

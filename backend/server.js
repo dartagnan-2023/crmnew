@@ -98,6 +98,9 @@ const SHEETS_CONFIG = {
     'is_private',
     'is_customer',
     'is_out_of_scope',
+    'highlighted_categories',
+    'customer_type',
+    'cooling_reason',
   ],
 };
 
@@ -229,8 +232,7 @@ const formatLeadsSummary = (leads) => {
   return leads
     .map(
       (l) =>
-        `- ${l.name} (${l.phone || '-'}) | Status: ${l.status || '-'} | Responsável: ${
-          l.owner || l.responsible_name || '-'
+        `- ${l.name} (${l.phone || '-'}) | Status: ${l.status || '-'} | Responsável: ${l.owner || l.responsible_name || '-'
         } | Próx.: ${l.next_contact || '-'}`
     )
     .join('\n');
@@ -406,7 +408,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 
 // Health/ping leves (nao tocam Google Sheets)
 app.get('/api/health', (req, res) => {
-  if (!initStarted) ensureInitialized().catch(() => {});
+  if (!initStarted) ensureInitialized().catch(() => { });
   res.json({
     ok: true,
     ready: initFinished,
@@ -418,7 +420,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/ping', (req, res) => {
-  if (!initStarted) ensureInitialized().catch(() => {});
+  if (!initStarted) ensureInitialized().catch(() => { });
   res.json({ ok: true, at: new Date().toISOString(), ready: initFinished });
 });
 
@@ -655,6 +657,9 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     first_contact = '',
     company = '',
     segment = '',
+    highlighted_categories = '',
+    customer_type = '',
+    cooling_reason = '',
   } = req.body;
 
   if (!name || !phone) return res.status(400).json({ error: 'Nome e telefone sao obrigatorios' });
@@ -711,6 +716,9 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     is_private: normalizeBool(is_private),
     is_customer: normalizeBool(is_customer),
     is_out_of_scope: normalizeBool(is_out_of_scope),
+    highlighted_categories: highlighted_categories || '',
+    customer_type: customer_type || '',
+    cooling_reason: cooling_reason || '',
   };
   leads.push(lead);
   await saveTable('leads', leads);
@@ -774,6 +782,9 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     first_contact,
     company,
     segment,
+    highlighted_categories,
+    customer_type,
+    cooling_reason,
   } = req.body;
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
@@ -853,6 +864,9 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
   if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
   if (is_out_of_scope !== undefined) leads[idx].is_out_of_scope = normalizeBool(is_out_of_scope);
+  if (highlighted_categories !== undefined) leads[idx].highlighted_categories = highlighted_categories;
+  if (customer_type !== undefined) leads[idx].customer_type = customer_type;
+  if (cooling_reason !== undefined) leads[idx].cooling_reason = cooling_reason;
 
   if (ownerId || owner) {
     const ownerUser = users.find((u) => String(u.id) === String(ownerId));
