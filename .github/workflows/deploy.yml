@@ -21,11 +21,10 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 PERMISSÕES WWW-DATA"
+          echo "🚀 DEPLOY CORRETIVO - PORT 3000 & BUILD CHECK"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          # 1. Ownership para o usuário do app e grupo do webserver
-          echo "🔒 Ajustando permissões bhs-crm:www-data..."
+          # 1. Permissões e Travessia
           chown -R bhs-crm:www-data "$APP_PATH"
           chmod -R 775 "$APP_PATH"
           chmod a+x /home/bhseletrica-crm /home/bhseletrica-crm/htdocs
@@ -35,21 +34,33 @@ jobs:
           git reset --hard HEAD
           git pull origin main
           
-          # 2. Backend
+          # 2. Backend (Forçar PORT 3000)
           echo "⚙️ Backend..."
           cd backend
           su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
+          # Forçar variável de ambiente no PM2
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 start server.js --name crm-backend --env PORT=3000"
           
           # 3. Frontend
           echo "🎨 Frontend..."
           cd ../frontend
+          # Garantir que o build seja limpo
+          rm -rf build
           su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          # 4. Permissões Finais (Crucial para o Nginx ler o build)
+          # 4. Verificação Crítica de Arquivos
+          if [ -f "build/index.html" ]; then
+            echo "✅ index.html encontrado!"
+          else
+            echo "⚠️ AVISO: index.html não está no build. Tentando localizar..."
+            find . -name "index.html"
+          fi
+          
+          # 5. Permissões Finais
           chmod -R 755 build
           chown -R bhs-crm:www-data build
           
-          # 5. Nginx
+          # 6. Nginx
           nginx -t && systemctl restart nginx
-          echo "✅ Deploy Concluído."
+          echo "✅ Deploy Finalizado!"

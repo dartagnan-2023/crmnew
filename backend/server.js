@@ -16,7 +16,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
 const ADMIN_USERNAME = 'marketing';
