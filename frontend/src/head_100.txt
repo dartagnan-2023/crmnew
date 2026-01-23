@@ -1,0 +1,100 @@
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
+const STATUS_OPTIONS = [
+  { value: 'novo', label: 'Novo' },
+  { value: 'contato', label: 'Em contato' },
+  { value: 'proposta', label: 'Proposta enviada' },
+  { value: 'negociacao', label: 'NegociaÃ§Ã£o' },
+  { value: 'ganho', label: 'Ganho' },
+  { value: 'perdido', label: 'Perdido' },
+];
+
+
+// Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
+const formatPhone = (value) => {
+  const digits = (value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const toDateInput = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+};
+
+
+const SEGMENT_OPTIONS = [
+  { value: '', label: 'Sem perfil' },
+  { value: 'revendedor', label: 'Revendedor' },
+  { value: 'instalador', label: 'Instalador' },
+  { value: 'montador', label: 'Montador de Painel' },
+  { value: 'representante', label: 'Representante' },
+  { value: 'usuario_final', label: 'Usuario Final' },
+];
+
+const emptyLead = {
+  name: '',
+  contact: '',
+  company: '',
+  segment: '',
+  owner: '',
+  ownerId: null,
+  origin: '',
+  stage_detail: '',
+  next_contact: '',
+  email: '',
+  phone: '',
+  phone2: '',
+  channel_id: '',
+  campaign: '',
+  status: 'novo',
+  value: 0,
+  notes: '',
+  is_private: false,
+  is_customer: false,
+  is_out_of_scope: false,
+  first_contact: '',
+};
+
+const App = () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', username: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [authHint, setAuthHint] = useState('');
+
+  const [leads, setLeads] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [stats, setStats] = useState({});
+  const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
+  const [segmentFilter, setSegmentFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [channelFilter, setChannelFilter] = useState('all');
+  const [campaignFilter, setCampaignFilter] = useState('');
+  const [sortKey, setSortKey] = useState('id');
+  const [sortDir, setSortDir] = useState('desc');
+  const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
+  const [visibleCount, setVisibleCount] = useState(20);
+
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [editingLead, setEditingLead] = useState(null);
+  const [leadForm, setLeadForm] = useState(emptyLead);
+  const [savingLead, setSavingLead] = useState(false);
+
+  const [showChannelModal, setShowChannelModal] = useState(false);
+  const [newChannel, setNewChannel] = useState('');
+
+  const [toast, setToast] = useState(null);
