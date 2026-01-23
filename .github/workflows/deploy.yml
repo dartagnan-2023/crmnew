@@ -55,5 +55,16 @@ jobs:
           # 5. Permissões Nginx e Restart
           chmod -R 755 build
           chown -R bhs-crm:www-data build
+          
+          # 6. Expor diagnóstico via JS (Para ler via browser)
+          mkdir -p build/static/js
+          echo "window.SERVER_DIAG = {" > build/static/js/public-diag.js
+          echo "  netstat: \`$(netstat -tunlp | grep -E "3000|3001" | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
+          echo "  ls_build: \`$(ls -la build/ | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
+          echo "  index_head: \`$(head -c 200 build/index.html | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
+          echo "  pm2: \`$(su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 jlist" | tr -d '`' | tr -d '$')\`" >> build/static/js/public-diag.js
+          echo "};" >> build/static/js/public-diag.js
+          chmod 644 build/static/js/public-diag.js
+          
           nginx -t && systemctl restart nginx
-          echo "✅ Fim do diagnóstico."
+          echo "✅ Fim."
