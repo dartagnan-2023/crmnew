@@ -21,20 +21,41 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔍 DIAGNÓSTICO DE CONFIGURAÇÃO"
+          echo "🔎 BUSCA GLOBAL E DIAGNÓSTICO"
           
-          # 1. Ver para onde o Nginx aponta
-          echo "🌐 Nginx Root Config:"
-          grep -r "root" /etc/nginx/sites-enabled/ || echo "Não foi possível ler as configs do Nginx."
+          # 1. Encontrar todos os index.html do CRM
+          # Vamos procurar em /home/ e ver as datas
+          find /home -name "index.html" -path "*build*" -ls > /tmp/search_results.txt
           
-          # 2. Ver processos PM2 e portas
-          echo "📊 PM2 Status:"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
-          netstat -tunlp | grep :3000
-          netstat -tunlp | grep :3001
+          # 2. Descobrir onde o Nginx está servindo /static/js/main.6ae19b05.js
+          # Esse arquivo deu 200 OK nos testes do bot
+          locate main.6ae19b05.js > /tmp/main_js_path.txt
           
-          # 3. Localizar onde está o git do crm
-          echo "📁 Localizando diretório git..."
-          find /home -name ".git" -type d -prune 2>/dev/null | grep crm
+          # 3. Mostrar configurações do Nginx
+          grep -r "root" /etc/nginx/sites-enabled/ > /tmp/nginx_roots.txt
           
-          echo "✅ Fim do diagnóstico."
+          # 4. Tentar colocar esses logs em uma pasta que o Nginx está servindo
+          # Se main.6ae19b05.js está em /path/to/static/js, 
+          # vamos tentar colocar o log em /path/to/debug.txt
+          WORKING_JS_PATH=$(head -n 1 /tmp/main_js_path.txt)
+          if [ ! -z "$WORKING_JS_PATH" ]; then
+            WORKING_DIR=$(dirname $(dirname $(dirname "$WORKING_JS_PATH")))
+            echo "🎯 Pasta Nginx Provável: $WORKING_DIR"
+            
+            # Criar log lá
+            {
+              echo "--- SEARCH RESULTS ---"
+              cat /tmp/search_results.txt
+              echo "--- NGINX ROOTS ---"
+              cat /tmp/nginx_roots.txt
+              echo "--- PM2 STATUS ---"
+              su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
+            } > "$WORKING_DIR/debug-final.txt"
+            
+            chmod 644 "$WORKING_DIR/debug-final.txt"
+            echo "✅ Log salvo em $WORKING_DIR/debug-final.txt"
+          else
+            echo "❌ Não foi possível localizar o arquivo JS vivo."
+          fi
+          
+          echo "✅ Fim da busca."
