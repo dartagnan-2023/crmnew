@@ -424,6 +424,15 @@ app.get('/api/ping', (req, res) => {
   res.json({ ok: true, at: new Date().toISOString(), ready: initFinished });
 });
 
+app.get('/api/debug/config', (req, res) => {
+  res.json({
+    ok: true,
+    sheetId: SHEET_ID ? 'CONNECTED' : 'MISSING',
+    leadsColumns: SHEETS_CONFIG.leads,
+    envPort: PORT,
+  });
+});
+
 // Middleware global (exceto health/ping) para garantir inicializacao
 app.use('/api', (req, res, next) => {
   if (req.path === '/ping' || req.path === '/health') return next();
