@@ -21,41 +21,27 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔎 BUSCA GLOBAL E DIAGNÓSTICO"
+          echo "🚀 TESTE DE EXTENSÕES NGINX"
+          APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
+          cd "$APP_PATH/frontend/build" || exit 1
           
-          # 1. Encontrar todos os index.html do CRM
-          # Vamos procurar em /home/ e ver as datas
-          find /home -name "index.html" -path "*build*" -ls > /tmp/search_results.txt
+          echo "DADOS DO SISTEMA" > debug_stats.txt
+          date >> debug_stats.txt
+          whoami >> debug_stats.txt
           
-          # 2. Descobrir onde o Nginx está servindo /static/js/main.6ae19b05.js
-          # Esse arquivo deu 200 OK nos testes do bot
-          locate main.6ae19b05.js > /tmp/main_js_path.txt
+          echo "<html><body>HTML OK</body></html>" > health.html
+          echo "TEXT OK" > health.txt
           
-          # 3. Mostrar configurações do Nginx
-          grep -r "root" /etc/nginx/sites-enabled/ > /tmp/nginx_roots.txt
+          # Garantir permissões
+          chmod 644 debug_stats.txt health.html health.txt
           
-          # 4. Tentar colocar esses logs em uma pasta que o Nginx está servindo
-          # Se main.6ae19b05.js está em /path/to/static/js, 
-          # vamos tentar colocar o log em /path/to/debug.txt
-          WORKING_JS_PATH=$(head -n 1 /tmp/main_js_path.txt)
-          if [ ! -z "$WORKING_JS_PATH" ]; then
-            WORKING_DIR=$(dirname $(dirname $(dirname "$WORKING_JS_PATH")))
-            echo "🎯 Pasta Nginx Provável: $WORKING_DIR"
-            
-            # Criar log lá
-            {
-              echo "--- SEARCH RESULTS ---"
-              cat /tmp/search_results.txt
-              echo "--- NGINX ROOTS ---"
-              cat /tmp/nginx_roots.txt
-              echo "--- PM2 STATUS ---"
-              su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
-            } > "$WORKING_DIR/debug-final.txt"
-            
-            chmod 644 "$WORKING_DIR/debug-final.txt"
-            echo "✅ Log salvo em $WORKING_DIR/debug-final.txt"
+          # Verificar integridade do index.html
+          if [ -f "index.html" ]; then
+            echo "index.html existe" >> debug_stats.txt
+            ls -la index.html >> debug_stats.txt
           else
-            echo "❌ Não foi possível localizar o arquivo JS vivo."
+            echo "index.html NAO EXISTE!" >> debug_stats.txt
           fi
           
-          echo "✅ Fim da busca."
+          systemctl restart nginx
+          echo "✅ Fim do teste."
