@@ -21,28 +21,26 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 FIX BACKEND PORT 3000"
+          echo "🚀 BACKEND CONNECTIVITY REPAIR"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          cd "$APP_PATH/backend" || exit 1
+          # 1. Limpeza total
+          fuser -k 3000/tcp || true
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 kill"
           
-          # 1. Forçar PORT=3000 no .env
-          if [ -f ".env" ]; then
-            sed -i 's/^PORT=.*/PORT=3000/' .env
-            grep -q "^PORT=" .env || echo "PORT=3000" >> .env
-          else
-            echo "PORT=3000" > .env
-          fi
+          # 2. Configurar .env
+          cd "$APP_PATH/backend"
+          echo "PORT=3000" > .env
+          echo "NODE_ENV=production" >> .env
           
-          # 2. Reiniciar Backend
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 start server.js --name crm-backend"
+          # 3. Iniciar Backend
+          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install && pm2 start server.js --name crm-backend"
           
-          # 3. Verificação de Rede
-          echo "🌐 Portas Ativas:"
-          netstat -tunlp | grep :3000
+          # 4. Validar Localmente
+          sleep 5
+          echo "🧪 Testando conectividade local:"
+          curl -v http://localhost:3000/api/ping || echo "❌ Falha ao conectar no localhost:3000"
           
-          # 4. Nginx
+          # 5. Nginx
           nginx -t && systemctl restart nginx
           echo "✅ SISTEMA RESTAURADO"
