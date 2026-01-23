@@ -21,51 +21,20 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 DEPLOY DIAGNÓSTICO NGINX"
-          APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
+          echo "🔍 DIAGNÓSTICO DE CONFIGURAÇÃO"
           
-          # 1. Permissões de Travessia (Crucial para erro 500 no Nginx)
-          echo "🔒 Garantindo permissões de travessia..."
-          # Nginx precisa de +x em todas as pastas do caminho
-          chmod a+x /home/bhseletrica-crm
-          chmod a+x /home/bhseletrica-crm/htdocs
-          chmod a+x /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br
+          # 1. Ver para onde o Nginx aponta
+          echo "🌐 Nginx Root Config:"
+          grep -r "root" /etc/nginx/sites-enabled/ || echo "Não foi possível ler as configs do Nginx."
           
-          # 2. Corrigir Owner e Recursividade
-          chown -R bhs-crm:bhs-crm "$APP_PATH"
-          chmod -R 755 "$APP_PATH"
+          # 2. Ver processos PM2 e portas
+          echo "📊 PM2 Status:"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
+          netstat -tunlp | grep :3000
+          netstat -tunlp | grep :3001
           
-          cd "$APP_PATH" || exit 1
-          git config --global --add safe.directory "$APP_PATH"
-          git reset --hard HEAD
-          git pull origin main
+          # 3. Localizar onde está o git do crm
+          echo "📁 Localizando diretório git..."
+          find /home -name ".git" -type d -prune 2>/dev/null | grep crm
           
-          # 3. Backend (Garantir porta e inicialização)
-          cd backend
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
-          
-          # 4. Frontend
-          cd ../frontend
-          # Criar o health.html ANTES do build para ele ser incluído
-          mkdir -p public
-          echo "OK" > public/health.html
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
-          
-          # 5. Permissões Finais Build
-          chmod -R 755 build
-          
-          # 6. Verificação de Arquivos
-          echo "📁 Verificando BUILD:"
-          ls -la build/index.html
-          ls -la build/health.html
-          
-          # 7. Nginx - Testar Configuração e Restart
-          nginx -t
-          systemctl restart nginx
-          
-          # 8. Ver logs de erro do Nginx para diagnosticar o 500
-          echo "📝 ÚLTIMOS ERROS DO NGINX:"
-          tail -n 20 /var/log/nginx/error.log
-          
-          echo "✅ Deploy Finalizado."
+          echo "✅ Fim do diagnóstico."
