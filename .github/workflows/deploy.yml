@@ -21,27 +21,27 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 TESTE DE EXTENSÕES NGINX"
+          echo "🚀 EXPOSING CONFIGS VIA JS"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
-          cd "$APP_PATH/frontend/build" || exit 1
+          JS_DEBUG_FILE="$APP_PATH/frontend/build/static/js/config-debug.js"
           
-          echo "DADOS DO SISTEMA" > debug_stats.txt
-          date >> debug_stats.txt
-          whoami >> debug_stats.txt
+          # Garantir que a pasta exista
+          mkdir -p "$APP_PATH/frontend/build/static/js"
           
-          echo "<html><body>HTML OK</body></html>" > health.html
-          echo "TEXT OK" > health.txt
+          # Capturar dados (sem SSL keys)
+          NGINX_CONF=$(cat /etc/nginx/sites-enabled/* | grep -v "ssl_certificate" | tr -d '`' | tr -d '$')
+          PM2_LIST=$(su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 jlist" | tr -d '`' | tr -d '$')
           
-          # Garantir permissões
-          chmod 644 debug_stats.txt health.html health.txt
+          echo "window.SERVER_DEBUG = {" > "$JS_DEBUG_FILE"
+          echo "  date: '$(date)'," >> "$JS_DEBUG_FILE"
+          echo "  nginx_conf: \`$NGINX_CONF\`," >> "$JS_DEBUG_FILE"
+          echo "  pm2_list: \`$PM2_LIST\`," >> "$JS_DEBUG_FILE"
+          echo "  pwd: '$(pwd)'," >> "$JS_DEBUG_FILE"
+          echo "  ls_root: \`$(ls -la "$APP_PATH")\`" >> "$JS_DEBUG_FILE"
+          echo "};" >> "$JS_DEBUG_FILE"
           
-          # Verificar integridade do index.html
-          if [ -f "index.html" ]; then
-            echo "index.html existe" >> debug_stats.txt
-            ls -la index.html >> debug_stats.txt
-          else
-            echo "index.html NAO EXISTE!" >> debug_stats.txt
-          fi
+          chmod 644 "$JS_DEBUG_FILE"
+          echo "✅ Configs exposed at static/js/config-debug.js"
           
           systemctl restart nginx
-          echo "✅ Fim do teste."
+          echo "✅ Fim."
