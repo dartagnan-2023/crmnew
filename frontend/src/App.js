@@ -883,6 +883,9 @@ const App = () => {
       is_private: !!lead.is_private,
       is_customer: !!lead.is_customer,
       is_out_of_scope: !!lead.is_out_of_scope,
+      highlighted_categories: lead.highlighted_categories || '',
+      customer_type: lead.customer_type || '',
+      cooling_reason: lead.cooling_reason || '',
     });
     setShowLeadModal(true);
   };
@@ -979,6 +982,9 @@ const App = () => {
     value: Number(lead.value) || 0,
     notes: lead.notes || null,
     is_private: lead.is_private || 0,
+    highlighted_categories: lead.highlighted_categories || '',
+    customer_type: lead.customer_type || '',
+    cooling_reason: lead.cooling_reason || '',
     ...overrides,
   });
 
