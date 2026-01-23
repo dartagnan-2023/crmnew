@@ -32,23 +32,25 @@ jobs:
           # Restaurar .env
           cp /tmp/backend.env.backup backend/.env
           
+          # Verificar versão do código
+          echo "📍 Versão atual no servidor:"
+          git log -1 --oneline
+          
           # Atualizar backend
           cd backend
-          
-          # Remover node_modules antigo para evitar problemas
           rm -rf node_modules package-lock.json
-          
-          # Instalar dependências como usuário bhs-crm
           su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
-          
-          # Reiniciar PM2 como usuário bhs-crm
           su - bhs-crm -c "pm2 restart crm-backend"
           
           # Atualizar frontend
           cd ../frontend
           
-          # Instalar e buildar como usuário bhs-crm
-          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          # Limpeza profunda e build
+          echo "🎨 Iniciando build do frontend..."
+          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && rm -rf build node_modules && npm install && npm run build"
+          
+          # Garantir permissões para o Nginx ler o build
+          chmod -R 755 build
           
           # Recarregar Nginx
           systemctl reload nginx
