@@ -21,52 +21,48 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 REPARO TOTAL E DEPLOY DEFINITIVO"
+          echo "🔥 RECONSTRUÇÃO TOTAL"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          # 1. Resetar Ownership de TUDO como root
-          echo "🔒 Resetando ownership para bhs-crm..."
+          # 1. Resetar permissões e caminhos
           chown -R bhs-crm:bhseletrica-crm "$APP_PATH" /home/bhseletrica-crm
           chmod -R 775 "$APP_PATH"
           chmod a+x /home/bhseletrica-crm /home/bhseletrica-crm/htdocs
           
           cd "$APP_PATH" || exit 1
-          
-          # 2. Sync Código (como root para garantir permissão no .git)
           git config --global --add safe.directory "$APP_PATH"
           git reset --hard HEAD
           git pull origin main
           
-          # 3. Garantir que o .env existe (Backup/Restore)
-          [ -f "backend/.env" ] || cp /tmp/backend.env.backup backend/.env 2>/dev/null || true
-          
-          # 4. Backend (Instalação limpa)
-          echo "⚙️ Backend Update..."
+          # 2. Reconstruir Backend
+          echo "⚙️ Reconstruindo Backend..."
           cd backend
           rm -rf node_modules package-lock.json
-          # Rodar install como o usuário correto
+          # Usamos o bhs-crm para instalar
           su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          # Restart PM2
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
+          # Matar e iniciar PM2 para garantir porta limpa
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 start server.js --name crm-backend"
           
-          # 5. Frontend (Build limpo)
-          echo "🎨 Frontend Build..."
+          # 3. Reconstruir Frontend (Desta vez garantindo o build)
+          echo "🎨 Reconstruindo Frontend..."
           cd ../frontend
           rm -rf build node_modules package-lock.json
           su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          # 6. Permissões de Saída
-          echo "🔒 Permissões finais..."
+          # 4. Verificação Fisioterapêutica do Build
+          if [ -f "build/index.html" ]; then
+            echo "✅ index.html criado com sucesso!"
+          else
+            echo "❌ FALHA: index.html sumiu após o build. Tentando mover manualmente se necessário..."
+            find . -name "index.html"
+          fi
+          
+          # 5. Permissões de Saída
           chown -R bhs-crm:bhseletrica-crm build
           chmod -R 755 build
           
-          # 7. Nginx final
+          # 6. Nginx
           nginx -t && systemctl restart nginx
           
-          # 8. Capturar Logs de Erro (para ler via browser em caso de 500)
-          echo "window.NGINX_LOGS = \`" > build/static/js/error-logs.js
-          tail -n 100 /var/log/nginx/error.log >> build/static/js/error-logs.js 2>&1
-          echo "\`;" >> build/static/js/error-logs.js
-          chmod 644 build/static/js/error-logs.js
-          
-          echo "✅ DEPLOY FINALIZADO COM SUCESSO!"
+          echo "✅ SISTEMA RESTAURADO!"
