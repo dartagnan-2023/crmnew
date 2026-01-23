@@ -39,7 +39,7 @@ jobs:
           rm -rf node_modules package-lock.json
           
           # Instalar dependências como usuário bhs-crm
-          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
+          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
           
           # Reiniciar PM2 como usuário bhs-crm
           su - bhs-crm -c "pm2 restart crm-backend"
@@ -48,7 +48,7 @@ jobs:
           cd ../frontend
           
           # Instalar e buildar como usuário bhs-crm
-          su - bhs-crm -c "cd /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
           # Recarregar Nginx
           systemctl reload nginx
