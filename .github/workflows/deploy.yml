@@ -49,11 +49,22 @@ jobs:
           # 5. Frontend - Limpeza e Rebuild
           echo "🎨 Rebuildando Frontend..."
           cd ../frontend
+          # Criar teste estático
+          mkdir -p public
+          echo "<html><body><h1>CRM ONLINE - HEALTH CHECK OK ✅</h1></body></html>" > public/health.html
+          
           rm -f package-lock.json
           rm -rf build
           su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
+          # Copiar para build se não foi automático
+          cp public/health.html build/health.html 2>/dev/null || true
+          
           # 6. Permissões Finais para o Nginx
           chmod -R 755 build
-          systemctl reload nginx
-          echo "✅ Deploy Concluído com Sucesso!"
+          
+          # 7. Restart Nginx e Status
+          systemctl restart nginx
+          echo "📊 PM2 Final Status:"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 list"
+          echo "✅ Deploy Finalizado!"
