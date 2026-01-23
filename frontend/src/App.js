@@ -51,6 +51,13 @@ const HIGHLIGHTED_CATEGORIES_OPTIONS = [
 
 const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
 
+
+const normalizeListValue = (value) =>
+  (value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
 const COOLING_REASON_OPTIONS = [
   'Preço',
   'Problemas técnicos',
@@ -883,9 +890,9 @@ const App = () => {
       is_private: !!lead.is_private,
       is_customer: !!lead.is_customer,
       is_out_of_scope: !!lead.is_out_of_scope,
-      highlighted_categories: lead.highlighted_categories || '',
+      highlighted_categories: normalizeListValue(lead.highlighted_categories).join(','),
       customer_type: lead.customer_type || '',
-      cooling_reason: lead.cooling_reason || '',
+      cooling_reason: normalizeListValue(lead.cooling_reason).join(','),
     });
     setShowLeadModal(true);
   };
@@ -903,6 +910,8 @@ const App = () => {
       : `${API_URL}/leads`;
     const payload = {
       ...leadForm,
+      highlighted_categories: normalizeListValue(leadForm.highlighted_categories).join(','),
+      cooling_reason: normalizeListValue(leadForm.cooling_reason).join(','),
       ownerId: leadForm.ownerId || user?.id || null,
       first_contact: leadForm.first_contact || '',
       value: Number(leadForm.value) || 0,
@@ -982,9 +991,9 @@ const App = () => {
     value: Number(lead.value) || 0,
     notes: lead.notes || null,
     is_private: lead.is_private || 0,
-    highlighted_categories: lead.highlighted_categories || '',
+    highlighted_categories: normalizeListValue(lead.highlighted_categories).join(','),
     customer_type: lead.customer_type || '',
-    cooling_reason: lead.cooling_reason || '',
+    cooling_reason: normalizeListValue(lead.cooling_reason).join(','),
     ...overrides,
   });
 
@@ -2588,13 +2597,13 @@ const App = () => {
                   </label>
                   <div className="flex flex-wrap gap-1">
                     {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
-                      const selected = (leadForm.highlighted_categories || '').split(',').includes(cat);
+                      const selected = normalizeListValue(leadForm.highlighted_categories).includes(cat);
                       return (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => {
-                            let current = (leadForm.highlighted_categories || '').split(',').filter(Boolean);
+                            let current = normalizeListValue(leadForm.highlighted_categories);
                             if (selected) {
                               current = current.filter((c) => c !== cat);
                             } else {
@@ -2620,13 +2629,13 @@ const App = () => {
                   </label>
                   <div className="flex flex-wrap gap-1">
                     {COOLING_REASON_OPTIONS.map((reason) => {
-                      const selected = (leadForm.cooling_reason || '').split(',').includes(reason);
+                      const selected = normalizeListValue(leadForm.cooling_reason).includes(reason);
                       return (
                         <button
                           key={reason}
                           type="button"
                           onClick={() => {
-                            let current = (leadForm.cooling_reason || '').split(',').filter(Boolean);
+                            let current = normalizeListValue(leadForm.cooling_reason);
                             if (selected) {
                               current = current.filter((r) => r !== reason);
                             } else {
