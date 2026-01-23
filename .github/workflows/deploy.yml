@@ -21,7 +21,6 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-        script: |
           echo "🔍 INFO: Iniciando recuperação e descoberta..."
           echo "Usuario SSH: $(whoami)"
           
