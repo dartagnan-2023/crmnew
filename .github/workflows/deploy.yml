@@ -21,54 +21,39 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 DEPLOY COM LOG PÚBLICO"
+          echo "🚀 DEPLOY CORRETIVO - FIX PERMISSIONS"
           APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
-          DEBUG_FOLDER="$APP_PATH/frontend/public"
-          DEBUG_FILE="$DEBUG_FOLDER/debug-deploy.txt"
           
-          # Criar pasta public se não existir (no frontend local antes do build)
-          mkdir -p "$DEBUG_FOLDER"
-          
-          echo "Starting Deploy at $(date)" > "$DEBUG_FILE"
+          # 1. Corrigir permissões como root logo no início
+          echo "🔒 Corrigindo permissões de diretório..."
+          chown -R bhs-crm:bhs-crm "$APP_PATH"
+          chmod -R 775 "$APP_PATH"
           
           cd "$APP_PATH" || exit 1
-          echo "--- Git Sync ---" >> "$DEBUG_FILE"
+          
+          # 2. Sync Código
           git config --global --add safe.directory "$APP_PATH"
-          git reset --hard HEAD >> "$DEBUG_FILE" 2>&1
-          git pull origin main >> "$DEBUG_FILE" 2>&1
-          echo "Git Hash: $(git rev-parse HEAD)" >> "$DEBUG_FILE"
+          git reset --hard HEAD
+          git pull origin main
           
-          # Backend
-          echo "--- Backend Update ---" >> "$DEBUG_FILE"
+          # 3. Backend - Limpeza e Reinstalação
+          echo "⚙️ Reinstalando Backend..."
           cd backend
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install" >> "$DEBUG_FILE" 2>&1
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend" >> "$DEBUG_FILE" 2>&1
+          rm -f package-lock.json
+          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
           
-          # Capturar logs do backend
-          sleep 5
-          echo "--- PM2 LOGS ---" >> "$DEBUG_FILE"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 100 --no-daemon" &
-          LOG_PID=$!
-          sleep 5
-          kill $LOG_PID || true
+          # 4. Restart PM2 e Logs
+          echo "📊 Restarting PM2..."
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
           
-          # Extrair logs para o arquivo
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 100 --no-daemon" >> "$DEBUG_FILE" 2>&1 &
-          LOG_PID2=$!
-          sleep 5
-          kill $LOG_PID2 || true
-          
-          # Frontend
-          echo "--- Frontend Build ---" >> "$DEBUG_FILE"
+          # 5. Frontend - Limpeza e Rebuild
+          echo "🎨 Rebuildando Frontend..."
           cd ../frontend
-          # Manter o log fora da pasta build que será apagada
-          cp "$DEBUG_FILE" /tmp/debug-deploy.txt
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && rm -rf build && npm install && npm run build" >> /tmp/debug-deploy.txt 2>&1
+          rm -f package-lock.json
+          rm -rf build
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          # Restaurar log para a nova pasta build
-          mkdir -p build
-          cp /tmp/debug-deploy.txt build/debug-deploy.txt
-          
+          # 6. Permissões Finais para o Nginx
           chmod -R 755 build
           systemctl reload nginx
-          echo "Deploy Finished at $(date)" >> build/debug-deploy.txt
+          echo "✅ Deploy Concluído com Sucesso!"
