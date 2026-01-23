@@ -21,52 +21,34 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔥 RECONSTRUÇÃO ULTRA LIMPA"
+          echo "🚀 DEPLOY REPARO FINAL"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          # 1. Limpeza total de permissões
           cd "$APP_PATH" || exit 1
           chown -R bhs-crm:bhseletrica-crm .
-          chmod -R 775 .
           
-          git config --global --add safe.directory "$APP_PATH"
-          git reset --hard HEAD
-          git pull origin main
+          # 1. Liberar portas
+          fuser -k 3000/tcp || true
+          fuser -k 3001/tcp || true
           
-          # 2. Frontend Rebuild
-          echo "🎨 Rebuildando Frontend..."
+          # 2. Frontend Build (Com log)
           cd frontend
-          # Limpeza total Como Root
-          rm -rf build node_modules
-          # Build como usuário bhs-crm
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          rm -rf build
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && CI=false npm install && CI=false npm run build > build.log 2>&1"
           
-          # 3. Backend Rebuild
-          echo "⚙️ Rebuildando Backend..."
+          # 3. Expor log do build se falhar
+          mkdir -p build/static/js
+          echo "window.BUILD_LOG = \`$(cat build.log | tr -d '`' | tr -d '$' | tail -n 100)\`;" > build/static/js/build-log.js
+          
+          # 4. Backend
           cd ../backend
-          rm -rf node_modules
           su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
           su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
           su - bhs-crm -c "source ~/.nvm/nvm.sh && PORT=3000 pm2 start server.js --name crm-backend"
           
-          # 4. Verificação Fisioterapêutica
-          cd ../frontend
-          if [ -d "build" ]; then
-            echo "✅ Build folder existe."
-            ls -la build/index.html || echo "❌ index.html MISSING!"
-          else
-            echo "❌ BUILD FOLDER MISSING!"
-          fi
-          
-          # 5. Permissões de Saída
-          chown -R bhs-crm:www-data build
-          chmod -R 755 build
-          
-          # 6. Nginx
+          # 5. Permissões e Nginx
+          cd ..
+          chown -R bhs-crm:www-data "$APP_PATH/frontend/build"
+          chmod -R 755 "$APP_PATH/frontend/build"
           nginx -t && systemctl restart nginx
-          echo "✅ DECOY DE DIAGNÓSTICO (Opcional)"
-          mkdir -p build/static/js
-          echo "window.SERVER_DIAG = { status: 'OK', date: '$(date)' };" > build/static/js/public-diag.js
-          chmod 644 build/static/js/public-diag.js
-          
-          echo "✨ SISTEMA RESTAURADO"
+          echo "✅ Fim."
