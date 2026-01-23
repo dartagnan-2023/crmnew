@@ -21,11 +21,12 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔥 RECONSTRUÇÃO TOTAL"
+          echo "🚀 PERMISSÕES WWW-DATA"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          # 1. Resetar permissões e caminhos
-          chown -R bhs-crm:bhseletrica-crm "$APP_PATH" /home/bhseletrica-crm
+          # 1. Ownership para o usuário do app e grupo do webserver
+          echo "🔒 Ajustando permissões bhs-crm:www-data..."
+          chown -R bhs-crm:www-data "$APP_PATH"
           chmod -R 775 "$APP_PATH"
           chmod a+x /home/bhseletrica-crm /home/bhseletrica-crm/htdocs
           
@@ -34,35 +35,21 @@ jobs:
           git reset --hard HEAD
           git pull origin main
           
-          # 2. Reconstruir Backend
-          echo "⚙️ Reconstruindo Backend..."
+          # 2. Backend
+          echo "⚙️ Backend..."
           cd backend
-          rm -rf node_modules package-lock.json
-          # Usamos o bhs-crm para instalar
           su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          # Matar e iniciar PM2 para garantir porta limpa
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 start server.js --name crm-backend"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
           
-          # 3. Reconstruir Frontend (Desta vez garantindo o build)
-          echo "🎨 Reconstruindo Frontend..."
+          # 3. Frontend
+          echo "🎨 Frontend..."
           cd ../frontend
-          rm -rf build node_modules package-lock.json
           su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          # 4. Verificação Fisioterapêutica do Build
-          if [ -f "build/index.html" ]; then
-            echo "✅ index.html criado com sucesso!"
-          else
-            echo "❌ FALHA: index.html sumiu após o build. Tentando mover manualmente se necessário..."
-            find . -name "index.html"
-          fi
-          
-          # 5. Permissões de Saída
-          chown -R bhs-crm:bhseletrica-crm build
+          # 4. Permissões Finais (Crucial para o Nginx ler o build)
           chmod -R 755 build
+          chown -R bhs-crm:www-data build
           
-          # 6. Nginx
+          # 5. Nginx
           nginx -t && systemctl restart nginx
-          
-          echo "✅ SISTEMA RESTAURADO!"
+          echo "✅ Deploy Concluído."
