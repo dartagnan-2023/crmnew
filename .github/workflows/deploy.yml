@@ -21,27 +21,46 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🚀 EXPOSING CONFIGS VIA JS"
+          echo "🚀 REPARO TOTAL E DEPLOY DEFINITIVO"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
-          JS_DEBUG_FILE="$APP_PATH/frontend/build/static/js/config-debug.js"
           
-          # Garantir que a pasta exista
-          mkdir -p "$APP_PATH/frontend/build/static/js"
+          # 1. Resetar Ownership de TUDO como root
+          echo "🔒 Resetando ownership para bhs-crm..."
+          chown -R bhs-crm:bhseletrica-crm "$APP_PATH" /home/bhseletrica-crm
+          chmod -R 775 "$APP_PATH"
+          chmod a+x /home/bhseletrica-crm /home/bhseletrica-crm/htdocs
           
-          # Capturar dados (sem SSL keys)
-          NGINX_CONF=$(cat /etc/nginx/sites-enabled/* | grep -v "ssl_certificate" | tr -d '`' | tr -d '$')
-          PM2_LIST=$(su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 jlist" | tr -d '`' | tr -d '$')
+          cd "$APP_PATH" || exit 1
           
-          echo "window.SERVER_DEBUG = {" > "$JS_DEBUG_FILE"
-          echo "  date: '$(date)'," >> "$JS_DEBUG_FILE"
-          echo "  nginx_conf: \`$NGINX_CONF\`," >> "$JS_DEBUG_FILE"
-          echo "  pm2_list: \`$PM2_LIST\`," >> "$JS_DEBUG_FILE"
-          echo "  pwd: '$(pwd)'," >> "$JS_DEBUG_FILE"
-          echo "  ls_root: \`$(ls -la "$APP_PATH")\`" >> "$JS_DEBUG_FILE"
-          echo "};" >> "$JS_DEBUG_FILE"
+          # 2. Sync Código (como root para garantir permissão no .git)
+          git config --global --add safe.directory "$APP_PATH"
+          git reset --hard HEAD
+          git pull origin main
           
-          chmod 644 "$JS_DEBUG_FILE"
-          echo "✅ Configs exposed at static/js/config-debug.js"
+          # 3. Garantir que o .env existe (Backup/Restore)
+          [ -f "backend/.env" ] || cp /tmp/backend.env.backup backend/.env 2>/dev/null || true
           
-          systemctl restart nginx
-          echo "✅ Fim."
+          # 4. Backend (Instalação limpa)
+          echo "⚙️ Backend Update..."
+          cd backend
+          rm -rf node_modules package-lock.json
+          # Rodar install como o usuário correto
+          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
+          # Restart PM2
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
+          
+          # 5. Frontend (Build limpo)
+          echo "🎨 Frontend Build..."
+          cd ../frontend
+          rm -rf build node_modules package-lock.json
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          
+          # 6. Permissões de Saída
+          echo "🔒 Permissões finais..."
+          chown -R bhs-crm:bhseletrica-crm build
+          chmod -R 755 build
+          
+          # 7. Nginx final
+          nginx -t && systemctl restart nginx
+          
+          echo "✅ DEPLOY FINALIZADO COM SUCESSO!"
