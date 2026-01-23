@@ -21,58 +21,68 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔍 INFO: Iniciando recuperação e descoberta..."
-          echo "Usuario SSH: $(whoami)"
+          echo "🚀 INICIANDO DEPLOY DE DIAGNÓSTICO E REPARO"
           
-          # Tentar entrar no diretorio
-          if cd ${{ secrets.VPS_APP_PATH }}; then
-            echo "✅ Entrou em VPS_APP_PATH: $(pwd)"
-          elif cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br; then
-            echo "✅ Entrou em /home/bhs-crm/... : $(pwd)"
+          # 1. Localização Rigorosa
+          APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
+          if cd "$APP_PATH"; then
+            echo "✅ Diretório encontrado: $APP_PATH"
           else
-            echo "❌ FALHA: Não foi possível encontrar o diretório da aplicação."
+            echo "❌ ERRO CRÍTICO: Não foi possível encontrar o diretório $APP_PATH"
             exit 1
           fi
           
-          # Atualizar código do GitHub
-          git config --global --add safe.directory $(pwd)
+          # 2. Sincronização de Código
+          echo "📥 Sincronizando código..."
+          git config --global --add safe.directory "$APP_PATH"
           git reset --hard HEAD
           git pull origin main
+          echo "📍 Versão: $(git log -1 --oneline)"
           
-          # Log da versão
-          echo "📍 Versão atual (git): $(git log -1 --oneline)"
+          # 3. Verificação de Ambiente (.env)
+          if [ -f "backend/.env" ]; then
+            echo "✅ Arquivo backend/.env existe."
+          else
+            echo "⚠️ AVISO: backend/.env não encontrado! Restaurando do backup se existir..."
+            cp /tmp/backend.env.backup backend/.env 2>/dev/null || echo "❌ FALHA: Sem backup de .env disponível."
+          fi
           
-          # DEBUG: Ver se o usuario bhs-crm consegue ver os arquivos
-          echo "� Permissões da pasta atual:"
-          ls -ld .
-          
-          # Atualizar backend (SEM apagar node_modules desta vez)
-          echo "⚙️ Atualizando backend..."
+          # 4. Atualização do Backend
+          echo "⚙️ Reinstalando Backend..."
           cd backend
-          su - bhs-crm -c "cd $(pwd) && source ~/.nvm/nvm.sh && npm install --no-audit --no-fund"
+          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
           
-          # Reiniciar e verificar PM2
-          echo "📊 Reiniciando PM2..."
+          # 5. Reinício do Backend com PM2
+          echo "📊 Reiniciando PM2 Process..."
           su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
           
-          # Esperar o backend subir e ver logs se houver erro
+          # 6. Captura de Erros do Backend
+          echo "🕒 Aguardando inicialização..."
           sleep 5
-          echo "📝 Ultimas linhas do Log do PM2:"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 20 --no-daemon" &
+          echo "📝 LOGS RECENTES (Últimas 50 linhas):"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 50 --no-daemon" &
           LOG_PID=$!
-          sleep 3
+          sleep 5
           kill $LOG_PID || true
           
-          # Atualizar frontend
-          echo "🎨 Atualizando frontend..."
+          # 7. Atualização do Frontend
+          echo "🎨 Rebuildando Frontend..."
           cd ../frontend
-          # Somente reinstalar se necessário para economizar tempo e evitar falhas
-          su - bhs-crm -c "cd $(pwd) && source ~/.nvm/nvm.sh && npm install --no-audit --no-fund && npm run build"
+          # Garantir que o build anterior seja limpo
+          rm -rf build
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          # Garantir que o Nginx consiga ler
-          chmod -R 755 build
+          # 8. Verificação do Build
+          if [ -d "build" ]; then
+            echo "✅ Pasta build gerada com sucesso."
+            ls -la build/static/js | head -n 5
+            chmod -R 755 build
+          else
+            echo "❌ ERRO: Pasta build NÃO foi gerada!"
+            exit 1
+          fi
           
-          # Recarregar Nginx
+          # 9. Finalização
+          echo "🔄 Recarregando Nginx..."
           systemctl reload nginx
-          
-          echo "✅ Deploy finalizado."
+          echo "✨ DEPLOY CONCLUÍDO!"
