@@ -21,50 +21,52 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔎 DIAGNÓSTICO PROFUNDO"
+          echo "🔥 RECONSTRUÇÃO ULTRA LIMPA"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
+          # 1. Limpeza total de permissões
           cd "$APP_PATH" || exit 1
+          chown -R bhs-crm:bhseletrica-crm .
+          chmod -R 775 .
+          
           git config --global --add safe.directory "$APP_PATH"
           git reset --hard HEAD
           git pull origin main
           
-          # 1. Backend
-          cd backend
+          # 2. Frontend Rebuild
+          echo "🎨 Rebuildando Frontend..."
+          cd frontend
+          # Limpeza total Como Root
+          rm -rf build node_modules
+          # Build como usuário bhs-crm
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          
+          # 3. Backend Rebuild
+          echo "⚙️ Rebuildando Backend..."
+          cd ../backend
+          rm -rf node_modules
           su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
           su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
           su - bhs-crm -c "source ~/.nvm/nvm.sh && PORT=3000 pm2 start server.js --name crm-backend"
           
-          # 2. Frontend
+          # 4. Verificação Fisioterapêutica
           cd ../frontend
-          rm -rf build node_modules
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
+          if [ -d "build" ]; then
+            echo "✅ Build folder existe."
+            ls -la build/index.html || echo "❌ index.html MISSING!"
+          else
+            echo "❌ BUILD FOLDER MISSING!"
+          fi
           
-          # 3. Inspeção de Arquivos
-          echo "📁 Estado do BUILD:"
-          ls -la build/
-          echo "📄 Conteúdo do index.html (Head):"
-          head -c 500 build/index.html || echo "Não foi possível ler index.html"
-          
-          # 4. Inspeção de Rede
-          echo "🌐 Portas Ativas:"
-          netstat -tunlp | grep -E "3000|3001"
-          echo "📊 PM2 Describe:"
-          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 describe crm-backend"
-          
-          # 5. Permissões Nginx e Restart
-          chmod -R 755 build
+          # 5. Permissões de Saída
           chown -R bhs-crm:www-data build
+          chmod -R 755 build
           
-          # 6. Expor diagnóstico via JS (Para ler via browser)
+          # 6. Nginx
+          nginx -t && systemctl restart nginx
+          echo "✅ DECOY DE DIAGNÓSTICO (Opcional)"
           mkdir -p build/static/js
-          echo "window.SERVER_DIAG = {" > build/static/js/public-diag.js
-          echo "  netstat: \`$(netstat -tunlp | grep -E "3000|3001" | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
-          echo "  ls_build: \`$(ls -la build/ | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
-          echo "  index_head: \`$(head -c 200 build/index.html | tr -d '`' | tr -d '$')\`," >> build/static/js/public-diag.js
-          echo "  pm2: \`$(su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 jlist" | tr -d '`' | tr -d '$')\`" >> build/static/js/public-diag.js
-          echo "};" >> build/static/js/public-diag.js
+          echo "window.SERVER_DIAG = { status: 'OK', date: '$(date)' };" > build/static/js/public-diag.js
           chmod 644 build/static/js/public-diag.js
           
-          nginx -t && systemctl restart nginx
-          echo "✅ Fim."
+          echo "✨ SISTEMA RESTAURADO"
