@@ -21,29 +21,38 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          echo "🔎 BUSCA E REPARO DE EMERGÊNCIA"
+          echo "🚀 DEPLOY FINAL DE PRODUÇÃO"
           APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
-          # 1. Onde estão os arquivos novos?
-          echo "📅 Arquivos modificados nos últimos 30min:"
-          find /home -name "index.html" -mmin -30 -ls || echo "Nenhum index.html novo encontrado."
-          
-          # 2. Restaurar permissões agressivamente
-          chown -R bhs-crm:www-data "$APP_PATH"
+          # 1. Ownership Inicial (Garantir que Git e NPM funcionem)
+          chown -R bhs-crm:bhseletrica-crm "$APP_PATH"
           chmod -R 775 "$APP_PATH"
+          chmod a+x /home/bhseletrica-crm /home/bhseletrica-crm/htdocs
           
-          # 3. Forçar um index.html ultra simples no build
-          mkdir -p "$APP_PATH/frontend/build"
-          echo "<html><body>RESTORED</body></html>" > "$APP_PATH/frontend/build/index.html"
-          chmod 644 "$APP_PATH/frontend/build/index.html"
+          cd "$APP_PATH" || exit 1
+          git config --global --add safe.directory "$APP_PATH"
+          git reset --hard HEAD
+          git pull origin main
           
-          # 4. Checar se o Nginx está no caminho certo
-          REAL_ROOT=$(grep -r "root" /etc/nginx/sites-enabled/ | head -n 1 | awk '{print $NF}' | tr -d ';')
-          echo "🗺️ Nginx Root Detectado: $REAL_ROOT"
+          # 2. Backend (Porta 3000)
+          echo "⚙️ Backend..."
+          cd backend
+          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && PORT=3000 pm2 start server.js --name crm-backend"
           
-          if [ "$REAL_ROOT" != "$APP_PATH/frontend/build" ]; then
-            echo "⚠️ DESVIO DETECTADO! Nginx aponta para $REAL_ROOT"
-          fi
+          # 3. Frontend (Build Limpo)
+          echo "🎨 Frontend Build..."
+          cd ../frontend
+          # Limpar absolutamente tudo antes do build
+          rm -rf build node_modules
+          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && npm run build"
           
-          systemctl restart nginx
-          echo "✅ Fim."
+          # 4. Permissões de Produção
+          echo "🔒 Permissões..."
+          chown -R bhs-crm:www-data build
+          chmod -R 755 build
+          
+          # 5. Nginx Final
+          nginx -t && systemctl restart nginx
+          echo "✨ DEPLOY CONCLUÍDO COM SUCESSO!"

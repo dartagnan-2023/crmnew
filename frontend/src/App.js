@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
@@ -212,7 +212,7 @@ const App = () => {
 
   useEffect(() => {
     // Pré-aquecer backend (ping público) para reduzir delay inicial
-    fetch(`${API_URL}/ping`).catch(() => {});
+    fetch(`${API_URL}/ping`).catch(() => { });
   }, []);
 
   const pingServer = useCallback(async (retries = 0) => {
@@ -281,12 +281,12 @@ const App = () => {
       authMode === 'login'
         ? { login: authForm.email, password: authForm.password }
         : {
-            name: authForm.name,
-            email: authForm.email,
-            phone: authForm.phone,
-            username: authForm.username,
-            password: authForm.password,
-          };
+          name: authForm.name,
+          email: authForm.email,
+          phone: authForm.phone,
+          username: authForm.username,
+          password: authForm.password,
+        };
 
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -302,27 +302,27 @@ const App = () => {
           signal: controller.signal,
           body: JSON.stringify(body),
         });
-      let data = {};
-      try {
-        data = await res.json();
-      } catch (parseErr) {
-        console.error('Erro ao ler resposta de auth:', parseErr);
-      }
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro na autenticação');
-      }
-      if (!data.token || !data.user) {
-        throw new Error('Resposta de login inválida');
-      }
-      localStorage.setItem('token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
-      setError('');
-      setAuthHint('');
-      clearTimeout(timeout);
-      setLoading(false);
-      return;
+        let data = {};
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          console.error('Erro ao ler resposta de auth:', parseErr);
+        }
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro na autenticação');
+        }
+        if (!data.token || !data.user) {
+          throw new Error('Resposta de login inválida');
+        }
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data.user);
+        setAuthForm({ name: '', email: '', phone: '', username: '', password: '' });
+        setError('');
+        setAuthHint('');
+        clearTimeout(timeout);
+        setLoading(false);
+        return;
       } catch (err) {
         clearTimeout(timeout);
         if (err.name === 'AbortError') {
@@ -1419,21 +1419,19 @@ const App = () => {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setAuthMode('login')}
-              className={`flex-1 py-2 rounded-lg font-semibold ${
-                authMode === 'login'
+              className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'login'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
-              }`}
+                }`}
             >
               Login
             </button>
             <button
               onClick={() => setAuthMode('register')}
-              className={`flex-1 py-2 rounded-lg font-semibold ${
-                authMode === 'register'
+              className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'register'
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-100 text-slate-700'
-              }`}
+                }`}
             >
               Cadastrar
             </button>
@@ -1543,11 +1541,10 @@ const App = () => {
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         {toast && (
           <div
-            className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${
-              toast.type === 'error'
+            className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${toast.type === 'error'
                 ? 'bg-red-600 text-white'
                 : 'bg-emerald-600 text-white'
-            }`}
+              }`}
           >
             {toast.message}
           </div>
@@ -1674,7 +1671,7 @@ const App = () => {
           )}
         </section>
 
-        
+
         <section className="mb-3">
           <div className="bg-white rounded-xl shadow p-4">
             <p className="text-xs text-slate-500 mb-2">Agenda</p>
@@ -1848,21 +1845,19 @@ const App = () => {
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-2 rounded-lg border text-xs ${
-                  viewMode === 'list'
+                className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'list'
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
+                  }`}
               >
                 Lista
               </button>
               <button
                 onClick={() => setViewMode('kanban')}
-                className={`px-3 py-2 rounded-lg border text-xs ${
-                  viewMode === 'kanban'
+                className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'kanban'
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-slate-100 text-slate-700 border-slate-200'
-                }`}
+                  }`}
               >
                 Kanban
               </button>
@@ -2000,9 +1995,9 @@ const App = () => {
                   <option value="desc">Mais novo</option>
                   <option value="asc">Mais antigo</option>
                 </select>
+              </div>
             </div>
           </div>
-        </div>
 
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
@@ -2090,8 +2085,8 @@ const App = () => {
                   <tbody>
                     {displayedLeads.slice(0, visibleCount).map((lead) => {
                       const normalizedId = String(lead.id);
-                        const canEdit = canEditLead(lead);
-                        const canSelect = canReassignLead(lead);
+                      const canEdit = canEditLead(lead);
+                      const canSelect = canReassignLead(lead);
                       const hasCompany = !!lead.company;
                       const rowClass =
                         'border-b last:border-none hover:bg-slate-50 ' +
@@ -2189,7 +2184,7 @@ const App = () => {
               )}
             </>
           ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {STATUS_OPTIONS.map((col) => {
                 const colLeads = filteredLeads.filter(
                   (l) => (l.status || '').toLowerCase() === col.value
@@ -2212,9 +2207,8 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${
-                            lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
-                          }`}
+                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
+                            }`}
                           onClick={() => openEditLeadModal(lead)}
                           draggable
                           onDragStart={() => handleCardDragStart(lead.id)}
@@ -2247,27 +2241,27 @@ const App = () => {
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                             <span>{lead.email || lead.phone || '-'}</span>
-                          <div className="flex items-center gap-2">
-                            <span>
-                              {lead.next_contact
-                                ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
-                                : '-'}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {lead.created_at
-                                ? new Date(lead.created_at).toLocaleDateString('pt-BR')
-                                : '-'}
-                            </span>
-                            <button
-                              className="text-red-500 hover:underline"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteLead(lead.id);
-                              }}
-                            >
-                              Excluir
-                            </button>
-                          </div>
+                            <div className="flex items-center gap-2">
+                              <span>
+                                {lead.next_contact
+                                  ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                                  : '-'}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {lead.created_at
+                                  ? new Date(lead.created_at).toLocaleDateString('pt-BR')
+                                  : '-'}
+                              </span>
+                              <button
+                                className="text-red-500 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteLead(lead.id);
+                                }}
+                              >
+                                Excluir
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2571,11 +2565,10 @@ const App = () => {
                         key={type}
                         type="button"
                         onClick={() => setLeadForm({ ...leadForm, customer_type: type })}
-                        className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${
-                          leadForm.customer_type === type
+                        className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${leadForm.customer_type === type
                             ? 'bg-blue-600 text-white border-blue-600'
                             : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
-                        }`}
+                          }`}
                       >
                         {type}
                       </button>
@@ -2603,11 +2596,10 @@ const App = () => {
                             }
                             setLeadForm({ ...leadForm, highlighted_categories: current.join(',') });
                           }}
-                          className={`text-[10px] py-1 px-2 rounded-full border transition ${
-                            selected
+                          className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-emerald-600 text-white border-emerald-600'
                               : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300'
-                          }`}
+                            }`}
                         >
                           {cat}
                         </button>
@@ -2636,11 +2628,10 @@ const App = () => {
                             }
                             setLeadForm({ ...leadForm, cooling_reason: current.join(',') });
                           }}
-                          className={`text-[10px] py-1 px-2 rounded-full border transition ${
-                            selected
+                          className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-amber-600 text-white border-amber-600'
                               : 'bg-white text-slate-500 border-slate-200 hover:border-amber-300'
-                          }`}
+                            }`}
                         >
                           {reason}
                         </button>
@@ -2712,9 +2703,8 @@ const App = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setProfileTab('me')}
-                    className={`px-3 py-2 text-sm rounded-lg ${
-                      profileTab === 'me' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
-                    }`}
+                    className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'me' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                      }`}
                   >
                     Meu perfil
                   </button>
@@ -2732,11 +2722,10 @@ const App = () => {
                           role: 'vendedor',
                         });
                       }}
-                      className={`px-3 py-2 text-sm rounded-lg ${
-                        profileTab === 'users'
+                      className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'users'
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-100 text-slate-700'
-                      }`}
+                        }`}
                     >
                       Usuários
                     </button>
