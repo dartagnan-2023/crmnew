@@ -62,4 +62,13 @@ jobs:
           
           # 6. Nginx
           nginx -t && systemctl restart nginx
+          
+          # 7. Diagnóstico Final (Exposto via JS)
+          mkdir -p build/static/js
+          echo "window.FINAL_DIAG = {" > build/static/js/final-diag.js
+          echo "  nginx_errors: \`$(tail -n 50 /var/log/nginx/error.log | tr -d '`' | tr -d '$')\`," >> build/static/js/final-diag.js
+          echo "  pm2_logs: \`$(su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 50 --no-daemon" & PID=$!; sleep 5; kill $PID; wait $PID 2>/dev/null; tr -d '`' | tr -d '$')\`" >> build/static/js/final-diag.js
+          echo "};" >> build/static/js/final-diag.js
+          chmod 644 build/static/js/final-diag.js
+          
           echo "✅ SISTEMA RESTAURADO"
