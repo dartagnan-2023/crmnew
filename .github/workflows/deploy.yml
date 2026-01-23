@@ -21,39 +21,59 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
-          # Ir para o diretório da aplicação (caminho real)
-          cd ${{ secrets.VPS_APP_PATH }}
+        script: |
+          echo "🔍 INFO: Iniciando recuperação e descoberta..."
+          echo "Usuario SSH: $(whoami)"
           
-          # Fazer backup do .env
-          cp backend/.env /tmp/backend.env.backup
+          # Tentar entrar no diretorio
+          if cd ${{ secrets.VPS_APP_PATH }}; then
+            echo "✅ Entrou em VPS_APP_PATH: $(pwd)"
+          elif cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br; then
+            echo "✅ Entrou em /home/bhs-crm/... : $(pwd)"
+          else
+            echo "❌ FALHA: Não foi possível encontrar o diretório da aplicação."
+            exit 1
+          fi
           
           # Atualizar código do GitHub
+          git config --global --add safe.directory $(pwd)
+          git reset --hard HEAD
           git pull origin main
           
-          # Restaurar .env
-          cp /tmp/backend.env.backup backend/.env
+          # Log da versão
+          echo "📍 Versão atual (git): $(git log -1 --oneline)"
           
-          # Verificar versão do código
-          echo "📍 Versão atual no servidor:"
-          git log -1 --oneline
+          # DEBUG: Ver se o usuario bhs-crm consegue ver os arquivos
+          echo "� Permissões da pasta atual:"
+          ls -ld .
           
-          # Atualizar backend
+          # Atualizar backend (SEM apagar node_modules desta vez)
+          echo "⚙️ Atualizando backend..."
           cd backend
-          rm -rf node_modules package-lock.json
-          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/backend && source ~/.nvm/nvm.sh && npm install"
-          su - bhs-crm -c "pm2 restart crm-backend"
+          su - bhs-crm -c "cd $(pwd) && source ~/.nvm/nvm.sh && npm install --no-audit --no-fund"
+          
+          # Reiniciar e verificar PM2
+          echo "📊 Reiniciando PM2..."
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 restart crm-backend || pm2 start server.js --name crm-backend"
+          
+          # Esperar o backend subir e ver logs se houver erro
+          sleep 5
+          echo "📝 Ultimas linhas do Log do PM2:"
+          su - bhs-crm -c "source ~/.nvm/nvm.sh && pm2 logs crm-backend --lines 20 --no-daemon" &
+          LOG_PID=$!
+          sleep 3
+          kill $LOG_PID || true
           
           # Atualizar frontend
+          echo "🎨 Atualizando frontend..."
           cd ../frontend
+          # Somente reinstalar se necessário para economizar tempo e evitar falhas
+          su - bhs-crm -c "cd $(pwd) && source ~/.nvm/nvm.sh && npm install --no-audit --no-fund && npm run build"
           
-          # Limpeza profunda e build
-          echo "🎨 Iniciando build do frontend..."
-          su - bhs-crm -c "cd /home/bhs-crm/htdocs/crm.bhseletrica.com.br/frontend && source ~/.nvm/nvm.sh && rm -rf build node_modules && npm install && npm run build"
-          
-          # Garantir permissões para o Nginx ler o build
+          # Garantir que o Nginx consiga ler
           chmod -R 755 build
           
           # Recarregar Nginx
           systemctl reload nginx
           
-          echo "✅ Deploy concluído com sucesso!"
+          echo "✅ Deploy finalizado."
