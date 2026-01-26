@@ -52,8 +52,8 @@ jobs:
           
           # 5. Reiniciar backend
           echo "🔄 Reiniciando backend..."
-          pm2 delete crm-backend || true
-          pm2 start server.js --name crm-backend
+          npx pm2 delete crm-backend || true
+          npx pm2 start server.js --name crm-backend
           
           # 6. Build do frontend
           echo "🎨 Buildando frontend..."
