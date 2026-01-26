@@ -63,15 +63,16 @@ jobs:
           npm install
           CI=false npm run build
           
-          # 7. Copiar build para diretório público
-          echo "📦 Copiando arquivos para produção..."
-          sudo rm -rf /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/*
-          sudo cp -r build/* /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/
+          # 7. Copiar build para servir arquivos estáticos
+          echo "📦 Preparando arquivos estáticos..."
+          # O Nginx provavelmente serve do diretório raiz do app
+          # Vamos copiar os arquivos do build para lá
+          sudo cp -r build/* "$APP_PATH/"
           
           # 8. Ajustar permissões
           echo "🔐 Ajustando permissões..."
-          sudo chown -R bhseletrica-crm:www-data /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html
-          sudo chmod -R 755 /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html
+          sudo chown -R bhseletrica-crm:www-data "$APP_PATH"
+          sudo chmod -R 755 "$APP_PATH"
           
           # 9. Validar backend
           echo "🔍 Validando backend..."
