@@ -6,7 +6,7 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contato', label: 'Em contato' },
   { value: 'proposta', label: 'Proposta enviada' },
-  { value: 'negociacao', label: 'NegociaÃƒÂ§ÃƒÂ£o' },
+  { value: 'negociacao', label: 'Negociação' },
   { value: 'ganho', label: 'Ganho' },
   { value: 'perdido', label: 'Perdido' },
 ];
@@ -1764,7 +1764,7 @@ const App = () => {
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
               <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">PrÃƒÂ³x. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Próx. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
           </div>
@@ -1980,8 +1980,8 @@ const App = () => {
                   }}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                 >
-                  <option value="all">Todos os responsÃƒÂ¡veis</option>
-                  <option value="unassigned">Sem proprietÃƒÂ¡rio</option>
+                  <option value="all">Todos os responsáveis</option>
+                  <option value="unassigned">Sem proprietário</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2009,7 +2009,7 @@ const App = () => {
                     <option value="all">Toda agenda</option>
                     <option value="overdue">Vencidos</option>
                     <option value="today">Hoje</option>
-                    <option value="next3">PrÃƒÂ³x. 3 dias</option>
+                    <option value="next3">Próx. 3 dias</option>
                   </select>
                   <select
                     value={channelFilter}
