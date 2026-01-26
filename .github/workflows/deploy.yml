@@ -28,6 +28,7 @@ jobs:
           # 1. Atualizar código do repositório
           echo "📥 Atualizando código..."
           cd "$APP_PATH"
+          git reset --hard
           git pull origin main
           
           # 2. Restaurar e configurar .env do backend
