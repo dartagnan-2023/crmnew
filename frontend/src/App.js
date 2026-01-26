@@ -2088,7 +2088,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">SelecionÃƒÂ¡veis na lista: {selectableLeadIds.length}</span>
+              <span className="text-slate-500">Selecionáveis na lista: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -2587,7 +2587,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Data de adiÃƒÂ§ÃƒÂ£o
+                    Data de adição
                   </label>
                   <input
                     type="text"
@@ -2617,7 +2617,7 @@ const App = () => {
                     htmlFor="lead-customer"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    JÃƒÂ¡ ÃƒÂ© cliente
+                    Já é cliente
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2963,7 +2963,7 @@ const App = () => {
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
-                    <h4 className="text-xs font-semibold text-slate-600 mb-2">UsuÃƒÂ¡rios</h4>
+                    <h4 className="text-xs font-semibold text-slate-600 mb-2">Usuários</h4>
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-sm">
                         <thead>
