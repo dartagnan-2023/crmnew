@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -6,7 +6,7 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contato', label: 'Em contato' },
   { value: 'proposta', label: 'Proposta enviada' },
-  { value: 'negociacao', label: 'NegociaÃƒÂ§ÃƒÂ£o' },
+  { value: 'negociacao', label: 'NegociaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o' },
   { value: 'ganho', label: 'Ganho' },
   { value: 'perdido', label: 'Perdido' },
 ];
@@ -39,14 +39,14 @@ const SEGMENT_OPTIONS = [
 ];
 
 const HIGHLIGHTED_CATEGORIES_OPTIONS = [
-  'Automação',
-  'Baixa Tensão',
-  'Comando e Sinalização',
-  'Instrumentos e Medições',
-  'Conectividade e Proteção',
-  'Ventilação e Filtragem',
+  'AutomaÃ§Ã£o',
+  'Baixa TensÃ£o',
+  'Comando e SinalizaÃ§Ã£o',
+  'Instrumentos e MediÃ§Ãµes',
+  'Conectividade e ProteÃ§Ã£o',
+  'VentilaÃ§Ã£o e Filtragem',
   'Ferramentas',
-  'Pneumática',
+  'PneumÃ¡tica',
 ];
 
 const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
@@ -85,10 +85,10 @@ const toggleSelection = (items, option) => {
 };
 
 const COOLING_REASON_OPTIONS = [
-  'Preço',
-  'Problemas técnicos',
-  'Não lembrava',
-  'Crédito/Outros',
+  'PreÃ§o',
+  'Problemas tÃ©cnicos',
+  'NÃ£o lembrava',
+  'CrÃ©dito/Outros',
 ];
 
 const emptyLead = {
@@ -208,10 +208,10 @@ const App = () => {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast('Texto copiado para ÃƒÂ¡rea de transferÃƒÂªncia');
+      showToast('Texto copiado para ÃƒÆ’Ã‚Â¡rea de transferÃƒÆ’Ã‚Âªncia');
     } catch (err) {
       console.error('Erro ao copiar:', err);
-      showToast('NÃƒÂ£o foi possÃƒÂ­vel copiar', 'error');
+      showToast('NÃƒÆ’Ã‚Â£o foi possÃƒÆ’Ã‚Â­vel copiar', 'error');
     }
   };
 
@@ -254,7 +254,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    // PrÃƒÂ©-aquecer backend (ping pÃƒÂºblico) para reduzir delay inicial
+    // PrÃƒÆ’Ã‚Â©-aquecer backend (ping pÃƒÆ’Ã‚Âºblico) para reduzir delay inicial
     fetch(`${API_URL}/ping`).catch(() => { });
   }, []);
 
@@ -283,7 +283,7 @@ const App = () => {
 
   useEffect(() => {
     if (pingFailCount >= 2) {
-      showToast('SessÃƒÂ£o finalizada por inatividade. FaÃƒÂ§a login novamente.', 'error');
+      showToast('SessÃƒÆ’Ã‚Â£o finalizada por inatividade. FaÃƒÆ’Ã‚Â§a login novamente.', 'error');
       handleLogout();
     }
   }, [pingFailCount]);
@@ -352,10 +352,10 @@ const App = () => {
           console.error('Erro ao ler resposta de auth:', parseErr);
         }
         if (!res.ok) {
-          throw new Error(data.error || 'Erro na autenticaÃƒÂ§ÃƒÂ£o');
+          throw new Error(data.error || 'Erro na autenticaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o');
         }
         if (!data.token || !data.user) {
-          throw new Error('Resposta de login invÃƒÂ¡lida');
+          throw new Error('Resposta de login invÃƒÆ’Ã‚Â¡lida');
         }
         localStorage.setItem('token', data.token);
         setToken(data.token);
@@ -442,7 +442,7 @@ const App = () => {
       const data = await res.json();
       setStats(data);
     } catch (err) {
-      console.error('Erro ao carregar estatÃƒÂ­sticas:', err);
+      console.error('Erro ao carregar estatÃƒÆ’Ã‚Â­sticas:', err);
     }
   };
 
@@ -584,7 +584,7 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      // normaliza possÃƒÂ­veis campos de owner vindos da planilha/API
+      // normaliza possÃƒÆ’Ã‚Â­veis campos de owner vindos da planilha/API
       _ownerId: l.ownerId || l.user_id || l.userId || l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
@@ -959,7 +959,7 @@ const App = () => {
     if (savingLead) return;
     const normalizedPhone = (leadForm.phone || '').replace(/\D/g, '');
     if (!leadForm.name || !normalizedPhone) {
-      showToast('Nome e telefone sÃƒÂ£o obrigatÃƒÂ³rios', 'error');
+      showToast('Nome e telefone sÃƒÆ’Ã‚Â£o obrigatÃƒÆ’Ã‚Â³rios', 'error');
       return;
     }
     const method = editingLead ? 'PUT' : 'POST';
@@ -993,7 +993,7 @@ const App = () => {
       if (!res.ok) {
         const message =
           res.status === 429
-            ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
+            ? 'Muitas requisiÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes. Tente novamente em alguns segundos.'
             : data.error || 'Erro ao salvar lead';
         showToast(message, 'error');
         return;
@@ -1104,7 +1104,7 @@ const App = () => {
     try {
       const current = new Date(lead.next_contact);
       if (Number.isNaN(current.getTime())) {
-        showToast('Data invÃƒÂ¡lida', 'error');
+        showToast('Data invÃƒÆ’Ã‚Â¡lida', 'error');
         return;
       }
       const next = new Date(current);
@@ -1135,7 +1135,7 @@ const App = () => {
 
   const handleAddChannel = async () => {
     if (!newChannel.trim()) {
-      showToast('Nome do canal ÃƒÂ© obrigatÃƒÂ³rio', 'error');
+      showToast('Nome do canal ÃƒÆ’Ã‚Â© obrigatÃƒÆ’Ã‚Â³rio', 'error');
       return;
     }
     try {
@@ -1222,8 +1222,8 @@ const App = () => {
       const failed = responses.find((res) => !res || !res.ok);
       if (failed) {
         const message = failed?.status === 429
-          ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
-          : 'Algumas atualizaÃƒÂ§ÃƒÂµes falharam';
+          ? 'Muitas requisiÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes. Tente novamente em alguns segundos.'
+          : 'Algumas atualizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes falharam';
         showToast(message, 'error');
       } else {
         showToast(successMessage, 'success');
@@ -1249,12 +1249,12 @@ const App = () => {
 
   const bulkReassignOwner = async () => {
     if (!bulkOwnerId) {
-      showToast('Escolha um novo responsÃƒÂ¡vel', 'error');
+      showToast('Escolha um novo responsÃƒÆ’Ã‚Â¡vel', 'error');
       return;
     }
     await applyBulkUpdate(
       () => ({ ownerId: bulkOwnerId }),
-      'Responsável atualizado',
+      'ResponsÃ¡vel atualizado',
       canReassignLead
     );
   };
@@ -1541,7 +1541,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    UsuÃƒÂ¡rio (login)
+                    UsuÃƒÆ’Ã‚Â¡rio (login)
                   </label>
                   <input
                     type="text"
@@ -1574,7 +1574,7 @@ const App = () => {
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                {authMode === 'login' ? 'Email ou usuÃƒÂ¡rio' : 'Email'}
+                {authMode === 'login' ? 'Email ou usuÃƒÆ’Ã‚Â¡rio' : 'Email'}
               </label>
               <input
                 type={authMode === 'login' ? 'text' : 'email'}
@@ -1654,7 +1654,7 @@ const App = () => {
             <button
               onClick={() => openProfileSettings('me')}
               className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
-              title="ConfiguraÃƒÂ§ÃƒÂµes e perfil"
+              title="ConfiguraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes e perfil"
             >
               Perfil
             </button>
@@ -1680,10 +1680,10 @@ const App = () => {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
-                📊
+                ðŸ“Š
               </span>
               <div className="text-left">
-                <span className="block leading-tight">Estatísticas</span>
+                <span className="block leading-tight">EstatÃ­sticas</span>
                 <span className="block text-[11px] text-slate-200 opacity-90">Toque para ver resumo</span>
               </div>
             </div>
@@ -1701,7 +1701,7 @@ const App = () => {
                 className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
                 aria-hidden
               >
-                Ã¢â€“Â¾
+                ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¾
               </span>
             </div>
           </button>
@@ -1720,7 +1720,7 @@ const App = () => {
                 <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Taxa de Conversão</p>
+                <p className="text-[11px] text-slate-500">Taxa de ConversÃ£o</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
@@ -1737,7 +1737,7 @@ const App = () => {
                 </p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Em negociação</p>
+                <p className="text-[11px] text-slate-500">Em negociaÃ§Ã£o</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
@@ -1764,7 +1764,7 @@ const App = () => {
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
               <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">PrÃƒÂ³x. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">PrÃƒÆ’Ã‚Â³x. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
           </div>
@@ -1775,7 +1775,7 @@ const App = () => {
             <div className="flex items-start justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Agenda - Próximos contatos
+                  Agenda - PrÃ³ximos contatos
                 </h2>
               </div>
               {agendaBase.length > 5 && (
@@ -1830,7 +1830,7 @@ const App = () => {
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
-                          ResponsÃƒÂ¡vel: {responsible}
+                          ResponsÃƒÆ’Ã‚Â¡vel: {responsible}
                         </p>
                       )}
                     </div>
@@ -1907,7 +1907,7 @@ const App = () => {
                       {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {lead.owner || lead.responsible_name || 'Sem responsÃƒÂ¡vel'}
+                      {lead.owner || lead.responsible_name || 'Sem responsÃƒÆ’Ã‚Â¡vel'}
                     </p>
                     {lead.first_contact && (
                       <p className="text-[11px] text-slate-500">
@@ -1980,8 +1980,8 @@ const App = () => {
                   }}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                 >
-                  <option value="all">Todos os responsÃƒÂ¡veis</option>
-                  <option value="unassigned">Sem proprietÃƒÂ¡rio</option>
+                  <option value="all">Todos os responsÃƒÆ’Ã‚Â¡veis</option>
+                  <option value="unassigned">Sem proprietÃƒÆ’Ã‚Â¡rio</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2009,7 +2009,7 @@ const App = () => {
                     <option value="all">Toda agenda</option>
                     <option value="overdue">Vencidos</option>
                     <option value="today">Hoje</option>
-                    <option value="next3">PrÃƒÂ³x. 3 dias</option>
+                    <option value="next3">PrÃƒÆ’Ã‚Â³x. 3 dias</option>
                   </select>
                   <select
                     value={channelFilter}
@@ -2050,7 +2050,7 @@ const App = () => {
                   <option value="name">Nome</option>
                   <option value="status">Status</option>
                   <option value="value">Valor</option>
-                  <option value="next_contact">Próximo contato</option>
+                  <option value="next_contact">PrÃ³ximo contato</option>
                 </select>
                 <select
                   value={segmentFilter}
@@ -2088,7 +2088,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">Selecionáveis na lista: {selectableLeadIds.length}</span>
+              <span className="text-slate-500">SelecionÃ¡veis na lista: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -2120,7 +2120,7 @@ const App = () => {
                   onChange={(e) => setBulkOwnerId(e.target.value)}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
                 >
-                  <option value="">ResponsÃƒÂ¡vel</option>
+                  <option value="">ResponsÃƒÆ’Ã‚Â¡vel</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2163,9 +2163,9 @@ const App = () => {
                       <th className="py-2 px-2">Empresa</th>
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Status</th>
-                      <th className="py-2 px-2">Responsável</th>
-                      <th className="py-2 px-2">Próximo contato</th>
-                      <th className="py-2 px-2 text-right">Ações</th>
+                      <th className="py-2 px-2">ResponsÃ¡vel</th>
+                      <th className="py-2 px-2">PrÃ³ximo contato</th>
+                      <th className="py-2 px-2 text-right">AÃ§Ãµes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2355,7 +2355,7 @@ const App = () => {
                         <p className="text-xs text-slate-500">Nenhum lead</p>
                       )}
                     </div>
-                    {/* ReatribuiÃƒÂ§ÃƒÂ£o em massa por coluna removida para simplificar Kanban; drag-and-drop jÃƒÂ¡ atualiza */}
+                    {/* ReatribuiÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o em massa por coluna removida para simplificar Kanban; drag-and-drop jÃƒÆ’Ã‚Â¡ atualiza */}
                   </div>
                 );
               })}
@@ -2468,7 +2468,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Responsável
+                    ResponsÃ¡vel
                   </label>
                   <select
                     value={leadForm.ownerId || ''}
@@ -2484,7 +2484,7 @@ const App = () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
                     <option value={user?.id || ''}>
-                      {user?.name ? `${user.name} (VocÃƒÂª)` : 'Selecione'}
+                      {user?.name ? `${user.name} (VocÃƒÆ’Ã‚Âª)` : 'Selecione'}
                     </option>
                     {users
                       .filter((u) => u.id !== user?.id)
@@ -2574,7 +2574,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Próximo contato (agenda)
+                    PrÃ³ximo contato (agenda)
                   </label>
                   <input
                     type="date"
@@ -2587,7 +2587,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Data de adição
+                    Data de adiÃ§Ã£o
                   </label>
                   <input
                     type="text"
@@ -2617,7 +2617,7 @@ const App = () => {
                     htmlFor="lead-customer"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    Já é cliente
+                    JÃ¡ Ã© cliente
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2729,12 +2729,12 @@ const App = () => {
                     htmlFor="lead-private"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    VisÃƒÂ­vel apenas para mim
+                    VisÃƒÆ’Ã‚Â­vel apenas para mim
                   </label>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ObservaÃƒÂ§ÃƒÂµes
+                    ObservaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes
                   </label>
                   <textarea
                     value={leadForm.notes}
@@ -2799,7 +2799,7 @@ const App = () => {
                         : 'bg-slate-100 text-slate-700'
                         }`}
                     >
-                      UsuÃƒÂ¡rios
+                      UsuÃƒÆ’Ã‚Â¡rios
                     </button>
                   )}
                 </div>
@@ -2875,7 +2875,7 @@ const App = () => {
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {userForm.id ? 'Editar usuÃƒÂ¡rio' : 'Novo usuÃƒÂ¡rio'}
+                      {userForm.id ? 'Editar usuÃƒÆ’Ã‚Â¡rio' : 'Novo usuÃƒÆ’Ã‚Â¡rio'}
                     </h3>
                     <button
                       onClick={startNewUser}
@@ -2895,7 +2895,7 @@ const App = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">UsuÃƒÂ¡rio (login)</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">UsuÃƒÆ’Ã‚Â¡rio (login)</label>
                       <input
                         type="text"
                         value={userForm.username}
@@ -2959,11 +2959,11 @@ const App = () => {
                       onClick={saveAdminUser}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
                     >
-                      {userForm.id ? 'Salvar alteraÃƒÂ§ÃƒÂµes' : 'Criar usuÃƒÂ¡rio'}
+                      {userForm.id ? 'Salvar alteraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes' : 'Criar usuÃƒÆ’Ã‚Â¡rio'}
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
-                    <h4 className="text-xs font-semibold text-slate-600 mb-2">Usuários</h4>
+                    <h4 className="text-xs font-semibold text-slate-600 mb-2">UsuÃ¡rios</h4>
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -2972,7 +2972,7 @@ const App = () => {
                             <th className="py-2 px-2">Email</th>
                             <th className="py-2 px-2">Telefone</th>
                             <th className="py-2 px-2">Papel</th>
-                            <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
+                            <th className="py-2 px-2 text-right">AÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3004,7 +3004,7 @@ const App = () => {
                                 colSpan={5}
                                 className="py-3 text-center text-slate-500 text-xs"
                               >
-                                Nenhum usuÃƒÂ¡rio cadastrado
+                                Nenhum usuÃƒÆ’Ã‚Â¡rio cadastrado
                               </td>
                             </tr>
                           )}
