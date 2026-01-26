@@ -1506,8 +1506,8 @@ const App = () => {
             <button
               onClick={() => setAuthMode('login')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'login'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-700'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 text-slate-700'
                 }`}
             >
               Login
@@ -1515,8 +1515,8 @@ const App = () => {
             <button
               onClick={() => setAuthMode('register')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'register'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 text-slate-700'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 text-slate-700'
                 }`}
             >
               Cadastrar
@@ -1628,8 +1628,8 @@ const App = () => {
         {toast && (
           <div
             className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${toast.type === 'error'
-                ? 'bg-red-600 text-white'
-                : 'bg-emerald-600 text-white'
+              ? 'bg-red-600 text-white'
+              : 'bg-emerald-600 text-white'
               }`}
           >
             {toast.message}
@@ -1680,10 +1680,10 @@ const App = () => {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
-                Ã°Å¸â€œÅ 
+                Ã°Å¸â€œÅ
               </span>
               <div className="text-left">
-                <span className="block leading-tight">Estatisticas</span>
+                <span className="block leading-tight">Estatísticas</span>
                 <span className="block text-[11px] text-slate-200 opacity-90">Toque para ver resumo</span>
               </div>
             </div>
@@ -1775,7 +1775,7 @@ const App = () => {
             <div className="flex items-start justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Agenda - PrÃƒÂ³ximos contatos
+                  Agenda - Próximos contatos
                 </h2>
               </div>
               {agendaBase.length > 5 && (
@@ -1932,8 +1932,8 @@ const App = () => {
               <button
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'list'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
                   }`}
               >
                 Lista
@@ -1941,8 +1941,8 @@ const App = () => {
               <button
                 onClick={() => setViewMode('kanban')}
                 className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'kanban'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
                   }`}
               >
                 Kanban
@@ -2050,7 +2050,7 @@ const App = () => {
                   <option value="name">Nome</option>
                   <option value="status">Status</option>
                   <option value="value">Valor</option>
-                  <option value="next_contact">PrÃƒÂ³ximo contato</option>
+                  <option value="next_contact">Próximo contato</option>
                 </select>
                 <select
                   value={segmentFilter}
@@ -2164,7 +2164,7 @@ const App = () => {
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Status</th>
                       <th className="py-2 px-2">ResponsÃƒÂ¡vel</th>
-                      <th className="py-2 px-2">PrÃƒÂ³ximo contato</th>
+                      <th className="py-2 px-2">Próximo contato</th>
                       <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
                     </tr>
                   </thead>
@@ -2574,7 +2574,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    PrÃƒÂ³ximo contato (agenda)
+                    Próximo contato (agenda)
                   </label>
                   <input
                     type="date"
@@ -2652,8 +2652,8 @@ const App = () => {
                         type="button"
                         onClick={() => setLeadForm({ ...leadForm, customer_type: type })}
                         className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${leadForm.customer_type === type
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
                           }`}
                       >
                         {type}
@@ -2795,8 +2795,8 @@ const App = () => {
                         });
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'users'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 text-slate-700'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700'
                         }`}
                     >
                       UsuÃƒÂ¡rios
