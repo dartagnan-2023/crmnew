@@ -61,6 +61,7 @@ const parseMultiSelect = (value) => {
 };
 
 const normalizeListValue = parseMultiSelect;
+const ensureArray = (value) => (Array.isArray(value) ? value : normalizeListValue(value));
 
 const normalizeOptionValue = (value) =>
   String(value || '')
@@ -149,8 +150,15 @@ const App = () => {
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
   const [savingLead, setSavingLead] = useState(false);
-  const [highlightedSelections, setHighlightedSelections] = useState([]);
-  const [coolingSelections, setCoolingSelections] = useState([]);
+  const highlightedField = ensureArray(leadForm.highlighted_categories);
+  const coolingField = ensureArray(leadForm.cooling_reason);
+  const toggleLeadListField = (field, option) => {
+    setLeadForm((prev) => {
+      const current = ensureArray(prev[field]);
+      const next = toggleSelection(current, option);
+      return { ...prev, [field]: next };
+    });
+  };
 
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [newChannel, setNewChannel] = useState('');
@@ -882,8 +890,6 @@ const App = () => {
   const openNewLeadModal = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
-    setHighlightedSelections([]);
-    setCoolingSelections([]);
     setShowLeadModal(true);
   };
 
@@ -940,8 +946,6 @@ const App = () => {
       const form = buildLeadFormFromLead(data);
       setEditingLead(data);
       setLeadForm(form);
-      setHighlightedSelections(form.highlighted_categories || []);
-      setCoolingSelections(form.cooling_reason || []);
       setShowLeadModal(true);
     } catch (err) {
       console.error('Erro ao carregar lead:', err);
@@ -1010,8 +1014,6 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
-      setHighlightedSelections([]);
-      setCoolingSelections([]);
       showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
@@ -2662,57 +2664,51 @@ const App = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Categorias em destaque (mÃƒÂºltipla escolha)
+                    Categorias em destaque (marque o que se aplicar)
                   </label>
-                  <div className="flex flex-wrap gap-1">
-                      {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
-                        const selected = containsNormalized(highlightedSelections, cat);
-                        return (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => {
-                              const next = toggleSelection(highlightedSelections, cat);
-                              setHighlightedSelections(next);
-                              setLeadForm({ ...leadForm, highlighted_categories: next });
-                            }}
-                            className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
-                                ? 'bg-emerald-600 text-white border-emerald-600'
-                                : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300'
-                              }`}
-                          >
-                            {cat}
-                          </button>
-                        );
-                      })}
+                  <div className="grid grid-cols-2 gap-2">
+                    {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
+                      const selected = containsNormalized(highlightedField, cat);
+                      return (
+                        <label
+                          key={cat}
+                          className="flex items-center gap-2 text-sm text-slate-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleLeadListField('highlighted_categories', cat)}
+                            className="h-4 w-4 rounded text-emerald-600 border-slate-300"
+                          />
+                          <span className="text-sm text-slate-700">{cat}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Motivo de esfriamento (mÃƒÂºltipla escolha)
+                    Motivo de esfriamento (marque o que se aplicar)
                   </label>
-                  <div className="flex flex-wrap gap-1">
-                      {COOLING_REASON_OPTIONS.map((reason) => {
-                        const selected = containsNormalized(coolingSelections, reason);
-                        return (
-                          <button
-                            key={reason}
-                            type="button"
-                            onClick={() => {
-                              const next = toggleSelection(coolingSelections, reason);
-                              setCoolingSelections(next);
-                              setLeadForm({ ...leadForm, cooling_reason: next });
-                            }}
-                            className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
-                                ? 'bg-amber-600 text-white border-amber-600'
-                                : 'bg-white text-slate-500 border-slate-200 hover:border-amber-300'
-                              }`}
-                          >
-                            {reason}
-                          </button>
-                        );
-                      })}
+                  <div className="grid grid-cols-2 gap-2">
+                    {COOLING_REASON_OPTIONS.map((reason) => {
+                      const selected = containsNormalized(coolingField, reason);
+                      return (
+                        <label
+                          key={reason}
+                          className="flex items-center gap-2 text-sm text-slate-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleLeadListField('cooling_reason', reason)}
+                            className="h-4 w-4 rounded text-amber-600 border-slate-300"
+                          />
+                          <span className="text-sm text-slate-700">{reason}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 
