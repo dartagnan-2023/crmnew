@@ -60,6 +60,29 @@ const normalizeListValue = (value) => {
     .filter(Boolean);
 };
 
+const normalizeOptionValue = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .toLowerCase();
+
+const listContainsNormalized = (value, option) => {
+  const items = normalizeListValue(value);
+  const normalizedOption = normalizeOptionValue(option);
+  return items.some((item) => normalizeOptionValue(item) === normalizedOption);
+};
+
+const toggleNormalizedValue = (currentValue, option) => {
+  const items = normalizeListValue(currentValue);
+  const normalizedOption = normalizeOptionValue(option);
+  const exists = items.some((item) => normalizeOptionValue(item) === normalizedOption);
+  if (exists) {
+    return items.filter((item) => normalizeOptionValue(item) !== normalizedOption);
+  }
+  return [...items, option];
+};
+
 const COOLING_REASON_OPTIONS = [
   'Preço',
   'Problemas técnicos',
@@ -2612,19 +2635,14 @@ const App = () => {
                   </label>
                   <div className="flex flex-wrap gap-1">
                     {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
-                      const selected = normalizeListValue(leadForm.highlighted_categories).includes(cat);
+                      const selected = listContainsNormalized(leadForm.highlighted_categories, cat);
                       return (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => {
-                            let current = normalizeListValue(leadForm.highlighted_categories);
-                            if (selected) {
-                              current = current.filter((c) => c !== cat);
-                            } else {
-                              current.push(cat);
-                            }
-                            setLeadForm({ ...leadForm, highlighted_categories: current.join(',') });
+                            const next = toggleNormalizedValue(leadForm.highlighted_categories, cat);
+                            setLeadForm({ ...leadForm, highlighted_categories: next.join(',') });
                           }}
                           className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-emerald-600 text-white border-emerald-600'
@@ -2644,19 +2662,14 @@ const App = () => {
                   </label>
                   <div className="flex flex-wrap gap-1">
                     {COOLING_REASON_OPTIONS.map((reason) => {
-                      const selected = normalizeListValue(leadForm.cooling_reason).includes(reason);
+                      const selected = listContainsNormalized(leadForm.cooling_reason, reason);
                       return (
                         <button
                           key={reason}
                           type="button"
                           onClick={() => {
-                            let current = normalizeListValue(leadForm.cooling_reason);
-                            if (selected) {
-                              current = current.filter((r) => r !== reason);
-                            } else {
-                              current.push(reason);
-                            }
-                            setLeadForm({ ...leadForm, cooling_reason: current.join(',') });
+                            const next = toggleNormalizedValue(leadForm.cooling_reason, reason);
+                            setLeadForm({ ...leadForm, cooling_reason: next.join(',') });
                           }}
                           className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-amber-600 text-white border-amber-600'
