@@ -112,9 +112,9 @@ const emptyLead = {
   is_customer: false,
   is_out_of_scope: false,
   first_contact: '',
-  highlighted_categories: '',
+  highlighted_categories: [],
   customer_type: '',
-  cooling_reason: '',
+  cooling_reason: [],
 };
 
 const App = () => {
@@ -914,9 +914,9 @@ const App = () => {
       is_private: !!lead.is_private,
       is_customer: !!lead.is_customer,
       is_out_of_scope: !!lead.is_out_of_scope,
-      highlighted_categories: normalizeListValue(lead.highlighted_categories).join(','),
+      highlighted_categories: normalizeListValue(lead.highlighted_categories),
       customer_type: lead.customer_type || '',
-      cooling_reason: normalizeListValue(lead.cooling_reason).join(','),
+      cooling_reason: normalizeListValue(lead.cooling_reason),
     };
   };
 
@@ -2664,7 +2664,7 @@ const App = () => {
                           type="button"
                           onClick={() => {
                             const next = toggleNormalizedValue(leadForm.highlighted_categories, cat);
-                            setLeadForm({ ...leadForm, highlighted_categories: next.join(',') });
+                            setLeadForm({ ...leadForm, highlighted_categories: next });
                           }}
                           className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-emerald-600 text-white border-emerald-600'
@@ -2691,7 +2691,7 @@ const App = () => {
                           type="button"
                           onClick={() => {
                             const next = toggleNormalizedValue(leadForm.cooling_reason, reason);
-                            setLeadForm({ ...leadForm, cooling_reason: next.join(',') });
+                            setLeadForm({ ...leadForm, cooling_reason: next });
                           }}
                           className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
                               ? 'bg-amber-600 text-white border-amber-600'
