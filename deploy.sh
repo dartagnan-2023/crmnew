@@ -1,110 +1,36 @@
 #!/bin/bash
-# Script de Deploy Automático - CRM BHS Eletrônica
-# Execute como: bash deploy.sh
+set -eo pipefail
 
-set -e  # Parar em caso de erro
+BASE=\"/home/bhs-crm/htdocs/crm.bhseletrica.com.br\"
 
-echo "🚀 Iniciando deploy automático do CRM..."
-echo ""
+cd \"\"
 
-# Cores para output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Diretório de trabalho
-DEPLOY_DIR="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
-ZIP_FILE="/tmp/crm-deploy.zip"
-
-# Verificar se o ZIP existe
-if [ ! -f "$ZIP_FILE" ]; then
-    echo -e "${RED}❌ Erro: Arquivo $ZIP_FILE não encontrado!${NC}"
-    echo "Por favor, faça upload do crm-deploy.zip para /tmp/"
-    exit 1
+export NVM_DIR=\"C:\Users\Usu�rio/.nvm\"
+if [ -s \"/nvm.sh\" ]; then
+  source \"/nvm.sh\"
+fi
+if command -v nvm >/dev/null 2>&1; then
+  nvm use 22 >/dev/null || (nvm install 22 >/dev/null && nvm use 22 >/dev/null)
 fi
 
-echo -e "${BLUE}📦 Descompactando arquivos...${NC}"
-cd "$DEPLOY_DIR"
+echo '-> git pull'
+git pull --ff-only origin main
 
-# Fazer backup do .env se existir
-if [ -f "backend/.env" ]; then
-    echo "💾 Fazendo backup do .env..."
-    cp backend/.env /tmp/.env.backup
+echo '-> backend install'
+cd \"/backend\"
+npm install
+
+if pm2 list | grep -q crm-backend; then
+  pm2 restart crm-backend
+else
+  pm2 start server.js --name crm-backend
 fi
-
-# Limpar diretório
-echo "🧹 Limpando diretório..."
-rm -rf backend frontend
-
-# Descompactar
-echo "📂 Extraindo arquivos..."
-unzip -q "$ZIP_FILE" -d "$DEPLOY_DIR"
-
-# Restaurar .env
-if [ -f "/tmp/.env.backup" ]; then
-    echo "♻️ Restaurando .env..."
-    cp /tmp/.env.backup backend/.env
-fi
-
-# Corrigir permissões
-echo "🔒 Corrigindo permissões..."
-chmod -R 777 "$DEPLOY_DIR"
-
-# Instalar backend
-echo -e "${BLUE}⚙️ Instalando backend...${NC}"
-cd "$DEPLOY_DIR/backend"
-
-# Carregar NVM
-export NVM_DIR="/home/bhs-crm/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-npm install --production
-
-# Parar backend antigo
-echo "🛑 Parando backend antigo..."
-pm2 delete crm-backend 2>/dev/null || true
-
-# Iniciar backend
-echo -e "${GREEN}▶️ Iniciando backend...${NC}"
-pm2 start server.js --name crm-backend
 pm2 save
 
-# Verificar backend
-echo ""
-echo -e "${GREEN}✅ Status do backend:${NC}"
-pm2 status
-
-# Build frontend
-echo ""
-echo -e "${BLUE}🎨 Buildando frontend...${NC}"
-cd "$DEPLOY_DIR/frontend"
-
+echo '-> frontend install + build'
+cd \"/frontend\"
 npm install
 npm run build
-
-# Corrigir permissões do build
 chmod -R 755 build
 
-# Recarregar Nginx
-echo ""
-echo -e "${BLUE}🔄 Recarregando Nginx...${NC}"
-systemctl reload nginx
-
-# Limpar
-echo "🧹 Limpando arquivos temporários..."
-rm -f "$ZIP_FILE"
-rm -f /tmp/.env.backup
-
-echo ""
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}✅ Deploy concluído com sucesso!${NC}"
-echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo "🌐 Acesse: http://crm.bhseletrica.com.br"
-echo ""
-echo "📊 Comandos úteis:"
-echo "  - Ver logs: pm2 logs crm-backend"
-echo "  - Reiniciar: pm2 restart crm-backend"
-echo "  - Status: pm2 status"
-echo ""
+echo '-> deploy complete'

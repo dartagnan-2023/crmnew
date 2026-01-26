@@ -117,3 +117,21 @@ ProprietÃ¡rio - BHS EletrÃ´nica
 ## ðŸ‘¥ Suporte
 
 Para suporte, entre em contato: marketing@bhseletronica.com.br
+
+## ?? Deploy em produção (VPS)
+
+Usamos \\deploy.sh\\ como script principal. Ele:
+1. Atualiza o repositório (git pull origin main).
+2. Instala dependências do backend e do frontend com 
+pm install.
+3. Gera o build do React (
+pm run build).
+4. Reinicia o pm2 com o backend (crm-backend).
+
+Depois de rodar deploy.sh como hs-crm, execute sudo /home/bhs-crm/deploy-root.sh como root para validar e recarregar o Nginx. O script deploy-zip.sh permanece como legado (necessita de /tmp/crm-deploy.zip), mas o novo fluxo é o recomendado.
+
+Para que o autodeploy funcione:
+- mantenha o workspace limpo (sem .cache/, builds ou .env extras);
+- o GitHub Actions ou CloudPanel deve apenas rodar ./deploy.sh e depois sudo /home/bhs-crm/deploy-root.sh;
+- se houver conflito com lockfiles, limpe com git checkout -- backend/package-lock.json frontend/package-lock.json e git clean -fd.
+
