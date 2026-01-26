@@ -21,17 +21,18 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         command_timeout: 20m
         script: |
+          set -e
           echo "🚀 INICIANDO DEPLOY COMPLETO"
           APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
           
           # 1. Atualizar código do repositório
           echo "📥 Atualizando código..."
-          cd "$APP_PATH" || exit 1
-          su - bhs-crm -c "cd $APP_PATH && git pull origin main"
+          cd "$APP_PATH"
+          git pull origin main
           
           # 2. Restaurar e configurar .env do backend
           echo "⚙️ Configurando backend..."
-          cd "$APP_PATH/backend" || exit 1
+          cd "$APP_PATH/backend"
           if [ -f "/tmp/backend.env.backup" ]; then
             cp /tmp/backend.env.backup .env
             echo "✅ .env restaurado do backup."
@@ -43,32 +44,39 @@ jobs:
           sed -i 's/^PORT=.*/PORT=3000/' .env
           grep -q "^PORT=" .env || echo "PORT=3000" >> .env
           
-          # 4. Instalar dependências e reiniciar backend
+          # 4. Instalar dependências do backend
+          echo "📦 Instalando dependências do backend..."
+          source ~/.nvm/nvm.sh
+          npm install
+          
+          # 5. Reiniciar backend
           echo "🔄 Reiniciando backend..."
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && npm install"
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && pm2 delete crm-backend || true"
-          su - bhs-crm -c "cd $APP_PATH/backend && source ~/.nvm/nvm.sh && pm2 start server.js --name crm-backend"
+          pm2 delete crm-backend || true
+          pm2 start server.js --name crm-backend
           
-          # 5. Build do frontend
+          # 6. Build do frontend
           echo "🎨 Buildando frontend..."
-          su - bhs-crm -c "cd $APP_PATH/frontend && source ~/.nvm/nvm.sh && npm install && CI=false npm run build"
+          cd "$APP_PATH/frontend"
+          npm install
+          CI=false npm run build
           
-          # 6. Copiar build para diretório público
+          # 7. Copiar build para diretório público
           echo "📦 Copiando arquivos para produção..."
-          rm -rf /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/*
-          cp -r $APP_PATH/frontend/build/* /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/
+          sudo rm -rf /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/*
+          sudo cp -r build/* /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/
           
-          # 7. Ajustar permissões
-          chown -R bhs-crm:www-data /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
-          chmod -R 755 /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
+          # 8. Ajustar permissões
+          echo "🔐 Ajustando permissões..."
+          sudo chown -R bhs-crm:www-data /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
+          sudo chmod -R 755 /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
           
-          # 8. Validar backend
+          # 9. Validar backend
           echo "🔍 Validando backend..."
           sleep 5
           curl -I http://localhost:3000/api/ping || echo "❌ Backend não responde."
           
-          # 9. Reiniciar Nginx
+          # 10. Reiniciar Nginx
           echo "🌐 Reiniciando Nginx..."
-          nginx -t && systemctl restart nginx
+          sudo nginx -t && sudo systemctl restart nginx
           
           echo "✅ Deploy concluído!"
