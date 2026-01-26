@@ -61,7 +61,6 @@ const parseMultiSelect = (value) => {
 };
 
 const normalizeListValue = parseMultiSelect;
-const ensureArray = (value) => (Array.isArray(value) ? value : normalizeListValue(value));
 
 const normalizeOptionValue = (value) =>
   String(value || '')
@@ -150,6 +149,8 @@ const App = () => {
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
   const [savingLead, setSavingLead] = useState(false);
+  const [highlightedSelections, setHighlightedSelections] = useState([]);
+  const [coolingSelections, setCoolingSelections] = useState([]);
 
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [newChannel, setNewChannel] = useState('');
@@ -184,8 +185,6 @@ const App = () => {
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
   const [pingFailCount, setPingFailCount] = useState(0);
-  const highlightedSelections = ensureArray(leadForm.highlighted_categories);
-  const coolingSelections = ensureArray(leadForm.cooling_reason);
   const buildWhatsappText = (lead) => {
     const origem = lead.channel_name || lead.campaign || 'Nao informado';
     const empresa = lead.company || '';
@@ -883,7 +882,9 @@ const App = () => {
   const openNewLeadModal = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
-        setShowLeadModal(true);
+    setHighlightedSelections([]);
+    setCoolingSelections([]);
+    setShowLeadModal(true);
   };
 
   const buildLeadFormFromLead = (lead) => {
@@ -939,6 +940,8 @@ const App = () => {
       const form = buildLeadFormFromLead(data);
       setEditingLead(data);
       setLeadForm(form);
+      setHighlightedSelections(form.highlighted_categories || []);
+      setCoolingSelections(form.cooling_reason || []);
       setShowLeadModal(true);
     } catch (err) {
       console.error('Erro ao carregar lead:', err);
@@ -1007,6 +1010,8 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
+      setHighlightedSelections([]);
+      setCoolingSelections([]);
       showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
@@ -2668,6 +2673,7 @@ const App = () => {
                             type="button"
                             onClick={() => {
                               const next = toggleSelection(highlightedSelections, cat);
+                              setHighlightedSelections(next);
                               setLeadForm({ ...leadForm, highlighted_categories: next });
                             }}
                             className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
@@ -2695,6 +2701,7 @@ const App = () => {
                             type="button"
                             onClick={() => {
                               const next = toggleSelection(coolingSelections, reason);
+                              setCoolingSelections(next);
                               setLeadForm({ ...leadForm, cooling_reason: next });
                             }}
                             className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
