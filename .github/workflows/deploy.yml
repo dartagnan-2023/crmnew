@@ -65,14 +65,17 @@ jobs:
           
           # 7. Copiar build para servir arquivos estáticos
           echo "📦 Preparando arquivos estáticos..."
-          # O Nginx provavelmente serve do diretório raiz do app
-          # Vamos copiar os arquivos do build para lá
-          sudo cp -r build/* "$APP_PATH/"
+          # Criar diretório público se não existir
+          sudo mkdir -p "$APP_PATH/public"
+          # Limpar conteúdo antigo
+          sudo rm -rf "$APP_PATH/public"/*
+          # Copiar arquivos do build
+          sudo cp -r build/* "$APP_PATH/public/"
           
           # 8. Ajustar permissões
           echo "🔐 Ajustando permissões..."
-          sudo chown -R bhseletrica-crm:www-data "$APP_PATH"
-          sudo chmod -R 755 "$APP_PATH"
+          sudo chown -R bhseletrica-crm:www-data "$APP_PATH/public"
+          sudo chmod -R 755 "$APP_PATH/public"
           
           # 9. Validar backend
           echo "🔍 Validando backend..."
