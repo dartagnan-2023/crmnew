@@ -646,6 +646,19 @@ app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   return res.json(filtered);
 });
 
+app.get('/api/leads/:id', apiKeyLeadsMiddleware, async (req, res) => {
+  const [{ items: leads }, { items: channels }] = await Promise.all([
+    loadTable('leads'),
+    loadTable('channels'),
+  ]);
+  const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
+  const lead = filtered.find((l) => String(l.id) === String(req.params.id));
+  if (!lead) {
+    return res.status(404).json({ error: 'Lead nao encontrado' });
+  }
+  return res.json(lead);
+});
+
 app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const {
     name,

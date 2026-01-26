@@ -145,6 +145,7 @@ const App = () => {
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [leadLoading, setLeadLoading] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
   const [savingLead, setSavingLead] = useState(false);
@@ -882,7 +883,7 @@ const App = () => {
     setShowLeadModal(true);
   };
 
-  const openEditLeadModal = (lead) => {
+  const buildLeadFormFromLead = (lead) => {
     let nextContact = '';
     if (lead.next_contact) {
       const d = new Date(lead.next_contact);
@@ -891,9 +892,7 @@ const App = () => {
       }
     }
     const firstContact = toDateInput(lead.first_contact);
-
-    setEditingLead(lead);
-    setLeadForm({
+    return {
       name: lead.name || '',
       contact: lead.contact || '',
       company: lead.company || '',
@@ -918,8 +917,31 @@ const App = () => {
       highlighted_categories: normalizeListValue(lead.highlighted_categories).join(','),
       customer_type: lead.customer_type || '',
       cooling_reason: normalizeListValue(lead.cooling_reason).join(','),
-    });
-    setShowLeadModal(true);
+    };
+  };
+
+  const openEditLeadModal = async (lead) => {
+    if (!lead || !token || leadLoading) return;
+    setLeadLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/leads/${lead.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao carregar lead', 'error');
+        return;
+      }
+      setEditingLead(data);
+      setLeadForm(buildLeadFormFromLead(data));
+      setShowLeadModal(true);
+    } catch (err) {
+      console.error('Erro ao carregar lead:', err);
+      showToast('Erro ao carregar lead', 'error');
+    } finally {
+      setLeadLoading(false);
+    }
   };
 
   const saveLead = async () => {
