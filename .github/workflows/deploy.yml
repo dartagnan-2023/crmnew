@@ -46,7 +46,8 @@ jobs:
           
           # 4. Instalar dependências do backend
           echo "📦 Instalando dependências do backend..."
-          source ~/.nvm/nvm.sh
+          export NVM_DIR="/home/bhs-crm/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           
           # 5. Reiniciar backend
@@ -57,6 +58,8 @@ jobs:
           # 6. Build do frontend
           echo "🎨 Buildando frontend..."
           cd "$APP_PATH/frontend"
+          export NVM_DIR="/home/bhs-crm/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           CI=false npm run build
           
