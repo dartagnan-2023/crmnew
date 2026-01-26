@@ -22,7 +22,7 @@ jobs:
         command_timeout: 20m
         script: |
           echo "🚀 RESTAURANDO .ENV E PORTA 3000"
-          APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
+          APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
           
           cd "$APP_PATH/backend" || exit 1
           
