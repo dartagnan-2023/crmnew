@@ -6,7 +6,7 @@ const STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'contato', label: 'Em contato' },
   { value: 'proposta', label: 'Proposta enviada' },
-  { value: 'negociacao', label: 'NegociaÃ§Ã£o' },
+  { value: 'negociacao', label: 'NegociaÃƒÂ§ÃƒÂ£o' },
   { value: 'ganho', label: 'Ganho' },
   { value: 'perdido', label: 'Perdido' },
 ];
@@ -39,14 +39,14 @@ const SEGMENT_OPTIONS = [
 ];
 
 const HIGHLIGHTED_CATEGORIES_OPTIONS = [
-  'AutomaÃ§Ã£o',
-  'Baixa TensÃ£o',
-  'Comando e SinalizaÃ§Ã£o',
-  'Instrumentos e MediÃ§Ãµes',
-  'Conectividade e ProteÃ§Ã£o',
-  'VentilaÃ§Ã£o e Filtragem',
+  'AutomaÃƒÂ§ÃƒÂ£o',
+  'Baixa TensÃƒÂ£o',
+  'Comando e SinalizaÃƒÂ§ÃƒÂ£o',
+  'Instrumentos e MediÃƒÂ§ÃƒÂµes',
+  'Conectividade e ProteÃƒÂ§ÃƒÂ£o',
+  'VentilaÃƒÂ§ÃƒÂ£o e Filtragem',
   'Ferramentas',
-  'PneumÃ¡tica',
+  'PneumÃƒÂ¡tica',
 ];
 
 const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
@@ -61,6 +61,7 @@ const parseMultiSelect = (value) => {
 };
 
 const normalizeListValue = parseMultiSelect;
+const ensureArray = (value) => (Array.isArray(value) ? value : normalizeListValue(value));
 
 const normalizeOptionValue = (value) =>
   String(value || '')
@@ -84,10 +85,10 @@ const toggleSelection = (items, option) => {
 };
 
 const COOLING_REASON_OPTIONS = [
-  'PreÃ§o',
-  'Problemas tÃ©cnicos',
-  'NÃ£o lembrava',
-  'CrÃ©dito/Outros',
+  'PreÃƒÂ§o',
+  'Problemas tÃƒÂ©cnicos',
+  'NÃƒÂ£o lembrava',
+  'CrÃƒÂ©dito/Outros',
 ];
 
 const emptyLead = {
@@ -112,9 +113,9 @@ const emptyLead = {
   is_customer: false,
   is_out_of_scope: false,
   first_contact: '',
-  highlighted_categories: '',
+  highlighted_categories: [],
   customer_type: '',
-  cooling_reason: '',
+  cooling_reason: [],
 };
 
 const App = () => {
@@ -148,8 +149,6 @@ const App = () => {
   const [leadLoading, setLeadLoading] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
-  const [highlightedSelections, setHighlightedSelections] = useState([]);
-  const [coolingSelections, setCoolingSelections] = useState([]);
   const [savingLead, setSavingLead] = useState(false);
 
   const [showChannelModal, setShowChannelModal] = useState(false);
@@ -185,6 +184,8 @@ const App = () => {
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [agendaUpdatingId, setAgendaUpdatingId] = useState(null);
   const [pingFailCount, setPingFailCount] = useState(0);
+  const highlightedSelections = ensureArray(leadForm.highlighted_categories);
+  const coolingSelections = ensureArray(leadForm.cooling_reason);
   const buildWhatsappText = (lead) => {
     const origem = lead.channel_name || lead.campaign || 'Nao informado';
     const empresa = lead.company || '';
@@ -200,10 +201,10 @@ const App = () => {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast('Texto copiado para Ã¡rea de transferÃªncia');
+      showToast('Texto copiado para ÃƒÂ¡rea de transferÃƒÂªncia');
     } catch (err) {
       console.error('Erro ao copiar:', err);
-      showToast('NÃ£o foi possÃ­vel copiar', 'error');
+      showToast('NÃƒÂ£o foi possÃƒÂ­vel copiar', 'error');
     }
   };
 
@@ -246,7 +247,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    // PrÃ©-aquecer backend (ping pÃºblico) para reduzir delay inicial
+    // PrÃƒÂ©-aquecer backend (ping pÃƒÂºblico) para reduzir delay inicial
     fetch(`${API_URL}/ping`).catch(() => { });
   }, []);
 
@@ -275,7 +276,7 @@ const App = () => {
 
   useEffect(() => {
     if (pingFailCount >= 2) {
-      showToast('SessÃ£o finalizada por inatividade. FaÃ§a login novamente.', 'error');
+      showToast('SessÃƒÂ£o finalizada por inatividade. FaÃƒÂ§a login novamente.', 'error');
       handleLogout();
     }
   }, [pingFailCount]);
@@ -344,10 +345,10 @@ const App = () => {
           console.error('Erro ao ler resposta de auth:', parseErr);
         }
         if (!res.ok) {
-          throw new Error(data.error || 'Erro na autenticaÃ§Ã£o');
+          throw new Error(data.error || 'Erro na autenticaÃƒÂ§ÃƒÂ£o');
         }
         if (!data.token || !data.user) {
-          throw new Error('Resposta de login invÃ¡lida');
+          throw new Error('Resposta de login invÃƒÂ¡lida');
         }
         localStorage.setItem('token', data.token);
         setToken(data.token);
@@ -434,7 +435,7 @@ const App = () => {
       const data = await res.json();
       setStats(data);
     } catch (err) {
-      console.error('Erro ao carregar estatÃ­sticas:', err);
+      console.error('Erro ao carregar estatÃƒÂ­sticas:', err);
     }
   };
 
@@ -576,7 +577,7 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      // normaliza possÃ­veis campos de owner vindos da planilha/API
+      // normaliza possÃƒÂ­veis campos de owner vindos da planilha/API
       _ownerId: l.ownerId || l.user_id || l.userId || l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
@@ -882,9 +883,7 @@ const App = () => {
   const openNewLeadModal = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
-    setHighlightedSelections([]);
-    setCoolingSelections([]);
-    setShowLeadModal(true);
+        setShowLeadModal(true);
   };
 
   const buildLeadFormFromLead = (lead) => {
@@ -896,39 +895,31 @@ const App = () => {
       }
     }
     const firstContact = toDateInput(lead.first_contact);
-    const highlightList = parseMultiSelect(lead.highlighted_categories);
-    const coolingList = parseMultiSelect(lead.cooling_reason);
     return {
-      form: {
-        name: lead.name || '',
-        contact: lead.contact || '',
-        company: lead.company || '',
-        segment: lead.segment || '',
-        owner: lead.owner || lead.responsible_name || '',
-        ownerId: lead.ownerId || lead.user_id || user?.id || null,
-        origin: lead.origin || '',
-        stage_detail: lead.stage_detail || '',
-        next_contact: nextContact,
-        first_contact: firstContact,
-        email: lead.email || '',
-        phone: lead.phone || '',
-        phone2: lead.phone2 || '',
-        channel_id: lead.channel_id || '',
-        campaign: lead.campaign || '',
-        status: lead.status || 'novo',
-        value: lead.value || 0,
-        notes: lead.notes || '',
-        is_private: !!lead.is_private,
-        is_customer: !!lead.is_customer,
-        is_out_of_scope: !!lead.is_out_of_scope,
-        highlighted_categories: highlightList.join(','),
-        customer_type: lead.customer_type || '',
-        cooling_reason: coolingList.join(','),
-      },
-      selections: {
-        highlightList,
-        coolingList,
-      },
+      name: lead.name || '',
+      contact: lead.contact || '',
+      company: lead.company || '',
+      segment: lead.segment || '',
+      owner: lead.owner || lead.responsible_name || '',
+      ownerId: lead.ownerId || lead.user_id || user?.id || null,
+      origin: lead.origin || '',
+      stage_detail: lead.stage_detail || '',
+      next_contact: nextContact,
+      first_contact: firstContact,
+      email: lead.email || '',
+      phone: lead.phone || '',
+      phone2: lead.phone2 || '',
+      channel_id: lead.channel_id || '',
+      campaign: lead.campaign || '',
+      status: lead.status || 'novo',
+      value: lead.value || 0,
+      notes: lead.notes || '',
+      is_private: !!lead.is_private,
+      is_customer: !!lead.is_customer,
+      is_out_of_scope: !!lead.is_out_of_scope,
+      highlighted_categories: parseMultiSelect(lead.highlighted_categories),
+      customer_type: lead.customer_type || '',
+      cooling_reason: parseMultiSelect(lead.cooling_reason),
     };
   };
 
@@ -945,11 +936,9 @@ const App = () => {
         showToast(data.error || 'Erro ao carregar lead', 'error');
         return;
       }
-      const { form, selections } = buildLeadFormFromLead(data);
+      const form = buildLeadFormFromLead(data);
       setEditingLead(data);
       setLeadForm(form);
-      setHighlightedSelections(selections.highlightList);
-      setCoolingSelections(selections.coolingList);
       setShowLeadModal(true);
     } catch (err) {
       console.error('Erro ao carregar lead:', err);
@@ -963,7 +952,7 @@ const App = () => {
     if (savingLead) return;
     const normalizedPhone = (leadForm.phone || '').replace(/\D/g, '');
     if (!leadForm.name || !normalizedPhone) {
-      showToast('Nome e telefone sÃ£o obrigatÃ³rios', 'error');
+      showToast('Nome e telefone sÃƒÂ£o obrigatÃƒÂ³rios', 'error');
       return;
     }
     const method = editingLead ? 'PUT' : 'POST';
@@ -997,7 +986,7 @@ const App = () => {
       if (!res.ok) {
         const message =
           res.status === 429
-            ? 'Muitas requisiÃ§Ãµes. Tente novamente em alguns segundos.'
+            ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
             : data.error || 'Erro ao salvar lead';
         showToast(message, 'error');
         return;
@@ -1108,7 +1097,7 @@ const App = () => {
     try {
       const current = new Date(lead.next_contact);
       if (Number.isNaN(current.getTime())) {
-        showToast('Data invÃ¡lida', 'error');
+        showToast('Data invÃƒÂ¡lida', 'error');
         return;
       }
       const next = new Date(current);
@@ -1139,7 +1128,7 @@ const App = () => {
 
   const handleAddChannel = async () => {
     if (!newChannel.trim()) {
-      showToast('Nome do canal Ã© obrigatÃ³rio', 'error');
+      showToast('Nome do canal ÃƒÂ© obrigatÃƒÂ³rio', 'error');
       return;
     }
     try {
@@ -1226,8 +1215,8 @@ const App = () => {
       const failed = responses.find((res) => !res || !res.ok);
       if (failed) {
         const message = failed?.status === 429
-          ? 'Muitas requisiÃ§Ãµes. Tente novamente em alguns segundos.'
-          : 'Algumas atualizaÃ§Ãµes falharam';
+          ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
+          : 'Algumas atualizaÃƒÂ§ÃƒÂµes falharam';
         showToast(message, 'error');
       } else {
         showToast(successMessage, 'success');
@@ -1253,12 +1242,12 @@ const App = () => {
 
   const bulkReassignOwner = async () => {
     if (!bulkOwnerId) {
-      showToast('Escolha um novo responsÃ¡vel', 'error');
+      showToast('Escolha um novo responsÃƒÂ¡vel', 'error');
       return;
     }
     await applyBulkUpdate(
       () => ({ ownerId: bulkOwnerId }),
-      'ResponsÃ¡vel atualizado',
+      'ResponsÃƒÂ¡vel atualizado',
       canReassignLead
     );
   };
@@ -1545,7 +1534,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    UsuÃ¡rio (login)
+                    UsuÃƒÂ¡rio (login)
                   </label>
                   <input
                     type="text"
@@ -1578,7 +1567,7 @@ const App = () => {
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                {authMode === 'login' ? 'Email ou usuÃ¡rio' : 'Email'}
+                {authMode === 'login' ? 'Email ou usuÃƒÂ¡rio' : 'Email'}
               </label>
               <input
                 type={authMode === 'login' ? 'text' : 'email'}
@@ -1658,7 +1647,7 @@ const App = () => {
             <button
               onClick={() => openProfileSettings('me')}
               className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
-              title="ConfiguraÃ§Ãµes e perfil"
+              title="ConfiguraÃƒÂ§ÃƒÂµes e perfil"
             >
               Perfil
             </button>
@@ -1684,7 +1673,7 @@ const App = () => {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
-                ðŸ“Š
+                Ã°Å¸â€œÅ 
               </span>
               <div className="text-left">
                 <span className="block leading-tight">Estatisticas</span>
@@ -1705,7 +1694,7 @@ const App = () => {
                 className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
                 aria-hidden
               >
-                â–¾
+                Ã¢â€“Â¾
               </span>
             </div>
           </button>
@@ -1724,7 +1713,7 @@ const App = () => {
                 <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Taxa de ConversÃ£o</p>
+                <p className="text-[11px] text-slate-500">Taxa de ConversÃƒÂ£o</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
@@ -1741,7 +1730,7 @@ const App = () => {
                 </p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Em negociaÃ§Ã£o</p>
+                <p className="text-[11px] text-slate-500">Em negociaÃƒÂ§ÃƒÂ£o</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
@@ -1768,7 +1757,7 @@ const App = () => {
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
               <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">PrÃ³x. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">PrÃƒÂ³x. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
           </div>
@@ -1779,7 +1768,7 @@ const App = () => {
             <div className="flex items-start justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Agenda - PrÃ³ximos contatos
+                  Agenda - PrÃƒÂ³ximos contatos
                 </h2>
               </div>
               {agendaBase.length > 5 && (
@@ -1834,7 +1823,7 @@ const App = () => {
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
-                          ResponsÃ¡vel: {responsible}
+                          ResponsÃƒÂ¡vel: {responsible}
                         </p>
                       )}
                     </div>
@@ -1911,7 +1900,7 @@ const App = () => {
                       {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {lead.owner || lead.responsible_name || 'Sem responsÃ¡vel'}
+                      {lead.owner || lead.responsible_name || 'Sem responsÃƒÂ¡vel'}
                     </p>
                     {lead.first_contact && (
                       <p className="text-[11px] text-slate-500">
@@ -1984,8 +1973,8 @@ const App = () => {
                   }}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                 >
-                  <option value="all">Todos os responsÃ¡veis</option>
-                  <option value="unassigned">Sem proprietÃ¡rio</option>
+                  <option value="all">Todos os responsÃƒÂ¡veis</option>
+                  <option value="unassigned">Sem proprietÃƒÂ¡rio</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2013,7 +2002,7 @@ const App = () => {
                     <option value="all">Toda agenda</option>
                     <option value="overdue">Vencidos</option>
                     <option value="today">Hoje</option>
-                    <option value="next3">PrÃ³x. 3 dias</option>
+                    <option value="next3">PrÃƒÂ³x. 3 dias</option>
                   </select>
                   <select
                     value={channelFilter}
@@ -2054,7 +2043,7 @@ const App = () => {
                   <option value="name">Nome</option>
                   <option value="status">Status</option>
                   <option value="value">Valor</option>
-                  <option value="next_contact">PrÃ³ximo contato</option>
+                  <option value="next_contact">PrÃƒÂ³ximo contato</option>
                 </select>
                 <select
                   value={segmentFilter}
@@ -2092,7 +2081,7 @@ const App = () => {
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">SelecionÃ¡veis na lista: {selectableLeadIds.length}</span>
+              <span className="text-slate-500">SelecionÃƒÂ¡veis na lista: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -2124,7 +2113,7 @@ const App = () => {
                   onChange={(e) => setBulkOwnerId(e.target.value)}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
                 >
-                  <option value="">ResponsÃ¡vel</option>
+                  <option value="">ResponsÃƒÂ¡vel</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2167,9 +2156,9 @@ const App = () => {
                       <th className="py-2 px-2">Empresa</th>
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Status</th>
-                      <th className="py-2 px-2">ResponsÃ¡vel</th>
-                      <th className="py-2 px-2">PrÃ³ximo contato</th>
-                      <th className="py-2 px-2 text-right">AÃ§Ãµes</th>
+                      <th className="py-2 px-2">ResponsÃƒÂ¡vel</th>
+                      <th className="py-2 px-2">PrÃƒÂ³ximo contato</th>
+                      <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2359,7 +2348,7 @@ const App = () => {
                         <p className="text-xs text-slate-500">Nenhum lead</p>
                       )}
                     </div>
-                    {/* ReatribuiÃ§Ã£o em massa por coluna removida para simplificar Kanban; drag-and-drop jÃ¡ atualiza */}
+                    {/* ReatribuiÃƒÂ§ÃƒÂ£o em massa por coluna removida para simplificar Kanban; drag-and-drop jÃƒÂ¡ atualiza */}
                   </div>
                 );
               })}
@@ -2472,7 +2461,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ResponsÃ¡vel
+                    ResponsÃƒÂ¡vel
                   </label>
                   <select
                     value={leadForm.ownerId || ''}
@@ -2488,7 +2477,7 @@ const App = () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
                     <option value={user?.id || ''}>
-                      {user?.name ? `${user.name} (VocÃª)` : 'Selecione'}
+                      {user?.name ? `${user.name} (VocÃƒÂª)` : 'Selecione'}
                     </option>
                     {users
                       .filter((u) => u.id !== user?.id)
@@ -2578,7 +2567,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    PrÃ³ximo contato (agenda)
+                    PrÃƒÂ³ximo contato (agenda)
                   </label>
                   <input
                     type="date"
@@ -2591,7 +2580,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Data de adiÃ§Ã£o
+                    Data de adiÃƒÂ§ÃƒÂ£o
                   </label>
                   <input
                     type="text"
@@ -2621,7 +2610,7 @@ const App = () => {
                     htmlFor="lead-customer"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    JÃ¡ Ã© cliente
+                    JÃƒÂ¡ ÃƒÂ© cliente
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2668,57 +2657,55 @@ const App = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Categorias em destaque (mÃºltipla escolha)
+                    Categorias em destaque (mÃƒÂºltipla escolha)
                   </label>
                   <div className="flex flex-wrap gap-1">
-                    {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
-                      const selected = containsNormalized(highlightedSelections, cat);
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => {
-                            const next = toggleSelection(highlightedSelections, cat);
-                            setHighlightedSelections(next);
-                            setLeadForm({ ...leadForm, highlighted_categories: next.join(',') });
-                          }}
-                          className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
-                              ? 'bg-emerald-600 text-white border-emerald-600'
-                              : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300'
-                            }`}
-                        >
-                          {cat}
-                        </button>
-                      );
-                    })}
+                      {HIGHLIGHTED_CATEGORIES_OPTIONS.map((cat) => {
+                        const selected = containsNormalized(highlightedSelections, cat);
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              const next = toggleSelection(highlightedSelections, cat);
+                              setLeadForm({ ...leadForm, highlighted_categories: next });
+                            }}
+                            className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-300'
+                              }`}
+                          >
+                            {cat}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
-                    Motivo de esfriamento (mÃºltipla escolha)
+                    Motivo de esfriamento (mÃƒÂºltipla escolha)
                   </label>
                   <div className="flex flex-wrap gap-1">
-                    {COOLING_REASON_OPTIONS.map((reason) => {
-                      const selected = containsNormalized(coolingSelections, reason);
-                      return (
-                        <button
-                          key={reason}
-                          type="button"
-                          onClick={() => {
-                            const next = toggleSelection(coolingSelections, reason);
-                            setCoolingSelections(next);
-                            setLeadForm({ ...leadForm, cooling_reason: next.join(',') });
-                          }}
-                          className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
-                              ? 'bg-amber-600 text-white border-amber-600'
-                              : 'bg-white text-slate-500 border-slate-200 hover:border-amber-300'
-                            }`}
-                        >
-                          {reason}
-                        </button>
-                      );
-                    })}
+                      {COOLING_REASON_OPTIONS.map((reason) => {
+                        const selected = containsNormalized(coolingSelections, reason);
+                        return (
+                          <button
+                            key={reason}
+                            type="button"
+                            onClick={() => {
+                              const next = toggleSelection(coolingSelections, reason);
+                              setLeadForm({ ...leadForm, cooling_reason: next });
+                            }}
+                            className={`text-[10px] py-1 px-2 rounded-full border transition ${selected
+                                ? 'bg-amber-600 text-white border-amber-600'
+                                : 'bg-white text-slate-500 border-slate-200 hover:border-amber-300'
+                              }`}
+                          >
+                            {reason}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -2739,12 +2726,12 @@ const App = () => {
                     htmlFor="lead-private"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    VisÃ­vel apenas para mim
+                    VisÃƒÂ­vel apenas para mim
                   </label>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ObservaÃ§Ãµes
+                    ObservaÃƒÂ§ÃƒÂµes
                   </label>
                   <textarea
                     value={leadForm.notes}
@@ -2809,7 +2796,7 @@ const App = () => {
                           : 'bg-slate-100 text-slate-700'
                         }`}
                     >
-                      UsuÃ¡rios
+                      UsuÃƒÂ¡rios
                     </button>
                   )}
                 </div>
@@ -2885,7 +2872,7 @@ const App = () => {
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {userForm.id ? 'Editar usuÃ¡rio' : 'Novo usuÃ¡rio'}
+                      {userForm.id ? 'Editar usuÃƒÂ¡rio' : 'Novo usuÃƒÂ¡rio'}
                     </h3>
                     <button
                       onClick={startNewUser}
@@ -2905,7 +2892,7 @@ const App = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">UsuÃ¡rio (login)</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">UsuÃƒÂ¡rio (login)</label>
                       <input
                         type="text"
                         value={userForm.username}
@@ -2969,11 +2956,11 @@ const App = () => {
                       onClick={saveAdminUser}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
                     >
-                      {userForm.id ? 'Salvar alteraÃ§Ãµes' : 'Criar usuÃ¡rio'}
+                      {userForm.id ? 'Salvar alteraÃƒÂ§ÃƒÂµes' : 'Criar usuÃƒÂ¡rio'}
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
-                    <h4 className="text-xs font-semibold text-slate-600 mb-2">UsuÃ¡rios</h4>
+                    <h4 className="text-xs font-semibold text-slate-600 mb-2">UsuÃƒÂ¡rios</h4>
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -2982,7 +2969,7 @@ const App = () => {
                             <th className="py-2 px-2">Email</th>
                             <th className="py-2 px-2">Telefone</th>
                             <th className="py-2 px-2">Papel</th>
-                            <th className="py-2 px-2 text-right">AÃ§Ãµes</th>
+                            <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3014,7 +3001,7 @@ const App = () => {
                                 colSpan={5}
                                 className="py-3 text-center text-slate-500 text-xs"
                               >
-                                Nenhum usuÃ¡rio cadastrado
+                                Nenhum usuÃƒÂ¡rio cadastrado
                               </td>
                             </tr>
                           )}
