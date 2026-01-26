@@ -65,6 +65,7 @@ jobs:
           
           # 7. Copiar build para diretório público
           echo "📦 Copiando arquivos para produção..."
+          sudo mkdir -p /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html
           sudo rm -rf /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/*
           sudo cp -r build/* /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/
           
