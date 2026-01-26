@@ -39,14 +39,14 @@ const SEGMENT_OPTIONS = [
 ];
 
 const HIGHLIGHTED_CATEGORIES_OPTIONS = [
-  'AutomaÃƒÂ§ÃƒÂ£o',
-  'Baixa TensÃƒÂ£o',
-  'Comando e SinalizaÃƒÂ§ÃƒÂ£o',
-  'Instrumentos e MediÃƒÂ§ÃƒÂµes',
-  'Conectividade e ProteÃƒÂ§ÃƒÂ£o',
-  'VentilaÃƒÂ§ÃƒÂ£o e Filtragem',
+  'Automação',
+  'Baixa Tensão',
+  'Comando e Sinalização',
+  'Instrumentos e Medições',
+  'Conectividade e Proteção',
+  'Ventilação e Filtragem',
   'Ferramentas',
-  'PneumÃƒÂ¡tica',
+  'Pneumática',
 ];
 
 const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
@@ -85,10 +85,10 @@ const toggleSelection = (items, option) => {
 };
 
 const COOLING_REASON_OPTIONS = [
-  'PreÃƒÂ§o',
-  'Problemas tÃƒÂ©cnicos',
-  'NÃƒÂ£o lembrava',
-  'CrÃƒÂ©dito/Outros',
+  'Preço',
+  'Problemas técnicos',
+  'Não lembrava',
+  'Crédito/Outros',
 ];
 
 const emptyLead = {
