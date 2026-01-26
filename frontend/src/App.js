@@ -52,11 +52,13 @@ const HIGHLIGHTED_CATEGORIES_OPTIONS = [
 const CUSTOMER_TYPE_OPTIONS = ['A', 'B', 'C'];
 
 
-const normalizeListValue = (value) =>
-  (value || '')
+const normalizeListValue = (value) => {
+  const source = Array.isArray(value) ? value.join(',') : String(value || '');
+  return source
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+};
 
 const COOLING_REASON_OPTIONS = [
   'Preço',
@@ -939,6 +941,19 @@ const App = () => {
             : data.error || 'Erro ao salvar lead';
         showToast(message, 'error');
         return;
+      }
+      if (data?.id) {
+        setLeads((prev) => {
+          const targetId = String(data.id);
+          const mapped = prev.map((l) =>
+            String(l.id) === targetId ? { ...l, ...data } : l
+          );
+          if (editingLead) {
+            return mapped;
+          }
+          const exists = prev.some((l) => String(l.id) === targetId);
+          return exists ? mapped : [...prev, data];
+        });
       }
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
