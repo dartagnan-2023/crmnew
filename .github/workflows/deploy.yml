@@ -23,7 +23,7 @@ jobs:
         script: |
           set -e
           echo "🚀 INICIANDO DEPLOY COMPLETO"
-          APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
+          APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
           
           # 1. Atualizar código do repositório
           echo "📥 Atualizando código..."
@@ -46,7 +46,7 @@ jobs:
           
           # 4. Instalar dependências do backend
           echo "📦 Instalando dependências do backend..."
-          export NVM_DIR="/home/bhs-crm/.nvm"
+          export NVM_DIR="/home/bhseletrica-crm/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           
@@ -58,20 +58,20 @@ jobs:
           # 6. Build do frontend
           echo "🎨 Buildando frontend..."
           cd "$APP_PATH/frontend"
-          export NVM_DIR="/home/bhs-crm/.nvm"
+          export NVM_DIR="/home/bhseletrica-crm/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           CI=false npm run build
           
           # 7. Copiar build para diretório público
           echo "📦 Copiando arquivos para produção..."
-          sudo rm -rf /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/*
-          sudo cp -r build/* /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html/
+          sudo rm -rf /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/*
+          sudo cp -r build/* /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html/
           
           # 8. Ajustar permissões
           echo "🔐 Ajustando permissões..."
-          sudo chown -R bhs-crm:www-data /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
-          sudo chmod -R 755 /home/bhs-crm/htdocs/crm.bhseletrica.com.br/public_html
+          sudo chown -R bhseletrica-crm:www-data /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html
+          sudo chmod -R 755 /home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br/public_html
           
           # 9. Validar backend
           echo "🔍 Validando backend..."
