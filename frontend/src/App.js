@@ -1254,7 +1254,7 @@ const App = () => {
     }
     await applyBulkUpdate(
       () => ({ ownerId: bulkOwnerId }),
-      'ResponsÃƒÂ¡vel atualizado',
+      'Responsável atualizado',
       canReassignLead
     );
   };
@@ -1680,7 +1680,7 @@ const App = () => {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
-                Ã°Å¸â€œÅ
+                📊
               </span>
               <div className="text-left">
                 <span className="block leading-tight">Estatísticas</span>
@@ -1720,7 +1720,7 @@ const App = () => {
                 <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Taxa de ConversÃƒÂ£o</p>
+                <p className="text-[11px] text-slate-500">Taxa de Conversão</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
@@ -1737,7 +1737,7 @@ const App = () => {
                 </p>
               </div>
               <div className="bg-white rounded-xl shadow p-3">
-                <p className="text-[11px] text-slate-500">Em negociaÃƒÂ§ÃƒÂ£o</p>
+                <p className="text-[11px] text-slate-500">Em negociação</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
@@ -2163,9 +2163,9 @@ const App = () => {
                       <th className="py-2 px-2">Empresa</th>
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Status</th>
-                      <th className="py-2 px-2">ResponsÃƒÂ¡vel</th>
+                      <th className="py-2 px-2">Responsável</th>
                       <th className="py-2 px-2">Próximo contato</th>
-                      <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
+                      <th className="py-2 px-2 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2468,7 +2468,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ResponsÃƒÂ¡vel
+                    Responsável
                   </label>
                   <select
                     value={leadForm.ownerId || ''}
