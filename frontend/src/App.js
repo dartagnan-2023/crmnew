@@ -208,10 +208,10 @@ const App = () => {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast('Texto copiado para ÃƒÂ¡rea de transferÃƒÂªncia');
+      showToast('Texto copiado para área de transferência');
     } catch (err) {
       console.error('Erro ao copiar:', err);
-      showToast('NÃƒÂ£o foi possÃƒÂ­vel copiar', 'error');
+      showToast('Não foi possível copiar', 'error');
     }
   };
 
@@ -254,7 +254,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    // PrÃƒÂ©-aquecer backend (ping pÃƒÂºblico) para reduzir delay inicial
+    // Pré-aquecer backend (ping público) para reduzir delay inicial
     fetch(`${API_URL}/ping`).catch(() => { });
   }, []);
 
@@ -283,7 +283,7 @@ const App = () => {
 
   useEffect(() => {
     if (pingFailCount >= 2) {
-      showToast('SessÃƒÂ£o finalizada por inatividade. FaÃƒÂ§a login novamente.', 'error');
+      showToast('Sessão finalizada por inatividade. Faça login novamente.', 'error');
       handleLogout();
     }
   }, [pingFailCount]);
@@ -352,10 +352,10 @@ const App = () => {
           console.error('Erro ao ler resposta de auth:', parseErr);
         }
         if (!res.ok) {
-          throw new Error(data.error || 'Erro na autenticaÃƒÂ§ÃƒÂ£o');
+          throw new Error(data.error || 'Erro na autenticação');
         }
         if (!data.token || !data.user) {
-          throw new Error('Resposta de login invÃƒÂ¡lida');
+          throw new Error('Resposta de login inválida');
         }
         localStorage.setItem('token', data.token);
         setToken(data.token);
@@ -442,7 +442,7 @@ const App = () => {
       const data = await res.json();
       setStats(data);
     } catch (err) {
-      console.error('Erro ao carregar estatÃƒÂ­sticas:', err);
+      console.error('Erro ao carregar estatísticas:', err);
     }
   };
 
@@ -584,7 +584,7 @@ const App = () => {
   const filteredLeads = useMemo(() => {
     let base = leads.map((l) => ({
       ...l,
-      // normaliza possÃƒÂ­veis campos de owner vindos da planilha/API
+      // normaliza possíveis campos de owner vindos da planilha/API
       _ownerId: l.ownerId || l.user_id || l.userId || l.owner_id,
       _status: (l.status || '').toLowerCase(),
     }));
@@ -959,7 +959,7 @@ const App = () => {
     if (savingLead) return;
     const normalizedPhone = (leadForm.phone || '').replace(/\D/g, '');
     if (!leadForm.name || !normalizedPhone) {
-      showToast('Nome e telefone sÃƒÂ£o obrigatÃƒÂ³rios', 'error');
+      showToast('Nome e telefone são obrigatórios', 'error');
       return;
     }
     const method = editingLead ? 'PUT' : 'POST';
@@ -993,7 +993,7 @@ const App = () => {
       if (!res.ok) {
         const message =
           res.status === 429
-            ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
+            ? 'Muitas requisições. Tente novamente em alguns segundos.'
             : data.error || 'Erro ao salvar lead';
         showToast(message, 'error');
         return;
@@ -1104,7 +1104,7 @@ const App = () => {
     try {
       const current = new Date(lead.next_contact);
       if (Number.isNaN(current.getTime())) {
-        showToast('Data invÃƒÂ¡lida', 'error');
+        showToast('Data inválida', 'error');
         return;
       }
       const next = new Date(current);
@@ -1135,7 +1135,7 @@ const App = () => {
 
   const handleAddChannel = async () => {
     if (!newChannel.trim()) {
-      showToast('Nome do canal ÃƒÂ© obrigatÃƒÂ³rio', 'error');
+      showToast('Nome do canal é obrigatório', 'error');
       return;
     }
     try {
@@ -1222,8 +1222,8 @@ const App = () => {
       const failed = responses.find((res) => !res || !res.ok);
       if (failed) {
         const message = failed?.status === 429
-          ? 'Muitas requisiÃƒÂ§ÃƒÂµes. Tente novamente em alguns segundos.'
-          : 'Algumas atualizaÃƒÂ§ÃƒÂµes falharam';
+          ? 'Muitas requisições. Tente novamente em alguns segundos.'
+          : 'Algumas atualizações falharam';
         showToast(message, 'error');
       } else {
         showToast(successMessage, 'success');
@@ -1249,7 +1249,7 @@ const App = () => {
 
   const bulkReassignOwner = async () => {
     if (!bulkOwnerId) {
-      showToast('Escolha um novo responsÃƒÂ¡vel', 'error');
+      showToast('Escolha um novo responsável', 'error');
       return;
     }
     await applyBulkUpdate(
@@ -1541,7 +1541,7 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    UsuÃƒÂ¡rio (login)
+                    Usuário (login)
                   </label>
                   <input
                     type="text"
@@ -1574,7 +1574,7 @@ const App = () => {
             )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                {authMode === 'login' ? 'Email ou usuÃƒÂ¡rio' : 'Email'}
+                {authMode === 'login' ? 'Email ou usuário' : 'Email'}
               </label>
               <input
                 type={authMode === 'login' ? 'text' : 'email'}
@@ -1654,7 +1654,7 @@ const App = () => {
             <button
               onClick={() => openProfileSettings('me')}
               className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
-              title="ConfiguraÃƒÂ§ÃƒÂµes e perfil"
+              title="Configurações e perfil"
             >
               Perfil
             </button>
@@ -1701,7 +1701,7 @@ const App = () => {
                 className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
                 aria-hidden
               >
-                Ã¢â€“Â¾
+                ▾
               </span>
             </div>
           </button>
@@ -1830,7 +1830,7 @@ const App = () => {
                       </p>
                       {responsible && (
                         <p className="text-xs text-slate-500">
-                          ResponsÃƒÂ¡vel: {responsible}
+                          Responsável: {responsible}
                         </p>
                       )}
                     </div>
@@ -1907,7 +1907,7 @@ const App = () => {
                       {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {lead.owner || lead.responsible_name || 'Sem responsÃƒÂ¡vel'}
+                      {lead.owner || lead.responsible_name || 'Sem responsável'}
                     </p>
                     {lead.first_contact && (
                       <p className="text-[11px] text-slate-500">
@@ -2120,7 +2120,7 @@ const App = () => {
                   onChange={(e) => setBulkOwnerId(e.target.value)}
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
                 >
-                  <option value="">ResponsÃƒÂ¡vel</option>
+                  <option value="">Responsável</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -2355,7 +2355,7 @@ const App = () => {
                         <p className="text-xs text-slate-500">Nenhum lead</p>
                       )}
                     </div>
-                    {/* ReatribuiÃƒÂ§ÃƒÂ£o em massa por coluna removida para simplificar Kanban; drag-and-drop jÃƒÂ¡ atualiza */}
+                    {/* Reatribuição em massa por coluna removida para simplificar Kanban; drag-and-drop já atualiza */}
                   </div>
                 );
               })}
@@ -2484,7 +2484,7 @@ const App = () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
                     <option value={user?.id || ''}>
-                      {user?.name ? `${user.name} (VocÃƒÂª)` : 'Selecione'}
+                      {user?.name ? `${user.name} (Você)` : 'Selecione'}
                     </option>
                     {users
                       .filter((u) => u.id !== user?.id)
@@ -2729,12 +2729,12 @@ const App = () => {
                     htmlFor="lead-private"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    VisÃƒÂ­vel apenas para mim
+                    Visível apenas para mim
                   </label>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ObservaÃƒÂ§ÃƒÂµes
+                    Observações
                   </label>
                   <textarea
                     value={leadForm.notes}
@@ -2799,7 +2799,7 @@ const App = () => {
                         : 'bg-slate-100 text-slate-700'
                         }`}
                     >
-                      UsuÃƒÂ¡rios
+                      Usuários
                     </button>
                   )}
                 </div>
@@ -2875,7 +2875,7 @@ const App = () => {
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-800">
-                      {userForm.id ? 'Editar usuÃƒÂ¡rio' : 'Novo usuÃƒÂ¡rio'}
+                      {userForm.id ? 'Editar usuário' : 'Novo usuário'}
                     </h3>
                     <button
                       onClick={startNewUser}
@@ -2895,7 +2895,7 @@ const App = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">UsuÃƒÂ¡rio (login)</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Usuário (login)</label>
                       <input
                         type="text"
                         value={userForm.username}
@@ -2959,7 +2959,7 @@ const App = () => {
                       onClick={saveAdminUser}
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
                     >
-                      {userForm.id ? 'Salvar alteraÃƒÂ§ÃƒÂµes' : 'Criar usuÃƒÂ¡rio'}
+                      {userForm.id ? 'Salvar alterações' : 'Criar usuário'}
                     </button>
                   </div>
                   <div className="border-t border-slate-200 pt-4">
@@ -2972,7 +2972,7 @@ const App = () => {
                             <th className="py-2 px-2">Email</th>
                             <th className="py-2 px-2">Telefone</th>
                             <th className="py-2 px-2">Papel</th>
-                            <th className="py-2 px-2 text-right">AÃƒÂ§ÃƒÂµes</th>
+                            <th className="py-2 px-2 text-right">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3004,7 +3004,7 @@ const App = () => {
                                 colSpan={5}
                                 className="py-3 text-center text-slate-500 text-xs"
                               >
-                                Nenhum usuÃƒÂ¡rio cadastrado
+                                Nenhum usuário cadastrado
                               </td>
                             </tr>
                           )}
