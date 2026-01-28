@@ -55,6 +55,7 @@ jobs:
           echo "🔄 Reiniciando backend..."
           npx pm2 delete crm-backend || true
           npx pm2 start server.js --name crm-backend
+          npx pm2 save
           
           # 6. Build do frontend
           echo "🎨 Buildando frontend..."
@@ -75,13 +76,14 @@ jobs:
           
           # 8. Ajustar permissões
           echo "🔐 Ajustando permissões..."
-          sudo chown -R bhseletrica-crm:www-data "$APP_PATH/public"
+          sudo chown -R bhs-crm:www-data "$APP_PATH/public"
           sudo chmod -R 755 "$APP_PATH/public"
           
           # 9. Validar backend
           echo "🔍 Validando backend..."
           sleep 5
-          curl -I http://localhost:3001/api/ping || echo "❌ Backend não responde."
+          npx pm2 status crm-backend
+          curl -I http://localhost:3001/api/ping || { echo "❌ Backend não responde."; exit 1; }
           
           # 10. Reiniciar Nginx
           echo "🌐 Reiniciando Nginx..."

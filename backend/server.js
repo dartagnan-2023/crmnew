@@ -14,8 +14,16 @@ const jwt = require('jsonwebtoken');
 const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
-
 const app = express();
+
+// Error handling global
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+  // Não sair violentamente, apenas logar. PM2 cuidará de reinicializar se necessário.
+});
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
