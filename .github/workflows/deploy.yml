@@ -53,6 +53,13 @@ jobs:
           
           # 5. Reiniciar backend
           echo "🔄 Reiniciando backend..."
+          
+          # Limpeza agressiva: matar qualquer processo na porta 3001 (caso PM2 falhe)
+          sudo fuser -k 3001/tcp || true
+          
+          # Verificar espaço em disco (evitar 502 por falta de logs/tmp)
+          df -h | grep '^/'
+          
           npx pm2 delete crm-backend || true
           npx pm2 start server.js --name crm-backend
           npx pm2 save
@@ -92,9 +99,13 @@ jobs:
           
           # 10. Debugar Nginx se necessário
           echo "📋 Verificando configuração do Nginx..."
+          ls -la /etc/nginx/sites-enabled/
           cat /etc/nginx/sites-enabled/crm.bhseletrica.com.br.conf || true
           
-          # 10. Reiniciar Nginx
+          echo "📋 Verificando quem está ouvindo nas portas..."
+          sudo netstat -tulpn | grep LISTEN || true
+          
+          # 11. Reiniciar Nginx
           echo "🌐 Reiniciando Nginx..."
           sudo nginx -t && sudo systemctl restart nginx
           
