@@ -16,7 +16,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const ADMIN_EMAIL = 'marketing@bhseletronica.com.br';
 const ADMIN_USERNAME = 'marketing';
@@ -1017,6 +1017,7 @@ app.post('/api/webhook/manychat', async (req, res) => {
 const bootstrap = async () => {
   app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/api/health`);
   });
   // Inicializa planilhas e admin em segundo plano (não bloqueia start)
   ensureInitialized().catch((err) => {

@@ -23,7 +23,7 @@ jobs:
         script: |
           set -e
           echo "🚀 INICIANDO DEPLOY COMPLETO"
-          APP_PATH="/home/bhseletrica-crm/htdocs/crm.bhseletrica.com.br"
+          APP_PATH="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
           
           # 1. Atualizar código do repositório
           echo "📥 Atualizando código..."
@@ -41,13 +41,13 @@ jobs:
             echo "⚠️ Backup não encontrado. Usando .env atual."
           fi
           
-          # 3. Enforçar PORT=3000
-          sed -i 's/^PORT=.*/PORT=3000/' .env
-          grep -q "^PORT=" .env || echo "PORT=3000" >> .env
+          # 3. Enforçar PORT=3001
+          sed -i 's/^PORT=.*/PORT=3001/' .env
+          grep -q "^PORT=" .env || echo "PORT=3001" >> .env
           
           # 4. Instalar dependências do backend
           echo "📦 Instalando dependências do backend..."
-          export NVM_DIR="/home/bhseletrica-crm/.nvm"
+          export NVM_DIR="/home/bhs-crm/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           
@@ -59,7 +59,7 @@ jobs:
           # 6. Build do frontend
           echo "🎨 Buildando frontend..."
           cd "$APP_PATH/frontend"
-          export NVM_DIR="/home/bhseletrica-crm/.nvm"
+          export NVM_DIR="/home/bhs-crm/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           npm install
           CI=false npm run build
@@ -81,7 +81,7 @@ jobs:
           # 9. Validar backend
           echo "🔍 Validando backend..."
           sleep 5
-          curl -I http://localhost:3000/api/ping || echo "❌ Backend não responde."
+          curl -I http://localhost:3001/api/ping || echo "❌ Backend não responde."
           
           # 10. Reiniciar Nginx
           echo "🌐 Reiniciando Nginx..."
