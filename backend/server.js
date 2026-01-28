@@ -1023,13 +1023,17 @@ app.post('/api/webhook/manychat', async (req, res) => {
 });
 
 const bootstrap = async () => {
+  console.log(`🚀 Iniciando servidor na porta ${PORT}...`);
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor rodando na porta ${PORT} (0.0.0.0)`);
-    console.log(`Health check: http://127.0.0.1:${PORT}/api/health`);
+    console.log(`✅ Servidor escutando em 0.0.0.0:${PORT}`);
+    console.log(`🔗 Health check: http://127.0.0.1:${PORT}/api/health`);
   });
   // Inicializa planilhas e admin em segundo plano (não bloqueia start)
-  ensureInitialized().catch((err) => {
-    console.error('Erro ao preparar storage:', err);
+  console.log('📦 Iniciando inicialização do storage (Google Sheets)...');
+  ensureInitialized().then(() => {
+    console.log('✅ Storage inicializado com sucesso.');
+  }).catch((err) => {
+    console.error('❌ Erro ao preparar storage:', err);
   });
 };
 

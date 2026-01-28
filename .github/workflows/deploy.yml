@@ -97,10 +97,25 @@ jobs:
             exit 1
           }
           
-          # 10. Debugar Nginx se necessário
+          # 10. Debugar e Corrigir Nginx
           echo "📋 Verificando configuração do Nginx..."
-          ls -la /etc/nginx/sites-enabled/
-          cat /etc/nginx/sites-enabled/crm.bhseletrica.com.br.conf || true
+          NGINX_CONF="/etc/nginx/sites-enabled/crm.bhseletrica.com.br.conf"
+          
+          if [ -f "$NGINX_CONF" ]; then
+            echo "✅ Arquivo Nginx encontrado. Auditando proxy_pass..."
+            cat "$NGINX_CONF" | grep "proxy_pass"
+            
+            # Corrigir automaticamente se estiver usando localhost ou porta 3000
+            echo "🔧 Aplicando correções preventivas no Nginx (Porta 3001 + IPv4)..."
+            sudo sed -i 's/proxy_pass http:\/\/localhost:3000/proxy_pass http:\/\/127.0.0.1:3001/g' "$NGINX_CONF"
+            sudo sed -i 's/proxy_pass http:\/\/127.0.0.1:3000/proxy_pass http:\/\/127.0.0.1:3001/g' "$NGINX_CONF"
+            sudo sed -i 's/proxy_pass http:\/\/localhost:3001/proxy_pass http:\/\/127.0.0.1:3001/g' "$NGINX_CONF"
+            
+            echo "✅ Nova configuração (proxy_pass):"
+            cat "$NGINX_CONF" | grep "proxy_pass"
+          else
+            echo "⚠️  Arquivo $NGINX_CONF não encontrado. Pulando patch."
+          fi
           
           echo "📋 Verificando quem está ouvindo nas portas..."
           sudo netstat -tulpn | grep LISTEN || true
