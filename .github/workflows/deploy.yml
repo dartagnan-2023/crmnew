@@ -83,7 +83,16 @@ jobs:
           echo "🔍 Validando backend..."
           sleep 5
           npx pm2 status crm-backend
-          curl -I http://localhost:3001/api/ping || { echo "❌ Backend não responde."; exit 1; }
+          curl -I http://127.0.0.1:3001/api/ping || { 
+            echo "❌ Backend não responde em 127.0.0.1:3001."
+            echo "📋 LOGS PM2:"
+            npx pm2 logs crm-backend --lines 50 --no-daemon & sleep 5 && kill $!
+            exit 1
+          }
+          
+          # 10. Debugar Nginx se necessário
+          echo "📋 Verificando configuração do Nginx..."
+          cat /etc/nginx/sites-enabled/crm.bhseletrica.com.br.conf || true
           
           # 10. Reiniciar Nginx
           echo "🌐 Reiniciando Nginx..."

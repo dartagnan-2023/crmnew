@@ -1023,9 +1023,9 @@ app.post('/api/webhook/manychat', async (req, res) => {
 });
 
 const bootstrap = async () => {
-  app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
-    console.log(`Health check: http://localhost:${PORT}/api/health`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor rodando na porta ${PORT} (0.0.0.0)`);
+    console.log(`Health check: http://127.0.0.1:${PORT}/api/health`);
   });
   // Inicializa planilhas e admin em segundo plano (não bloqueia start)
   ensureInitialized().catch((err) => {
