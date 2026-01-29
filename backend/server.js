@@ -609,13 +609,14 @@ const filterLeadsByUser = (leads, user, query) => {
   }
 
   const userId = String(user.id);
-  const userNameNorm = normalizeName(user.name);
+  const userNames = [user.name, user.username].filter(Boolean).map((val) => normalizeName(val));
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
     const isOutOfScope = normalizeBool(l.is_out_of_scope);
     if (isOutOfScope) return false;
     const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
-    const ownerMatchName = normalizeName(l.owner || l.responsible_name) === userNameNorm;
+    const ownerNormalized = normalizeName(l.owner || l.responsible_name);
+    const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
 
     const ownerMatches = ownerMatchId || ownerMatchName;
 
