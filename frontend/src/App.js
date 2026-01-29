@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -186,6 +186,7 @@ const App = () => {
     role: 'vendedor',
   });
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
+  const pendingLeadsRef = useRef(null);
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkOwnerId, setBulkOwnerId] = useState('');
   const [loadingData, setLoadingData] = useState(false);
@@ -392,7 +393,12 @@ const App = () => {
         cache: 'no-store',
       });
       const data = await res.json();
-      setLeads(data);
+      if (!selectedLeadIds.length) {
+        setLeads(data);
+        pendingLeadsRef.current = null;
+      } else {
+        pendingLeadsRef.current = data;
+      }
     } catch (err) {
       console.error('Erro ao carregar leads:', err);
     }
@@ -672,6 +678,13 @@ const App = () => {
     }
     return base;
   }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
+
+  useEffect(() => {
+    if (!selectedLeadIds.length && pendingLeadsRef.current) {
+      setLeads(pendingLeadsRef.current);
+      pendingLeadsRef.current = null;
+    }
+  }, [selectedLeadIds]);
 
   const sorter = useCallback(
     (a, b) => {
