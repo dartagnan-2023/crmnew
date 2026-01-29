@@ -824,9 +824,11 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 
   const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
   const ownerMatchId = String(leadOwnerId) === String(req.user.id);
-  const ownerMatchName =
-    normalizeName(leads[idx].owner || leads[idx].responsible_name) ===
-    normalizeName(req.user.name);
+    const ownerNames = [req.user.name, req.user.username]
+      .filter(Boolean)
+      .map((val) => normalizeName(val));
+    const ownerNormalized = normalizeName(leads[idx].owner || leads[idx].responsible_name);
+    const ownerMatchName = ownerNames.some((name) => name && ownerNormalized === name);
   const isOwner = ownerMatchId || ownerMatchName;
 
   const hasOtherChanges = (() => {
