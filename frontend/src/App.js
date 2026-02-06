@@ -2108,15 +2108,15 @@ const App = () => {
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
               <span className="text-slate-500 text-xs">Disponíveis: {selectableLeadIds.length}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap md:flex-nowrap items-center gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <span className="text-[10px] uppercase font-bold text-slate-400">Status</span>
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value)}
                   className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  <option value="">Selecionar...</option>
+                  <option value="">Status...</option>
                   {STATUS_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -2126,22 +2126,22 @@ const App = () => {
                 <button
                   onClick={bulkChangeStatus}
                   disabled={!selectedEditableCount || !bulkStatus}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap"
                 >
                   Aplicar
                 </button>
               </div>
 
-              <div className="w-[1px] h-6 bg-slate-200 hidden md:block"></div>
+              <div className="w-[1px] h-6 bg-slate-200 hidden md:block flex-shrink-0"></div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Responsável</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Dono</span>
                 <select
                   value={bulkOwnerId}
                   onChange={(e) => setBulkOwnerId(e.target.value)}
                   className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none min-w-[140px]"
                 >
-                  <option value="">Selecionar...</option>
+                  <option value="">Responsável...</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
@@ -2151,18 +2151,18 @@ const App = () => {
                 <button
                   onClick={bulkReassignOwner}
                   disabled={!selectedCount || !bulkOwnerId}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors whitespace-nowrap"
                 >
                   Mover
                 </button>
               </div>
 
-              <div className="w-[1px] h-6 bg-slate-200 hidden md:block"></div>
+              <div className="w-[1px] h-6 bg-slate-200 hidden md:block flex-shrink-0"></div>
 
               <button
                 onClick={bulkMarkContactDone}
                 disabled={!selectedEditableCount}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-2"
+                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
               >
                 <span>Contato feito</span>
               </button>
