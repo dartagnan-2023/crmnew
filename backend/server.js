@@ -610,6 +610,19 @@ const filterLeadsByUser = (leads, user, query) => {
 
   const userId = String(user.id);
   const userNames = [user.name, user.username].filter(Boolean).map((val) => normalizeName(val));
+
+  // Novo: Representante só vê os seus próprios leads (não vê os dos outros, nem públicos)
+  if (user.role === 'representante') {
+    return leads.filter((l) => {
+      const isOutOfScope = normalizeBool(l.is_out_of_scope);
+      if (isOutOfScope) return false;
+      const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
+      const ownerNormalized = normalizeName(l.owner || l.responsible_name);
+      const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
+      return ownerMatchId || ownerMatchName;
+    });
+  }
+
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
     const isOutOfScope = normalizeBool(l.is_out_of_scope);
@@ -697,14 +710,22 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
 
   const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
   const id = nextId(leads);
+  const isRepresentante = req.user.role === 'representante';
   const hasOwnerInput = Boolean(ownerId || owner);
-  let ownerUser =
-    users.find((u) => String(u.id) === String(ownerId)) ||
-    users.find((u) => String(u.id) === String(req.user.id));
-  if (!hasOwnerInput) {
-    const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
-    if (candidates.length) {
-      ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
+  let ownerUser;
+
+  if (isRepresentante) {
+    // Representante sempre cadastra para si mesmo
+    ownerUser = users.find((u) => String(u.id) === String(req.user.id));
+  } else {
+    ownerUser =
+      users.find((u) => String(u.id) === String(ownerId)) ||
+      users.find((u) => String(u.id) === String(req.user.id));
+    if (!hasOwnerInput) {
+      const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
+      if (candidates.length) {
+        ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
+      }
     }
   }
   const channelName = req.body.channel_name || '';
@@ -824,11 +845,11 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
 
   const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
   const ownerMatchId = String(leadOwnerId) === String(req.user.id);
-    const ownerNames = [req.user.name, req.user.username]
-      .filter(Boolean)
-      .map((val) => normalizeName(val));
-    const ownerNormalized = normalizeName(leads[idx].owner || leads[idx].responsible_name);
-    const ownerMatchName = ownerNames.some((name) => name && ownerNormalized === name);
+  const ownerNames = [req.user.name, req.user.username]
+    .filter(Boolean)
+    .map((val) => normalizeName(val));
+  const ownerNormalized = normalizeName(leads[idx].owner || leads[idx].responsible_name);
+  const ownerMatchName = ownerNames.some((name) => name && ownerNormalized === name);
   const isOwner = ownerMatchId || ownerMatchName;
 
   const hasOtherChanges = (() => {
@@ -877,7 +898,12 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     return false;
   })();
 
-  // Todos os usuários autenticados podem editar qualquer lead (incluindo reatribuir),
+  // Novo: Se for representante, só pode editar o que ele enxerga (seus próprios leads)
+  if (req.user.role === 'representante' && !isOwner) {
+    return res.status(403).json({ error: 'Acesso negado: voce so pode editar seus proprios leads' });
+  }
+
+  // Todos os usuários autenticados (exceto representantes) podem editar qualquer lead (incluindo reatribuir),
   // conforme regra do CRM.
 
   if (name) leads[idx].name = name;
@@ -915,11 +941,25 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
   const targetId = String(req.params.id || '').trim();
   try {
     const { items: leads } = await loadTable('leads');
-    const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
-    if (filtered.length === leads.length) {
-      return res.status(404).json({ error: 'Lead nao encontrado' });
+    const lead = leads.find((l) => String(l.id || '').trim() === targetId);
+    if (!lead) return res.status(404).json({ error: 'Lead nao encontrado' });
+
+    // Novo: Se for representante, só pode excluir o que ele enxerga (seus próprios leads)
+    if (req.user.role === 'representante') {
+      const userId = String(req.user.id);
+      const userNames = [req.user.name, req.user.username].filter(Boolean).map((val) => normalizeName(val));
+      const leadOwnerId = lead.ownerId || lead.user_id || lead.owner_id || '';
+      const ownerMatchId = String(leadOwnerId) === userId;
+      const ownerNormalized = normalizeName(lead.owner || lead.responsible_name);
+      const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
+      const isOwner = ownerMatchId || ownerMatchName;
+
+      if (!isOwner) {
+        return res.status(403).json({ error: 'Acesso negado: voce so pode excluir seus proprios leads' });
+      }
     }
 
+    const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
     await saveTable('leads', filtered);
 
     // Releitura imediata para garantir persistencia real na planilha

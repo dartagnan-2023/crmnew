@@ -627,7 +627,12 @@ const App = () => {
     }
 
     if (segmentFilter !== 'all') {
-      base = base.filter((l) => (l.segment || '') === segmentFilter);
+      base = base.filter((l) => {
+        const norm = normalizeOptionValue(l.segment);
+        if (segmentFilter === 'montador') return norm.includes('montador');
+        if (segmentFilter === 'usuario_final') return norm === 'usuario final';
+        return norm === segmentFilter;
+      });
     }
 
     if (customerFilter !== 'all') {
@@ -2957,6 +2962,7 @@ const App = () => {
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                       >
                         <option value="vendedor">Vendedor</option>
+                        <option value="representante">Representante</option>
                         <option value="admin">Admin</option>
                       </select>
                     </div>
@@ -3029,67 +3035,70 @@ const App = () => {
               )}
             </div>
           </div>
-        )}
+        )
+        }
 
-        {showChannelModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-slate-200">
-                <h2 className="text-lg font-semibold text-slate-900">Canais</h2>
-              </div>
-              <div className="p-4 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Novo canal
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newChannel}
-                      onChange={(e) => setNewChannel(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
-                    />
-                    <button
-                      onClick={handleAddChannel}
-                      className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
+        {
+          showChannelModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b border-slate-200">
+                  <h2 className="text-lg font-semibold text-slate-900">Canais</h2>
                 </div>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {channels.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                    >
-                      <span>{c.name}</span>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Novo canal
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newChannel}
+                        onChange={(e) => setNewChannel(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
                       <button
-                        onClick={() => handleDeleteChannel(c.id)}
-                        className="text-xs text-red-600"
+                        onClick={handleAddChannel}
+                        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg"
                       >
-                        Excluir
+                        Adicionar
                       </button>
                     </div>
-                  ))}
-                  {channels.length === 0 && (
-                    <p className="text-xs text-slate-500">
-                      Nenhum canal cadastrado
-                    </p>
-                  )}
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {channels.map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      >
+                        <span>{c.name}</span>
+                        <button
+                          onClick={() => handleDeleteChannel(c.id)}
+                          className="text-xs text-red-600"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    ))}
+                    {channels.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        Nenhum canal cadastrado
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4 border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={() => setShowChannelModal(false)}
+                    className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                  >
+                    Fechar
+                  </button>
                 </div>
               </div>
-              <div className="p-4 border-t border-slate-200 flex justify-end">
-                <button
-                  onClick={() => setShowChannelModal(false)}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
-                >
-                  Fechar
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+          )
+        }
       </div>
     </div>
   );
