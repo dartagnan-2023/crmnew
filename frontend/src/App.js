@@ -2104,19 +2104,19 @@ const App = () => {
           </div>
 
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-3 text-sm flex-wrap">
               <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
-              <span className="text-slate-500">Selecionáveis na lista: {selectableLeadIds.length}</span>
+              <span className="text-slate-500 text-xs">Disponíveis: {selectableLeadIds.length}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-500">Status</label>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Status</span>
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  <option value="">Selecionar</option>
+                  <option value="">Selecionar...</option>
                   {STATUS_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -2126,39 +2126,45 @@ const App = () => {
                 <button
                   onClick={bulkChangeStatus}
                   disabled={!selectedEditableCount || !bulkStatus}
-                  className="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
                 >
-                  Aplicar status
+                  Aplicar
                 </button>
               </div>
+
+              <div className="w-[1px] h-6 bg-slate-200 hidden md:block"></div>
+
               <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-500">Reatribuir</label>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Responsável</span>
                 <select
                   value={bulkOwnerId}
                   onChange={(e) => setBulkOwnerId(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white min-w-[160px]"
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none min-w-[140px]"
                 >
-                  <option value="">Responsável</option>
+                  <option value="">Selecionar...</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name} ({u.role})
+                      {u.name}
                     </option>
                   ))}
                 </select>
                 <button
                   onClick={bulkReassignOwner}
                   disabled={!selectedCount || !bulkOwnerId}
-                  className="px-3 py-2 text-sm rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors"
                 >
-                  Reatribuir
+                  Mover
                 </button>
               </div>
+
+              <div className="w-[1px] h-6 bg-slate-200 hidden md:block"></div>
+
               <button
                 onClick={bulkMarkContactDone}
                 disabled={!selectedEditableCount}
-                className="px-3 py-2 text-sm rounded-lg bg-slate-800 text-white disabled:opacity-50"
+                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-2"
               >
-                Contato feito
+                <span>Contato feito</span>
               </button>
             </div>
           </div>
