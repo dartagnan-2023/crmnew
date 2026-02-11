@@ -425,6 +425,7 @@ const App = () => {
       });
       if (!res.ok) return;
       const data = await res.json();
+      console.log(`[DEBUG] loadUsers returned ${data.length} users:`, data);
       setUsers(data);
     } catch (err) {
       console.error('Erro ao carregar usuarios:', err);

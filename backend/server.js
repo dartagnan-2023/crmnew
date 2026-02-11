@@ -451,7 +451,9 @@ app.use('/api', (req, res, next) => {
 // ===================== USERS =====================
 app.get('/api/users', authMiddleware, async (req, res) => {
   const { items: users } = await loadTable('users');
-  return res.json(users.map(sanitizeUser));
+  console.log(`[DEBUG] /api/users called by ${req.user.name} (Role: ${req.user.role}). Total users in sheet: ${users.length}`);
+  const sanitized = users.map(sanitizeUser);
+  return res.json(sanitized);
 });
 
 app.put('/api/users/me', authMiddleware, async (req, res) => {
@@ -614,32 +616,38 @@ const filterLeadsByUser = (leads, user, query) => {
   // Novo: Representante só vê os seus próprios leads (não vê os dos outros, nem públicos)
   if (user.role === 'representante') {
     return leads.filter((l) => {
+      const isPrivate = normalizeBool(l.is_private);
       const isOutOfScope = normalizeBool(l.is_out_of_scope);
       if (isOutOfScope) return false;
       const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
       const ownerNormalized = normalizeName(l.owner || l.responsible_name);
       const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
-      return ownerMatchId || ownerMatchName;
+      const ownerMatches = ownerMatchId || ownerMatchName;
+      return ownerMatches || !isPrivate; // Vê seus próprios leads ou públicos
     });
   }
 
+  // Vendedor: vê tudo, exceto o que for explicitamente privado de outro usuário.
+  // IMPORTANTE: Leads "Novo" (públicos) devem ser sempre visíveis.
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
     const isOutOfScope = normalizeBool(l.is_out_of_scope);
     if (isOutOfScope) return false;
+
     const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
     const ownerNormalized = normalizeName(l.owner || l.responsible_name);
     const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
-
     const ownerMatches = ownerMatchId || ownerMatchName;
-
-    if (isPrivate && !ownerMatches) return false;
 
     if (query.userId) {
       const target = String(query.userId);
-      return (String(l.ownerId) === target || String(l.user_id || '') === target) && (!isPrivate || ownerMatches);
+      const targetMatches = (String(l.ownerId) === target || String(l.user_id || '') === target);
+      // Se filtrou por um usuário específico, mostra se for público ou se for o dono.
+      return targetMatches && (!isPrivate || ownerMatches);
     }
-    return ownerMatches || !isPrivate; // públicos aparecem para todos
+
+    // Se não houver filtro de userId, vendedores veem seus próprios leads E todos os públicos.
+    return ownerMatches || !isPrivate;
   });
 };
 
