@@ -58,6 +58,11 @@ const normalizeBool = (val) => {
 };
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SHEET_USERS = process.env.SHEET_USERS || 'users';
+const SHEET_LEADS = process.env.SHEET_LEADS || process.env.SHEET_NAME || 'leads';
+const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
+const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
+
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
@@ -160,20 +165,58 @@ const writeSheet = async (sheetName, headers, rows) => {
 };
 
 const ensureHeaders = async () => {
-  for (const [sheet, expectedHeaders] of Object.entries(SHEETS_CONFIG)) {
+  const configs = {
+    [SHEET_USERS]: SHEETS_CONFIG.users,
+    [SHEET_CHANNELS]: SHEETS_CONFIG.channels,
+    [SHEET_NEGATIVE_TERMS]: SHEETS_CONFIG.negative_terms,
+    [SHEET_LEADS]: SHEETS_CONFIG.leads,
+  };
+
+  for (const [sheet, expectedHeaders] of Object.entries(configs)) {
     const { headers, rows } = await readSheet(sheet);
     if (!headers.length) {
+      console.log(`[INIT] Criando headers para ${sheet}...`);
       await writeSheet(sheet, expectedHeaders, rows);
-    } else if (headers.join(',') !== expectedHeaders.join(',')) {
-      // regrava cabecalho mantendo dados existentes com as chaves conhecidas
-      const normalizedRows = rows.map((row) => {
-        const obj = {};
-        expectedHeaders.forEach((h) => {
-          obj[h] = row[h] ?? '';
+    } else {
+      // Verifica se todos os headers esperados existem (mesmo que com nomes levemente diferentes)
+      const canonicalHeaders = headers.map(h => normalizeName(h));
+      const missing = expectedHeaders.filter(h => !canonicalHeaders.includes(normalizeName(h)));
+
+      if (missing.length > 0) {
+        console.log(`[WARN] Headers da planilha ${sheet} incompletos. Faltando: ${missing.join(', ')}. Normalizando...`);
+        const normalizedRows = rows.map((oldRow) => {
+          const newRow = {};
+          // Mapeamento extra de nomes comuns em português
+          const aliasMap = {
+            'id': ['id', 'ID'],
+            'name': ['name', 'nome', 'contato'],
+            'company': ['company', 'empresa', 'cliente'],
+            'status': ['status', 'situacao', 'estagio'],
+            'owner': ['owner', 'dono', 'responsavel', 'vendedor'],
+            'ownerId': ['ownerid', 'owner_id', 'user_id', 'id_vendedor', 'responsible_id'],
+            'is_private': ['is_private', 'privado', 'particular'],
+            'is_out_of_scope': ['is_out_of_scope', 'fora_de_escopo', 'descartado'],
+          };
+
+          expectedHeaders.forEach((h) => {
+            let val = oldRow[h];
+            if (val === undefined || val === '') {
+              const aliases = aliasMap[h] || [h];
+              for (const alias of aliases) {
+                const canonicalAlias = normalizeName(alias);
+                const foundKey = Object.keys(oldRow).find(key => normalizeName(key) === canonicalAlias);
+                if (foundKey) {
+                  val = oldRow[foundKey];
+                  break;
+                }
+              }
+            }
+            newRow[h] = val || '';
+          });
+          return newRow;
         });
-        return obj;
-      });
-      await writeSheet(sheet, expectedHeaders, normalizedRows);
+        await writeSheet(sheet, expectedHeaders, normalizedRows);
+      }
     }
   }
 };
@@ -450,8 +493,8 @@ app.use('/api', (req, res, next) => {
 // ===================== USERS =====================
 // ===================== USERS =====================
 app.get('/api/users', authMiddleware, async (req, res) => {
-  const { items: users } = await loadTable('users');
-  console.log(`[DEBUG] /api/users called by ${req.user.name} (Role: ${req.user.role}). Total users in sheet: ${users.length}`);
+  const { items: users } = await loadTable(SHEET_USERS);
+  console.log(`[DEBUG] /api/users called by ${req.user.name} (Role: ${req.user.role}). Total in sheet: ${users.length}`);
   const sanitized = users.map(sanitizeUser);
   return res.json(sanitized);
 });
@@ -612,41 +655,44 @@ const filterLeadsByUser = (leads, user, query) => {
 
   const userId = String(user.id);
   const userNames = [user.name, user.username].filter(Boolean).map((val) => normalizeName(val));
+  const uname = normalizeName(user.name);
 
-  // Novo: Representante só vê os seus próprios leads (não vê os dos outros, nem públicos)
+  // Se for representante, vê os leads dele ou os públicos.
   if (user.role === 'representante') {
     return leads.filter((l) => {
       const isPrivate = normalizeBool(l.is_private);
       const isOutOfScope = normalizeBool(l.is_out_of_scope);
       if (isOutOfScope) return false;
-      const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
-      const ownerNormalized = normalizeName(l.owner || l.responsible_name);
+
+      const ownerMatchId = String(l.ownerId || l.user_id || l.owner_id || '') === userId;
+      const ownerNormalized = normalizeName(l.owner || l.responsible_name || l.responsavel);
       const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
-      const ownerMatches = ownerMatchId || ownerMatchName;
-      return ownerMatches || !isPrivate; // Vê seus próprios leads ou públicos
+
+      return ownerMatchId || ownerMatchName || !isPrivate;
     });
   }
 
-  // Vendedor: vê tudo, exceto o que for explicitamente privado de outro usuário.
-  // IMPORTANTE: Leads "Novo" (públicos) devem ser sempre visíveis.
+  // Vendedor (Ines): Assume visão ampla por padrão, especialmente para novos leads.
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
     const isOutOfScope = normalizeBool(l.is_out_of_scope);
     if (isOutOfScope) return false;
 
-    const ownerMatchId = String(l.ownerId || l.user_id || '') === userId;
-    const ownerNormalized = normalizeName(l.owner || l.responsible_name);
-    const ownerMatchName = userNames.some((name) => name && ownerNormalized === name);
+    const ownerMatchId = String(l.ownerId || l.user_id || l.owner_id || '') === userId;
+    const ownerNormalized = normalizeName(l.owner || l.responsible_name || l.responsavel || l.vendedor);
+    const ownerMatchName = userNames.some((name) => name && (ownerNormalized.includes(name) || name.includes(ownerNormalized)));
+
     const ownerMatches = ownerMatchId || ownerMatchName;
 
+    // Se houver filtro de usuário específico (ex: selecionei um representante)
     if (query.userId) {
       const target = String(query.userId);
-      const targetMatches = (String(l.ownerId) === target || String(l.user_id || '') === target);
-      // Se filtrou por um usuário específico, mostra se for público ou se for o dono.
-      return targetMatches && (!isPrivate || ownerMatches);
+      const isTarget = (String(l.ownerId) === target || String(l.user_id || '') === target);
+      return isTarget && (!isPrivate || ownerMatches);
     }
 
-    // Se não houver filtro de userId, vendedores veem seus próprios leads E todos os públicos.
+    // Por padrão, vendedores veem seus leads, leads sem dono e todos os públicos.
+    // IMPORTANTE: Leads "novo" (públicos) devem aparecer.
     return ownerMatches || !isPrivate;
   });
 };
@@ -669,8 +715,8 @@ const hydrateLeads = (leads, channels) => {
 
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
-    loadTable('leads'),
-    loadTable('channels'),
+    loadTable(SHEET_LEADS),
+    loadTable(SHEET_CHANNELS),
   ]);
   const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
   return res.json(filtered);

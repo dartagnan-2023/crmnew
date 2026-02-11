@@ -598,10 +598,10 @@ const App = () => {
     if (ownerFilter === 'me') {
       base = base.filter((l) => {
         const oid = l._ownerId ? String(l._ownerId) : '';
-        const oname = (l.owner || l.responsible_name || '').toLowerCase();
-        const uname = (user?.name || '').toLowerCase();
+        const oname = normalizeOptionValue(l.owner || l.responsible_name);
+        const uname = normalizeOptionValue(user?.name);
         if (oid) return oid === String(user?.id);
-        return uname && oname === uname;
+        return uname && (oname === uname || oname.includes(uname) || uname.includes(oname));
       });
     } else if (ownerFilter === 'unassigned') {
       base = base.filter((l) => {
@@ -611,14 +611,14 @@ const App = () => {
       });
     } else if (ownerFilter !== 'all') {
       const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
-      const targetName = (targetUser?.name || '').toLowerCase();
+      const targetName = normalizeOptionValue(targetUser?.name);
       const targetId = String(ownerFilter);
       base = base.filter((l) => {
         const oid = l._ownerId ? String(l._ownerId) : '';
-        const oname = (l.owner || l.responsible_name || '').toLowerCase();
+        const oname = normalizeOptionValue(l.owner || l.responsible_name);
         if (oid) return oid === targetId;
-        if (targetName) return oname === targetName;
-        // fallback: compare owner name with raw filter value (caso venha nome no select/planilha antiga)
+        if (targetName) return oname === targetName || oname.includes(targetName) || targetName.includes(oname);
+        // fallback: compare owner name/id with raw filter value
         return oname === targetId.toLowerCase();
       });
     }
