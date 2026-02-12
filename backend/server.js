@@ -676,13 +676,21 @@ const filterLeadsByUser = (leads, user, query) => {
   return leads.filter((l) => {
     const isPrivate = normalizeBool(l.is_private);
     const isOutOfScope = normalizeBool(l.is_out_of_scope);
-    if (isOutOfScope) return false;
 
     const ownerMatchId = String(l.ownerId || l.user_id || l.owner_id || '') === userId;
     const ownerNormalized = normalizeName(l.owner || l.responsible_name || l.responsavel || l.vendedor);
     const ownerMatchName = userNames.some((name) => name && (ownerNormalized.includes(name) || name.includes(ownerNormalized)));
 
+    // Especial: Leads do segmento ou status 'rep comercial' são sempre visíveis para vendedores.
+    const segNorm = normalizeName(l.segment);
+    const statNorm = normalizeName(l.status);
+    const isRepComercial = segNorm.includes('rep comercial') || segNorm.includes('rep_comercial') ||
+      statNorm.includes('rep comercial') || statNorm.includes('rep_comercial');
+
     const ownerMatches = ownerMatchId || ownerMatchName;
+
+    // Se estiver fora de escopo, só mostramos se for dono ou for um "Rep Comercial" solicitado.
+    if (isOutOfScope && !ownerMatches && !isRepComercial) return false;
 
     // Se houver filtro de usuário específico (ex: selecionei um representante)
     if (query.userId) {
@@ -691,14 +699,7 @@ const filterLeadsByUser = (leads, user, query) => {
       return isTarget && (!isPrivate || ownerMatches);
     }
 
-    // Por padrão, vendedores veem seus leads, leads sem dono e todos os públicos.
-    // Especial: Leads do segmento ou status 'rep comercial' são sempre visíveis para vendedores.
-    const segNorm = normalizeName(l.segment);
-    const statNorm = normalizeName(l.status);
-    const isRepComercial = segNorm.includes('rep comercial') || segNorm.includes('rep_comercial') ||
-      statNorm.includes('rep comercial') || statNorm.includes('rep_comercial');
-
-    // IMPORTANTE: Leads "novo" (públicos) devem aparecer.
+    // Por padrão (sem filtros extras), vendedores veem seus leads, leads sem dono (públicos) e todos os 'rep comercial'.
     return ownerMatches || !isPrivate || isRepComercial;
   });
 };
