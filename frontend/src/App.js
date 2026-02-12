@@ -36,6 +36,7 @@ const SEGMENT_OPTIONS = [
   { value: 'montador', label: 'Montador de Painel' },
   { value: 'representante', label: 'Representante' },
   { value: 'usuario_final', label: 'Usuario Final' },
+  { value: 'rep_comercial', label: 'Rep Comercial' },
 ];
 
 const HIGHLIGHTED_CATEGORIES_OPTIONS = [
