@@ -692,8 +692,11 @@ const filterLeadsByUser = (leads, user, query) => {
     }
 
     // Por padrão, vendedores veem seus leads, leads sem dono e todos os públicos.
-    // Especial: Leads do segmento 'rep_comercial' são sempre visíveis para vendedores.
-    const isRepComercial = normalizeName(l.segment) === 'rep_comercial';
+    // Especial: Leads do segmento ou status 'rep comercial' são sempre visíveis para vendedores.
+    const segNorm = normalizeName(l.segment);
+    const statNorm = normalizeName(l.status);
+    const isRepComercial = segNorm.includes('rep comercial') || segNorm.includes('rep_comercial') ||
+      statNorm.includes('rep comercial') || statNorm.includes('rep_comercial');
 
     // IMPORTANTE: Leads "novo" (públicos) devem aparecer.
     return ownerMatches || !isPrivate || isRepComercial;
