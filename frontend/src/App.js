@@ -394,12 +394,8 @@ const App = () => {
         cache: 'no-store',
       });
       const data = await res.json();
-      if (!selectedLeadIds.length) {
-        setLeads(data);
-        pendingLeadsRef.current = null;
-      } else {
-        pendingLeadsRef.current = data;
-      }
+      setLeads(data);
+      pendingLeadsRef.current = null;
     } catch (err) {
       console.error('Erro ao carregar leads:', err);
     }
@@ -476,9 +472,12 @@ const App = () => {
     return () => clearTimeout(timeout);
   }, [loadingData]);
 
+  // Removemos o reset automático de seleção para evitar perda de dados ao atualizar
+  /*
   useEffect(() => {
     setSelectedLeadIds([]);
   }, [leads, user]);
+  */
 
   useEffect(() => {
     try {
@@ -534,7 +533,7 @@ const App = () => {
       if (showLeadModal || showProfileModal || savingLead) return;
       loadLeads();
       loadStats();
-    }, 10 * 1000);
+    }, 30 * 1000); // Aumentado para 30 segundos para reduzir piscadas e distrações
     return () => clearInterval(interval);
   }, [user, showLeadModal, showProfileModal, savingLead]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -686,12 +685,6 @@ const App = () => {
     return base;
   }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
 
-  useEffect(() => {
-    if (!selectedLeadIds.length && pendingLeadsRef.current) {
-      setLeads(pendingLeadsRef.current);
-      pendingLeadsRef.current = null;
-    }
-  }, [selectedLeadIds]);
 
   const sorter = useCallback(
     (a, b) => {
