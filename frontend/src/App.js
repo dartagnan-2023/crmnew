@@ -729,7 +729,18 @@ const App = () => {
 
   useEffect(() => {
     setVisibleCount(20);
-  }, [filteredLeads, sortKey, sortDir, searchTerm]);
+  }, [
+    ownerFilter,
+    statusFilter,
+    urgencyFilter,
+    segmentFilter,
+    customerFilter,
+    channelFilter,
+    campaignFilter,
+    sortKey,
+    sortDir,
+    searchTerm,
+  ]);
 
   const canEditLead = useCallback(
     (lead) => {
