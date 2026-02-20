@@ -82,9 +82,26 @@ const auth = new google.auth.JWT(
   ['https://www.googleapis.com/auth/spreadsheets']
 );
 const sheets = google.sheets({ version: 'v4', auth });
-// Cache leve de leituras das planilhas (ms). Default menor para frescor sem depender de env no tier free.
-const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 15000);
+// Cache leve de leituras das planilhas (ms).
+const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 2000); // Reduzido para 2s para mais frescor
 const cache = {};
+
+// Gerenciador de Travas (Mutex) por Tabela
+const tableLocks = new Map();
+const withTableLock = async (tableName, fn) => {
+  while (tableLocks.get(tableName)) {
+    await tableLocks.get(tableName);
+  }
+  const promise = (async () => {
+    try {
+      return await fn();
+    } finally {
+      tableLocks.delete(tableName);
+    }
+  })();
+  tableLocks.set(tableName, promise);
+  return promise;
+};
 
 app.use(cors());
 app.use(express.json());
@@ -122,8 +139,8 @@ const SHEETS_CONFIG = {
   ],
 };
 
-const readSheet = async (sheetName) => {
-  if (cache[sheetName] && Date.now() - cache[sheetName].ts < CACHE_TTL_MS) {
+const readSheet = async (sheetName, ignoreCache = false) => {
+  if (!ignoreCache && cache[sheetName] && Date.now() - cache[sheetName].ts < CACHE_TTL_MS) {
     return cache[sheetName].data;
   }
   const range = `${sheetName}!A1:Z5000`;
@@ -332,8 +349,8 @@ const sendAlertWebhook = async (leads) => {
 };
 
 // Carrega tabelas
-const loadTable = async (name) => {
-  const { headers, rows } = await readSheet(name);
+const loadTable = async (name, ignoreCache = false) => {
+  const { headers, rows } = await readSheet(name, ignoreCache);
   const expected = SHEETS_CONFIG[name] || headers;
   const normalizedHeaders = headers.length ? headers : expected;
   const items = rows.map((row) => {
@@ -514,32 +531,36 @@ app.put('/api/users/me', authMiddleware, async (req, res) => {
   if (email) users[userIdx].email = email;
   if (phone) users[userIdx].phone = phone;
   if (password) users[userIdx].password = await bcrypt.hash(password, 10);
-  await saveTable('users', users);
-  return res.json(sanitizeUser(users[userIdx]));
+  return withTableLock('users', async () => {
+    await saveTable('users', users);
+    return res.json(sanitizeUser(users[userIdx]));
+  });
 });
 
 app.post('/api/users', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { name, email, phone, password, role, username } = req.body;
-  const { items: users } = await loadTable('users');
-  const exists = users.find((u) => (u.email || '').toLowerCase() === (email || '').toLowerCase());
-  if (exists) return res.status(400).json({ error: 'Usuario ja existe' });
-  const existsUser = users.find((u) => (u.username || '').toLowerCase() === (username || '').toLowerCase());
-  if (existsUser) return res.status(400).json({ error: 'Username ja existe' });
-  const id = nextId(users);
-  const hashed = await bcrypt.hash(password || '123456', 10);
-  const user = {
-    id,
-    name,
-    username: username || email?.split('@')[0] || `user${id}`,
-    email,
-    phone: phone || '',
-    password: hashed,
-    role: role || 'vendedor',
-  };
-  users.push(user);
-  await saveTable('users', users);
-  return res.json(sanitizeUser(user));
+  return withTableLock('users', async () => {
+    const { items: users } = await loadTable('users', true);
+    const exists = users.find((u) => (u.email || '').toLowerCase() === (email || '').toLowerCase());
+    if (exists) return res.status(400).json({ error: 'Usuario ja existe' });
+    const existsUser = users.find((u) => (u.username || '').toLowerCase() === (username || '').toLowerCase());
+    if (existsUser) return res.status(400).json({ error: 'Username ja existe' });
+    const id = nextId(users);
+    const hashed = await bcrypt.hash(password || '123456', 10);
+    const user = {
+      id,
+      name,
+      username: username || email?.split('@')[0] || `user${id}`,
+      email,
+      phone: phone || '',
+      password: hashed,
+      role: role || 'vendedor',
+    };
+    users.push(user);
+    await saveTable('users', users);
+    return res.json(sanitizeUser(user));
+  });
 });
 
 app.put('/api/users/:id', authMiddleware, async (req, res) => {
@@ -560,16 +581,20 @@ app.put('/api/users/:id', authMiddleware, async (req, res) => {
   if (phone) users[idx].phone = phone;
   if (role) users[idx].role = role;
   if (password) users[idx].password = await bcrypt.hash(password, 10);
-  await saveTable('users', users);
-  return res.json(sanitizeUser(users[idx]));
+  return withTableLock('users', async () => {
+    await saveTable('users', users);
+    return res.json(sanitizeUser(users[idx]));
+  });
 });
 
 app.delete('/api/users/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { items: users } = await loadTable('users');
-  const filtered = users.filter((u) => String(u.id) !== String(req.params.id));
-  await saveTable('users', filtered);
-  return res.json({ success: true });
+  return withTableLock('users', async () => {
+    const { items: users } = await loadTable('users', true);
+    const filtered = users.filter((u) => String(u.id) !== String(req.params.id));
+    await saveTable('users', filtered);
+    return res.json({ success: true });
+  });
 });
 
 // ===================== CHANNELS =====================
@@ -582,31 +607,37 @@ app.post('/api/channels', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome obrigatorio' });
-  const { items: channels } = await loadTable('channels');
-  const id = nextId(channels);
-  const channel = { id, name };
-  channels.push(channel);
-  await saveTable('channels', channels);
-  return res.json(channel);
+  return withTableLock('channels', async () => {
+    const { items: channels } = await loadTable('channels', true);
+    const id = nextId(channels);
+    const channel = { id, name };
+    channels.push(channel);
+    await saveTable('channels', channels);
+    return res.json(channel);
+  });
 });
 
 app.put('/api/channels/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { name } = req.body;
-  const { items: channels } = await loadTable('channels');
-  const idx = channels.findIndex((c) => String(c.id) === String(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Canal nao encontrado' });
-  if (name) channels[idx].name = name;
-  await saveTable('channels', channels);
-  return res.json(channels[idx]);
+  return withTableLock('channels', async () => {
+    const { items: channels } = await loadTable('channels', true);
+    const idx = channels.findIndex((c) => String(c.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Canal nao encontrado' });
+    if (name) channels[idx].name = name;
+    await saveTable('channels', channels);
+    return res.json(channels[idx]);
+  });
 });
 
 app.delete('/api/channels/:id', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { items: channels } = await loadTable('channels');
-  const filtered = channels.filter((c) => String(c.id) !== String(req.params.id));
-  await saveTable('channels', filtered);
-  return res.json({ success: true });
+  return withTableLock('channels', async () => {
+    const { items: channels } = await loadTable('channels', true);
+    const filtered = channels.filter((c) => String(c.id) !== String(req.params.id));
+    await saveTable('channels', filtered);
+    return res.json({ success: true });
+  });
 });
 
 // ===================== NEGATIVE TERMS =====================
@@ -619,34 +650,40 @@ app.post('/api/negative-terms', apiKeyLeadsMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { term, active = true, notes = '' } = req.body;
   if (!term) return res.status(400).json({ error: 'Termo obrigatorio' });
-  const { items } = await loadTable('negative_terms');
-  const id = nextId(items);
-  const now = new Date().toISOString();
-  const row = { id, term, active: normalizeBool(active), notes, created_at: now };
-  items.push(row);
-  await saveTable('negative_terms', items);
-  return res.json(row);
+  return withTableLock('negative_terms', async () => {
+    const { items } = await loadTable('negative_terms', true);
+    const id = nextId(items);
+    const now = new Date().toISOString();
+    const row = { id, term, active: normalizeBool(active), notes, created_at: now };
+    items.push(row);
+    await saveTable('negative_terms', items);
+    return res.json(row);
+  });
 });
 
 app.put('/api/negative-terms/:id', apiKeyLeadsMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const { term, active, notes } = req.body;
-  const { items } = await loadTable('negative_terms');
-  const idx = items.findIndex((t) => String(t.id) === String(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Termo nao encontrado' });
-  if (term !== undefined) items[idx].term = term;
-  if (active !== undefined) items[idx].active = normalizeBool(active);
-  if (notes !== undefined) items[idx].notes = notes;
-  await saveTable('negative_terms', items);
-  return res.json(items[idx]);
+  return withTableLock('negative_terms', async () => {
+    const { items } = await loadTable('negative_terms', true);
+    const idx = items.findIndex((t) => String(t.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Termo nao encontrado' });
+    if (term !== undefined) items[idx].term = term;
+    if (active !== undefined) items[idx].active = normalizeBool(active);
+    if (notes !== undefined) items[idx].notes = notes;
+    await saveTable('negative_terms', items);
+    return res.json(items[idx]);
+  });
 });
 
 app.delete('/api/negative-terms/:id', apiKeyLeadsMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const { items } = await loadTable('negative_terms');
-  const filtered = items.filter((t) => String(t.id) !== String(req.params.id));
-  await saveTable('negative_terms', filtered);
-  return res.json({ success: true });
+  return withTableLock('negative_terms', async () => {
+    const { items } = await loadTable('negative_terms', true);
+    const filtered = items.filter((t) => String(t.id) !== String(req.params.id));
+    await saveTable('negative_terms', filtered);
+    return res.json({ success: true });
+  });
 });
 
 // ===================== LEADS =====================
@@ -775,73 +812,78 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
 
   if (!name || !phone) return res.status(400).json({ error: 'Nome e telefone sao obrigatorios' });
 
-  const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
-  const id = nextId(leads);
-  const isRepresentante = req.user.role === 'representante';
-  const hasOwnerInput = Boolean(ownerId || owner);
-  let ownerUser;
+  return withTableLock('leads', async () => {
+    const [{ items: leads }, { items: users }] = await Promise.all([
+      loadTable('leads', true), // ignora cache para inserção
+      loadTable('users'),      // cache ok para usuários
+    ]);
+    const id = nextId(leads);
+    const isRepresentante = req.user.role === 'representante';
+    const hasOwnerInput = Boolean(ownerId || owner);
+    let ownerUser;
 
-  if (isRepresentante) {
-    // Representante sempre cadastra para si mesmo
-    ownerUser = users.find((u) => String(u.id) === String(req.user.id));
-  } else {
-    ownerUser =
-      users.find((u) => String(u.id) === String(ownerId)) ||
-      users.find((u) => String(u.id) === String(req.user.id));
-    if (!hasOwnerInput) {
-      const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
-      if (candidates.length) {
-        ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
+    if (isRepresentante) {
+      // Representante sempre cadastra para si mesmo
+      ownerUser = users.find((u) => String(u.id) === String(req.user.id));
+    } else {
+      ownerUser =
+        users.find((u) => String(u.id) === String(ownerId)) ||
+        users.find((u) => String(u.id) === String(req.user.id));
+      if (!hasOwnerInput) {
+        const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
+        if (candidates.length) {
+          ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
+        }
       }
     }
-  }
-  const channelName = req.body.channel_name || '';
-  const now = new Date().toISOString();
+    const channelName = req.body.channel_name || '';
+    const now = new Date().toISOString();
 
-  const normalizedPhone = normalizePhone(phone);
-  const normalizedPhone2 = normalizePhone(phone2);
-  if (!normalizedPhone) return res.status(400).json({ error: 'Informe telefone com DDD' });
-  const normalizedEmail = (email || '').toLowerCase();
-  const duplicate = leads.find((l) => {
-    const leadPhone = normalizePhone(l.phone);
-    const leadPhone2 = normalizePhone(l.phone2);
-    const phoneMatch = normalizedPhone && (leadPhone === normalizedPhone || leadPhone2 === normalizedPhone);
-    const phone2Match =
-      normalizedPhone2 && (leadPhone === normalizedPhone2 || leadPhone2 === normalizedPhone2);
-    const emailMatch = normalizedEmail && (l.email || '').toLowerCase() === normalizedEmail;
-    return phoneMatch || phone2Match || emailMatch;
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedPhone2 = normalizePhone(phone2);
+    if (!normalizedPhone) return res.status(400).json({ error: 'Informe telefone com DDD' });
+    const normalizedEmail = (email || '').toLowerCase();
+    const duplicate = leads.find((l) => {
+      const leadPhone = normalizePhone(l.phone);
+      const leadPhone2 = normalizePhone(l.phone2);
+      const phoneMatch = normalizedPhone && (leadPhone === normalizedPhone || leadPhone2 === normalizedPhone);
+      const phone2Match =
+        normalizedPhone2 && (leadPhone === normalizedPhone2 || leadPhone2 === normalizedPhone2);
+      const emailMatch = normalizedEmail && (l.email || '').toLowerCase() === normalizedEmail;
+      return phoneMatch || phone2Match || emailMatch;
+    });
+    if (duplicate) return res.status(409).json({ error: 'Lead ja existe (email/telefone duplicado)' });
+
+    const lead = {
+      id,
+      name,
+      company: company || '',
+      segment: segment || '',
+      email,
+      phone: phone || '',
+      phone2: phone2 || '',
+      status,
+      owner: ownerUser?.name || owner || '',
+      ownerId: ownerUser?.id || ownerId || '',
+      campaign,
+      channel_id,
+      channel_name: channelName,
+      value: Number(value || 0),
+      first_contact: first_contact || '',
+      next_contact: next_contact || '',
+      notes: notes || '',
+      created_at: now,
+      is_private: normalizeBool(is_private),
+      is_customer: normalizeBool(is_customer),
+      is_out_of_scope: normalizeBool(is_out_of_scope),
+      highlighted_categories: highlighted_categories || '',
+      customer_type: customer_type || '',
+      cooling_reason: cooling_reason || '',
+    };
+    leads.push(lead);
+    await saveTable('leads', leads);
+    return res.json(lead);
   });
-  if (duplicate) return res.status(409).json({ error: 'Lead ja existe (email/telefone duplicado)' });
-
-  const lead = {
-    id,
-    name,
-    company: company || '',
-    segment: segment || '',
-    email,
-    phone: phone || '',
-    phone2: phone2 || '',
-    status,
-    owner: ownerUser?.name || owner || '',
-    ownerId: ownerUser?.id || ownerId || '',
-    campaign,
-    channel_id,
-    channel_name: channelName,
-    value: Number(value || 0),
-    first_contact: first_contact || '',
-    next_contact: next_contact || '',
-    notes: notes || '',
-    created_at: now,
-    is_private: normalizeBool(is_private),
-    is_customer: normalizeBool(is_customer),
-    is_out_of_scope: normalizeBool(is_out_of_scope),
-    highlighted_categories: highlighted_categories || '',
-    customer_type: customer_type || '',
-    cooling_reason: cooling_reason || '',
-  };
-  leads.push(lead);
-  await saveTable('leads', leads);
-  return res.json(lead);
 });
 
 // Executa alerta de follow-up (via X-API-Key ou JWT)
@@ -906,108 +948,113 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     cooling_reason,
   } = req.body;
 
-  const [{ items: leads }, { items: users }] = await Promise.all([loadTable('leads'), loadTable('users')]);
-  const idx = leads.findIndex((l) => String(l.id) === String(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
+  return withTableLock('leads', async () => {
+    const [{ items: leads }, { items: users }] = await Promise.all([
+      loadTable('leads', true), // ignora cache
+      loadTable('users'),
+    ]);
+    const idx = leads.findIndex((l) => String(l.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
 
-  const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
-  const ownerMatchId = String(leadOwnerId) === String(req.user.id);
-  const ownerNames = [req.user.name, req.user.username]
-    .filter(Boolean)
-    .map((val) => normalizeName(val));
-  const ownerNormalized = normalizeName(leads[idx].owner || leads[idx].responsible_name);
-  const ownerMatchName = ownerNames.some((name) => name && ownerNormalized === name);
-  const isOwner = ownerMatchId || ownerMatchName;
+    const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
+    const ownerMatchId = String(leadOwnerId) === String(req.user.id);
+    const ownerNames = [req.user.name, req.user.username]
+      .filter(Boolean)
+      .map((val) => normalizeName(val));
+    const ownerNormalized = normalizeName(leads[idx].owner || leads[idx].responsible_name);
+    const ownerMatchName = ownerNames.some((name) => name && ownerNormalized === name);
+    const isOwner = ownerMatchId || ownerMatchName;
 
-  const hasOtherChanges = (() => {
-    const current = leads[idx];
-    if (name !== undefined && String(name) !== String(current.name || '')) return true;
-    if (email !== undefined && String(email || '') !== String(current.email || '')) return true;
-    if (phone !== undefined && String(phone || '') !== String(current.phone || '')) return true;
-    if (phone2 !== undefined && String(phone2 || '') !== String(current.phone2 || '')) return true;
-    if (status !== undefined && String(status || '') !== String(current.status || '')) return true;
-    if (campaign !== undefined && String(campaign || '') !== String(current.campaign || '')) return true;
-    if (channel_id !== undefined && String(channel_id || '') !== String(current.channel_id || '')) return true;
-    if (
-      channel_name !== undefined &&
-      String(channel_name || '') !== String(current.channel_name || '')
-    ) {
-      return true;
+    const hasOtherChanges = (() => {
+      const current = leads[idx];
+      if (name !== undefined && String(name) !== String(current.name || '')) return true;
+      if (email !== undefined && String(email || '') !== String(current.email || '')) return true;
+      if (phone !== undefined && String(phone || '') !== String(current.phone || '')) return true;
+      if (phone2 !== undefined && String(phone2 || '') !== String(current.phone2 || '')) return true;
+      if (status !== undefined && String(status || '') !== String(current.status || '')) return true;
+      if (campaign !== undefined && String(campaign || '') !== String(current.campaign || '')) return true;
+      if (channel_id !== undefined && String(channel_id || '') !== String(current.channel_id || '')) return true;
+      if (
+        channel_name !== undefined &&
+        String(channel_name || '') !== String(current.channel_name || '')
+      ) {
+        return true;
+      }
+      if (value !== undefined && Number(value || 0) !== Number(current.value || 0)) return true;
+      if (first_contact !== undefined && String(first_contact || '') !== String(current.first_contact || '')) {
+        return true;
+      }
+      if (next_contact !== undefined && String(next_contact || '') !== String(current.next_contact || '')) {
+        return true;
+      }
+      if (notes !== undefined && String(notes || '') !== String(current.notes || '')) return true;
+      if (company !== undefined && String(company || '') !== String(current.company || '')) return true;
+      if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
+      if (
+        is_private !== undefined &&
+        normalizeBool(is_private) !== normalizeBool(current.is_private)
+      ) {
+        return true;
+      }
+      if (
+        is_customer !== undefined &&
+        normalizeBool(is_customer) !== normalizeBool(current.is_customer)
+      ) {
+        return true;
+      }
+      if (
+        is_out_of_scope !== undefined &&
+        normalizeBool(is_out_of_scope) !== normalizeBool(current.is_out_of_scope)
+      ) {
+        return true;
+      }
+      return false;
+    })();
+
+    // Novo: Se for representante, só pode editar o que ele enxerga (seus próprios leads)
+    if (req.user.role === 'representante' && !isOwner) {
+      return res.status(403).json({ error: 'Acesso negado: voce so pode editar seus proprios leads' });
     }
-    if (value !== undefined && Number(value || 0) !== Number(current.value || 0)) return true;
-    if (first_contact !== undefined && String(first_contact || '') !== String(current.first_contact || '')) {
-      return true;
-    }
-    if (next_contact !== undefined && String(next_contact || '') !== String(current.next_contact || '')) {
-      return true;
-    }
-    if (notes !== undefined && String(notes || '') !== String(current.notes || '')) return true;
-    if (company !== undefined && String(company || '') !== String(current.company || '')) return true;
-    if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
-    if (
-      is_private !== undefined &&
-      normalizeBool(is_private) !== normalizeBool(current.is_private)
-    ) {
-      return true;
-    }
-    if (
-      is_customer !== undefined &&
-      normalizeBool(is_customer) !== normalizeBool(current.is_customer)
-    ) {
-      return true;
-    }
-    if (
-      is_out_of_scope !== undefined &&
-      normalizeBool(is_out_of_scope) !== normalizeBool(current.is_out_of_scope)
-    ) {
-      return true;
-    }
-    return false;
-  })();
 
-  // Novo: Se for representante, só pode editar o que ele enxerga (seus próprios leads)
-  if (req.user.role === 'representante' && !isOwner) {
-    return res.status(403).json({ error: 'Acesso negado: voce so pode editar seus proprios leads' });
-  }
+    // Todos os usuários autenticados (exceto representantes) podem editar qualquer lead (incluindo reatribuir),
+    // conforme regra do CRM.
 
-  // Todos os usuários autenticados (exceto representantes) podem editar qualquer lead (incluindo reatribuir),
-  // conforme regra do CRM.
+    if (name) leads[idx].name = name;
+    if (company !== undefined) leads[idx].company = company;
+    if (segment !== undefined) leads[idx].segment = segment;
+    if (email) leads[idx].email = email;
+    if (phone) leads[idx].phone = phone;
+    if (phone2 !== undefined) leads[idx].phone2 = phone2;
+    if (status) leads[idx].status = status;
+    if (campaign !== undefined) leads[idx].campaign = campaign;
+    if (channel_id !== undefined) leads[idx].channel_id = channel_id;
+    if (channel_name !== undefined) leads[idx].channel_name = channel_name;
+    if (value !== undefined) leads[idx].value = Number(value);
+    if (first_contact !== undefined) leads[idx].first_contact = first_contact;
+    if (next_contact !== undefined) leads[idx].next_contact = next_contact;
+    if (notes !== undefined) leads[idx].notes = notes;
+    if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
+    if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
+    if (is_out_of_scope !== undefined) leads[idx].is_out_of_scope = normalizeBool(is_out_of_scope);
+    if (highlighted_categories !== undefined) leads[idx].highlighted_categories = highlighted_categories;
+    if (customer_type !== undefined) leads[idx].customer_type = customer_type;
+    if (cooling_reason !== undefined) leads[idx].cooling_reason = cooling_reason;
 
-  if (name) leads[idx].name = name;
-  if (company !== undefined) leads[idx].company = company;
-  if (segment !== undefined) leads[idx].segment = segment;
-  if (email) leads[idx].email = email;
-  if (phone) leads[idx].phone = phone;
-  if (phone2 !== undefined) leads[idx].phone2 = phone2;
-  if (status) leads[idx].status = status;
-  if (campaign !== undefined) leads[idx].campaign = campaign;
-  if (channel_id !== undefined) leads[idx].channel_id = channel_id;
-  if (channel_name !== undefined) leads[idx].channel_name = channel_name;
-  if (value !== undefined) leads[idx].value = Number(value);
-  if (first_contact !== undefined) leads[idx].first_contact = first_contact;
-  if (next_contact !== undefined) leads[idx].next_contact = next_contact;
-  if (notes !== undefined) leads[idx].notes = notes;
-  if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
-  if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
-  if (is_out_of_scope !== undefined) leads[idx].is_out_of_scope = normalizeBool(is_out_of_scope);
-  if (highlighted_categories !== undefined) leads[idx].highlighted_categories = highlighted_categories;
-  if (customer_type !== undefined) leads[idx].customer_type = customer_type;
-  if (cooling_reason !== undefined) leads[idx].cooling_reason = cooling_reason;
+    if (ownerId || owner) {
+      const ownerUser = users.find((u) => String(u.id) === String(ownerId));
+      leads[idx].ownerId = ownerUser?.id || ownerId || leads[idx].ownerId;
+      leads[idx].owner = ownerUser?.name || owner || leads[idx].owner;
+    }
 
-  if (ownerId || owner) {
-    const ownerUser = users.find((u) => String(u.id) === String(ownerId));
-    leads[idx].ownerId = ownerUser?.id || ownerId || leads[idx].ownerId;
-    leads[idx].owner = ownerUser?.name || owner || leads[idx].owner;
-  }
-
-  await saveTable('leads', leads);
-  return res.json(leads[idx]);
+    await saveTable('leads', leads);
+    return res.json(leads[idx]);
+  });
 });
 
 app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
   const targetId = String(req.params.id || '').trim();
-  try {
-    const { items: leads } = await loadTable('leads');
+  return withTableLock('leads', async () => {
+    const { items: leads } = await loadTable('leads', true);
     const lead = leads.find((l) => String(l.id || '').trim() === targetId);
     if (!lead) return res.status(404).json({ error: 'Lead nao encontrado' });
 
@@ -1041,10 +1088,7 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
 
     console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${afterSave.length}`);
     return res.json({ success: true, removed: leads.length - afterSave.length });
-  } catch (err) {
-    console.error('Erro ao excluir lead na planilha:', err);
-    return res.status(500).json({ error: 'Erro ao excluir lead' });
-  }
+  });
 });
 
 // ===================== STATS =====================
@@ -1094,42 +1138,44 @@ app.post('/api/webhook/manychat', async (req, res) => {
   if (!secret || secret !== MANYCHAT_SECRET) return res.status(401).json({ error: 'Token invalido' });
   if (!phone && !email) return res.status(400).json({ error: 'Informe phone ou email' });
 
-  const [{ items: leads }, { items: users }] = await Promise.all([
-    loadTable('leads'),
-    loadTable('users'),
-  ]);
+  return withTableLock('leads', async () => {
+    const [{ items: leads }, { items: users }] = await Promise.all([
+      loadTable('leads', true),
+      loadTable('users'),
+    ]);
 
-  // Seleciona aleatoriamente entre Ines e Victor (se existirem)
-  const pool = users.filter((u) => {
-    const uname = (u.username || u.name || '').toLowerCase();
-    return uname.includes('ines') || uname.includes('victor');
+    // Seleciona aleatoriamente entre Ines e Victor (se existirem)
+    const pool = users.filter((u) => {
+      const uname = (u.username || u.name || '').toLowerCase();
+      return uname.includes('ines') || uname.includes('victor');
+    });
+    const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+
+    const id = nextId(leads);
+    const now = new Date().toISOString();
+    const lead = {
+      id,
+      name: name || 'Lead Manychat',
+      email: email || '',
+      phone: phone || '',
+      status: 'novo',
+      owner: chosen?.name || '',
+      ownerId: chosen?.id || '',
+      campaign: 'manychat',
+      channel_id: '',
+      channel_name: 'Manychat',
+      value: 0,
+      first_contact: now,
+      next_contact: '',
+      notes: 'Capturado via Manychat',
+      created_at: now,
+      is_private: false,
+    };
+
+    leads.push(lead);
+    await saveTable('leads', leads);
+    return res.json({ success: true, lead });
   });
-  const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
-
-  const id = nextId(leads);
-  const now = new Date().toISOString();
-  const lead = {
-    id,
-    name: name || 'Lead Manychat',
-    email: email || '',
-    phone: phone || '',
-    status: 'novo',
-    owner: chosen?.name || '',
-    ownerId: chosen?.id || '',
-    campaign: 'manychat',
-    channel_id: '',
-    channel_name: 'Manychat',
-    value: 0,
-    first_contact: now,
-    next_contact: '',
-    notes: 'Capturado via Manychat',
-    created_at: now,
-    is_private: false,
-  };
-
-  leads.push(lead);
-  await saveTable('leads', leads);
-  return res.json({ success: true, lead });
 });
 
 // ===================== ERROR HANDLER =====================
