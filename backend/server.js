@@ -14,6 +14,10 @@ const jwt = require('jsonwebtoken');
 const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+
+// Importar middleware de monitoramento
+const { monitoring, healthCheck, errorHandler } = require('./middleware/monitoring');
+
 const app = express();
 
 // Error handling global
@@ -84,6 +88,7 @@ const cache = {};
 
 app.use(cors());
 app.use(express.json());
+app.use(monitoring);
 
 const SHEETS_CONFIG = {
   users: ['id', 'name', 'username', 'email', 'phone', 'password', 'role'],
@@ -121,7 +126,7 @@ const readSheet = async (sheetName) => {
   if (cache[sheetName] && Date.now() - cache[sheetName].ts < CACHE_TTL_MS) {
     return cache[sheetName].data;
   }
-  const range = `${sheetName}!A1:Z1000`;
+  const range = `${sheetName}!A1:Z5000`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range }).catch((err) => {
     if (err.response?.status === 400) {
       return { data: { values: [] } };
@@ -144,7 +149,8 @@ const readSheet = async (sheetName) => {
 };
 
 const clearTrailingRows = async (sheetName, startRow) => {
-  const range = `${sheetName}!A${startRow}:Z1000`;
+  if (startRow > 5000) return; // Segurança contra ranges inválidos
+  const range = `${sheetName}!A${startRow}:Z5000`;
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
     range,
@@ -1125,6 +1131,9 @@ app.post('/api/webhook/manychat', async (req, res) => {
   await saveTable('leads', leads);
   return res.json({ success: true, lead });
 });
+
+// ===================== ERROR HANDLER =====================
+app.use(errorHandler);
 
 const bootstrap = async () => {
   console.log(`🚀 Iniciando servidor na porta ${PORT}...`);
