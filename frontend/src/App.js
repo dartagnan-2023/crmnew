@@ -2192,6 +2192,7 @@ const App = () => {
                       <th className="py-2 px-2">Nome</th>
                       <th className="py-2 px-2">Empresa</th>
                       <th className="py-2 px-2">Canal</th>
+                      <th className="py-2 px-2">Região</th>
                       <th className="py-2 px-2">Status</th>
                       <th className="py-2 px-2">Responsável</th>
                       <th className="py-2 px-2">Próximo contato</th>
@@ -2241,6 +2242,13 @@ const App = () => {
                             </div>
                           </td>
                           <td className="py-2 px-2">{lead.channel_name || '-'}</td>
+                          <td className="py-2 px-2">
+                            {lead.region ? (
+                              <span className="px-2 py-[2px] rounded-full text-[10px] bg-slate-100 text-slate-600 border border-slate-200 uppercase font-bold">
+                                {lead.region}
+                              </span>
+                            ) : '-'}
+                          </td>
                           <td className="py-2 px-2">
                             <span className="px-2 py-[2px] rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">
                               {lead.status}
@@ -2351,6 +2359,11 @@ const App = () => {
                                   SEGMENT_OPTIONS.find((s) => s.value === lead.segment)?.label ||
                                   lead.segment
                                 }
+                              </span>
+                            )}
+                            {lead.region && (
+                              <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-bold">
+                                {lead.region}
                               </span>
                             )}
                           </div>
@@ -2691,7 +2704,12 @@ const App = () => {
                     ))}
                   </div>
                 </div>
-
+                {leadForm.region && (
+                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Região Identificada (DDD)</p>
+                    <p className="text-sm font-semibold text-slate-700">{leadForm.region}</p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-2">
                     Categorias em destaque (marque o que se aplicar)
