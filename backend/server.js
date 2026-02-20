@@ -176,7 +176,8 @@ const readSheet = async (sheetName, ignoreCache = false) => {
   if (!ignoreCache && cache[sheetName] && Date.now() - cache[sheetName].ts < CACHE_TTL_MS) {
     return cache[sheetName].data;
   }
-  const range = `${sheetName}!A1:Z5000`;
+  // Remove o limite forçado de 5000 para evitar erro de grid limits
+  const range = `${sheetName}!A:Z`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range }).catch((err) => {
     if (err.response?.status === 400) {
       return { data: { values: [] } };
@@ -199,16 +200,51 @@ const readSheet = async (sheetName, ignoreCache = false) => {
 };
 
 const clearTrailingRows = async (sheetName, startRow) => {
-  if (startRow > 5000) return; // Segurança contra ranges inválidos
-  const range = `${sheetName}!A${startRow}:Z5000`;
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range,
-  });
+  try {
+    const range = `${sheetName}!A${startRow}:Z`;
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SHEET_ID,
+      range,
+    });
+  } catch (err) {
+    // Se a linha inicial está além do limite atual da grid, não há nada para limpar
+    if (err.message && err.message.includes('exceeds grid limits')) {
+      return;
+    }
+    console.error(`[CLEAR] Erro ao limpar linhas em ${sheetName}:`, err.message);
+  }
+};
+
+const ensureSheetCapacity = async (sheetName, requiredRows) => {
+  const ss = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheet = ss.data.sheets.find(s => s.properties.title === sheetName);
+  if (!sheet) return;
+
+  const currentRows = sheet.properties.gridProperties.rowCount;
+  if (currentRows < requiredRows) {
+    const addRows = requiredRows - currentRows + 500; // Adiciona margem de folga
+    console.log(`[GRID] Expandindo ${sheetName} de ${currentRows} para ${currentRows + addRows} linhas...`);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [{
+          appendDimension: {
+            sheetId: sheet.properties.sheetId,
+            dimension: 'ROWS',
+            length: addRows
+          }
+        }]
+      }
+    });
+  }
 };
 
 const writeSheet = async (sheetName, headers, rows) => {
   const values = [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))];
+
+  // Garante que a planilha tem espaço suficiente
+  await ensureSheetCapacity(sheetName, values.length + 1);
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: `${sheetName}!A1`,
