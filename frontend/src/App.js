@@ -28,6 +28,25 @@ const toDateInput = (value) => {
   return d.toISOString().slice(0, 10);
 };
 
+const formatDateBR = (value) => {
+  if (!value) return '-';
+  const dateStr = String(value).split('T')[0];
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  try {
+    const d = new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const yyyy = d.getUTCFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    }
+  } catch (e) { }
+  return value;
+};
+
 
 const SEGMENT_OPTIONS = [
   { value: '', label: 'Sem perfil' },
@@ -1148,7 +1167,7 @@ const App = () => {
         return;
       }
       await Promise.all([loadLeads(), loadStats()]);
-      showToast(`Contato reagendado para ${toDateInput(next)}`, 'success');
+      showToast(`Contato reagendado para ${formatDateBR(next)}`, 'success');
     } catch (err) {
       console.error('Erro ao reagendar contato:', err);
       showToast('Erro ao reagendar contato', 'error');
@@ -1862,7 +1881,7 @@ const App = () => {
                       <div className="text-right">
                         <p className="text-xs text-slate-600">
                           {lead.next_contact
-                            ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                            ? formatDateBR(lead.next_contact)
                             : '-'}
                         </p>
                         <p className="text-[11px] text-slate-500">
@@ -1935,7 +1954,7 @@ const App = () => {
                     </p>
                     {lead.first_contact && (
                       <p className="text-[11px] text-slate-500">
-                        Primeiro contato: {new Date(lead.first_contact).toLocaleDateString('pt-BR')}
+                        Primeiro contato: {formatDateBR(lead.first_contact)}
                       </p>
                     )}
                   </div>
@@ -2257,7 +2276,7 @@ const App = () => {
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-xs text-slate-500">
                             {lead.next_contact
-                              ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                              ? formatDateBR(lead.next_contact)
                               : '-'}
                           </td>
                           <td className="py-2 px-2 text-right space-x-2">
@@ -2373,7 +2392,7 @@ const App = () => {
                             <div className="flex items-center gap-2">
                               <span>
                                 {lead.next_contact
-                                  ? new Date(lead.next_contact).toLocaleDateString('pt-BR')
+                                  ? formatDateBR(lead.next_contact)
                                   : '-'}
                               </span>
                               <span className="text-[10px] text-slate-400">
