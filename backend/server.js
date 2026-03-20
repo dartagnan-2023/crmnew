@@ -60,6 +60,32 @@ const normalizeBool = (val) => {
   const normalized = String(val || '').toLowerCase().trim();
   return ['1', 'true', 'sim', 'yes'].includes(normalized);
 };
+const parseMoneyValue = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+
+  let normalized = String(val).trim();
+  if (!normalized) return 0;
+
+  normalized = normalized.replace(/[^\d,.\-]/g, '');
+  if (!normalized) return 0;
+
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    if (lastComma > lastDot) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (lastComma !== -1) {
+    normalized = normalized.replace(',', '.');
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const DDD_REGION_MAP = {
   '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
@@ -822,7 +848,7 @@ const hydrateLeads = (leads, channels) => {
     return {
       ...l,
       ownerId: l.ownerId || l.user_id || l.owner_id || '',
-      value: Number(l.value || 0),
+      value: parseMoneyValue(l.value),
       channel_name: l.channel_name || channel?.name || '',
       created_at: l.created_at || '',
       is_private: normalizeBool(l.is_private),
@@ -938,7 +964,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       campaign,
       channel_id,
       channel_name: channelName,
-      value: Number(value || 0),
+      value: parseMoneyValue(value),
       first_contact: first_contact || '',
       next_contact: next_contact || '',
       notes: notes || '',
@@ -1050,7 +1076,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
       ) {
         return true;
       }
-      if (value !== undefined && Number(value || 0) !== Number(current.value || 0)) return true;
+      if (value !== undefined && parseMoneyValue(value) !== parseMoneyValue(current.value)) return true;
       if (first_contact !== undefined && String(first_contact || '') !== String(current.first_contact || '')) {
         return true;
       }
@@ -1099,7 +1125,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (campaign !== undefined) leads[idx].campaign = campaign;
     if (channel_id !== undefined) leads[idx].channel_id = channel_id;
     if (channel_name !== undefined) leads[idx].channel_name = channel_name;
-    if (value !== undefined) leads[idx].value = Number(value);
+    if (value !== undefined) leads[idx].value = parseMoneyValue(value);
     if (first_contact !== undefined) leads[idx].first_contact = first_contact;
     if (next_contact !== undefined) leads[idx].next_contact = next_contact;
     if (notes !== undefined) leads[idx].notes = notes;
