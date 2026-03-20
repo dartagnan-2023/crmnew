@@ -57,6 +57,7 @@ const SEGMENT_OPTIONS = [
   { value: 'usuario_final', label: 'Usuario Final' },
   { value: 'rep_comercial', label: 'Rep Comercial' },
 ];
+const CLIENT_SEGMENT_OPTIONS = SEGMENT_OPTIONS.filter((option) => option.value !== 'representante');
 
 const HIGHLIGHTED_CATEGORIES_OPTIONS = [
   'Automação',
@@ -1790,7 +1791,7 @@ const App = () => {
                 <p className="text-[11px] text-slate-500">Empresas (company preenchido)</p>
                 <p className="text-xl font-bold text-slate-900">{statsSegments.empresas || 0}</p>
               </div>
-              {SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
+              {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
                 <div key={opt.value} className="bg-white rounded-xl shadow p-3">
                   <p className="text-[11px] text-slate-500">{opt.label}</p>
                   <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
@@ -2101,7 +2102,7 @@ const App = () => {
                   className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
                 >
                   <option value="all">Todos os perfis</option>
-                  {SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
+                  {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
                     <option key={s.value} value={s.value}>
                       {s.label}
                     </option>
@@ -2479,7 +2480,7 @@ const App = () => {
                     onChange={(e) => setLeadForm({ ...leadForm, segment: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                   >
-                    {SEGMENT_OPTIONS.map((opt) => (
+                    {CLIENT_SEGMENT_OPTIONS.map((opt) => (
                       <option key={opt.value || 'none'} value={opt.value}>
                         {opt.label}
                       </option>
