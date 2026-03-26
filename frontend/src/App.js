@@ -123,7 +123,7 @@ const StatCard = ({ label, value, helper, tone = 'slate' }) => {
   );
 };
 
-const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados' }) => {
+const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados', formatValue = (value) => value }) => {
   const safeData = (data || []).filter((item) => item && Number(item.value) > 0).slice(0, 6);
   const max = Math.max(...safeData.map((item) => Number(item.value)), 1);
   if (!safeData.length) {
@@ -135,7 +135,7 @@ const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados' }) => 
         <div key={item.label} className="space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-600 gap-3">
             <span className="font-medium truncate">{item.label}</span>
-            <span className="font-semibold text-slate-800">{item.value}</span>
+            <span className="font-semibold text-slate-800">{formatValue(item.value)}</span>
           </div>
           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -149,7 +149,7 @@ const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados' }) => 
   );
 };
 
-const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico suficiente' }) => {
+const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico suficiente', formatValue = (value) => value }) => {
   const safeData = (data || []).slice(-6);
   const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
   if (!safeData.length) {
@@ -183,7 +183,7 @@ const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico s
       <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500">
         {safeData.map((item) => (
           <div key={item.label} className="rounded-lg bg-slate-50 px-2 py-1 text-center">
-            <div className="font-semibold text-slate-700">{item.value}</div>
+            <div className="font-semibold text-slate-700">{formatValue(item.value)}</div>
             <div>{item.label}</div>
           </div>
         ))}
@@ -2132,13 +2132,13 @@ const App = () => {
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do valor convertido</h3>
-                <MiniLineChart data={dashboardData.convertedEvolution} color="#2563eb" />
+                <MiniLineChart data={dashboardData.convertedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
               </div>
 
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do pipeline ativo</h3>
-                <MiniLineChart data={dashboardData.pipelineEvolution} color="#f97316" />
+                <MiniLineChart data={dashboardData.pipelineEvolution} color="#f97316" formatValue={formatCurrencyBR} />
               </div>
             </div>
 
