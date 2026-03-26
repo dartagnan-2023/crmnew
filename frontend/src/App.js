@@ -1966,8 +1966,8 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.10),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10),_transparent_24%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_45%,_#f8fafc_100%)]">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {toast && (
           <div
             className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${toast.type === 'error'
@@ -1988,25 +1988,29 @@ const App = () => {
           </div>
         )}
 
-        <header className="bg-white rounded-xl shadow p-4 flex items-center justify-between">
+        <header className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(30,41,59,0.96)_42%,_rgba(8,145,178,0.88)_100%)] p-5 md:p-6 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)]">
+          <div className="absolute -top-20 right-0 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl" />
+          <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-emerald-300/10 blur-3xl" />
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Leads - BHS Eletronica</h1>
-            <p className="text-sm text-slate-600">Bem-vindo(a), {user.name}</p>
-            <div className="mt-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <p className="text-[11px] uppercase tracking-[0.26em] text-cyan-100/80 font-bold">BHS CRM</p>
+            <h1 className="mt-2 text-3xl md:text-4xl font-black text-white">Leads - BHS Eletronica</h1>
+            <p className="mt-2 text-sm text-slate-200">Bem-vindo(a), {user.name}</p>
+            <div className="mt-4 inline-flex rounded-2xl border border-white/10 bg-white/10 p-1.5 backdrop-blur">
               <button
                 onClick={() => setActiveTab('crm')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition ${activeTab === 'crm'
+                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'crm'
                   ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-200 hover:text-white'
                   }`}
               >
                 CRM
               </button>
               <button
                 onClick={() => setActiveTab('dashboard')}
-                className={`px-3 py-1.5 text-sm rounded-lg transition ${activeTab === 'dashboard'
+                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'dashboard'
                   ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-200 hover:text-white'
                   }`}
               >
                 Dashboard
@@ -2016,23 +2020,24 @@ const App = () => {
           <div className="flex gap-3 flex-wrap justify-end">
             <button
               onClick={() => openProfileSettings('me')}
-              className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
+              className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
               title="Configurações e perfil"
             >
               Perfil
             </button>
             <button
               onClick={() => setShowChannelModal(true)}
-              className="px-3 py-2 text-sm bg-slate-200 rounded-lg"
+              className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
             >
               Canais
             </button>
             <button
               onClick={handleLogout}
-              className="px-3 py-2 text-sm bg-red-600 text-white rounded-lg"
+              className="px-4 py-2.5 text-sm bg-rose-500 text-white rounded-xl shadow hover:bg-rose-600 transition"
             >
               Sair
             </button>
+          </div>
           </div>
         </header>
 
@@ -2125,7 +2130,7 @@ const App = () => {
         <section className="mb-3">
           <button
             onClick={() => setShowStats((prev) => !prev)}
-            className="w-full flex items-center justify-between px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-lg text-sm shadow-sm hover:shadow-md transition group"
+            className="w-full flex items-center justify-between px-5 py-4 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(30,64,175,0.92)_100%)] text-white rounded-[24px] text-sm shadow-[0_18px_40px_-20px_rgba(15,23,42,0.65)] hover:shadow-[0_24px_46px_-20px_rgba(15,23,42,0.7)] transition group"
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
@@ -2137,13 +2142,13 @@ const App = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+              <span className="text-[11px] bg-white/10 px-3 py-1 rounded-full border border-white/20">
                 Total: {localStats.total || 0}
               </span>
-              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+              <span className="text-[11px] bg-emerald-400/20 text-emerald-100 px-3 py-1 rounded-full border border-emerald-200/20">
                 Novos: {localStats.novos || 0}
               </span>
-              <span className="text-[11px] bg-white/10 px-2 py-[2px] rounded-full border border-white/20">
+              <span className="text-[11px] bg-cyan-400/20 text-cyan-100 px-3 py-1 rounded-full border border-cyan-200/20">
                 Tx: {localStats.taxaConversao || 0}%
               </span>
               <span
@@ -2155,49 +2160,49 @@ const App = () => {
             </div>
           </button>
           {showStats && (
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <div className="bg-white rounded-xl shadow p-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
                 <p className="text-[11px] text-slate-500">Total de Leads</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.total || 0}</p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(5,150,105,0.35)]">
                 <p className="text-[11px] text-slate-500">Novos</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.novos || 0}</p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-cyan-200 bg-cyan-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(8,145,178,0.35)]">
                 <p className="text-[11px] text-slate-500">Em contato</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(37,99,235,0.35)]">
                 <p className="text-[11px] text-slate-500">Taxa de Conversão</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(124,58,237,0.35)]">
                 <p className="text-[11px] text-slate-500">Valor Convertido</p>
                 <p className="text-xl font-bold text-slate-900">
                   R$ {(localStats.valorTotal || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(225,29,72,0.3)]">
                 <p className="text-[11px] text-slate-500">Perdidos</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor perdido: R$ {(localStats.valorPerdido || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(245,158,11,0.35)]">
                 <p className="text-[11px] text-slate-500">Em negociação</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="bg-white rounded-xl shadow p-3">
+              <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
                 <p className="text-[11px] text-slate-500">Empresas (company preenchido)</p>
                 <p className="text-xl font-bold text-slate-900">{statsSegments.empresas || 0}</p>
               </div>
               {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
-                <div key={opt.value} className="bg-white rounded-xl shadow p-3">
+                <div key={opt.value} className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
                   <p className="text-[11px] text-slate-500">{opt.label}</p>
                   <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
                 </div>
@@ -2208,7 +2213,7 @@ const App = () => {
 
 
         <section className="mb-3">
-          <div className="bg-white rounded-xl shadow p-4">
+          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-4 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
             <p className="text-xs text-slate-500 mb-2">Agenda</p>
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
@@ -2220,7 +2225,7 @@ const App = () => {
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-          <div className="bg-white rounded-xl shadow p-4">
+          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
             <div className="flex items-start justify-between mb-3 gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
@@ -2332,7 +2337,7 @@ const App = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow p-4">
+          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-slate-900">
                 Follow-up (10+ dias em Novo)
@@ -2374,50 +2379,53 @@ const App = () => {
           </div>
         </section>
 
-        <section className="bg-white/90 backdrop-blur rounded-xl shadow p-4 border border-slate-200">
+        <section className="bg-white/85 backdrop-blur rounded-[28px] shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)] p-5 border border-white/70">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-            <h2 className="text-lg font-semibold text-slate-900">Leads</h2>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Operação</p>
+              <h2 className="text-2xl font-black text-slate-900">Leads</h2>
+            </div>
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'list'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                className={`px-4 py-2 rounded-xl border text-xs font-semibold ${viewMode === 'list'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200'
                   }`}
               >
                 Lista
               </button>
               <button
                 onClick={() => setViewMode('kanban')}
-                className={`px-3 py-2 rounded-lg border text-xs ${viewMode === 'kanban'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                className={`px-4 py-2 rounded-xl border text-xs font-semibold ${viewMode === 'kanban'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200'
                   }`}
               >
                 Kanban
               </button>
               <button
                 onClick={exportCsv}
-                className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg text-sm"
+                className="px-4 py-2 bg-white text-slate-800 rounded-xl text-sm border border-slate-200 shadow-sm"
               >
                 Exportar CSV
               </button>
               <button
                 onClick={clearFilters}
-                className="px-4 py-2 bg-white text-slate-700 rounded-lg text-sm border border-slate-200"
+                className="px-4 py-2 bg-white text-slate-700 rounded-xl text-sm border border-slate-200 shadow-sm"
               >
                 Limpar filtros
               </button>
               <button
                 onClick={openNewLeadModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                className="px-4 py-2 bg-[linear-gradient(135deg,_#2563eb,_#0891b2)] text-white rounded-xl text-sm shadow"
               >
                 Novo Lead
               </button>
             </div>
           </div>
 
-          <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3">
+          <div className="mb-4 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,_rgba(248,250,252,0.95)_0%,_rgba(241,245,249,0.92)_100%)] p-4 flex flex-col gap-3 shadow-inner">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <select
