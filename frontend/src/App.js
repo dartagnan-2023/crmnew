@@ -47,6 +47,151 @@ const formatDateBR = (value) => {
   return value;
 };
 
+const formatCurrencyBR = (value) =>
+  `R$ ${Number(value || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const parseLeadDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const monthLabel = (key) => {
+  const [year, month] = String(key || '').split('-');
+  if (!year || !month) return key;
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'short',
+    year: '2-digit',
+  });
+};
+
+const escapeXml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+const buildExcelWorkbook = (sheets) => {
+  const workbookSheets = sheets
+    .map((sheet) => {
+      const rows = sheet.rows
+        .map((row) => {
+          const cells = row
+            .map((cell) => {
+              const type = typeof cell === 'number' && Number.isFinite(cell) ? 'Number' : 'String';
+              return `<Cell><Data ss:Type="${type}">${escapeXml(cell)}</Data></Cell>`;
+            })
+            .join('');
+          return `<Row>${cells}</Row>`;
+        })
+        .join('');
+
+      return `<Worksheet ss:Name="${escapeXml(sheet.name)}"><Table>${rows}</Table></Worksheet>`;
+    })
+    .join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+  <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:html="http://www.w3.org/TR/REC-html40">
+    ${workbookSheets}
+  </Workbook>`;
+};
+
+const StatCard = ({ label, value, helper, tone = 'slate' }) => {
+  const toneClasses = {
+    slate: 'from-slate-900 to-slate-700 text-white',
+    blue: 'from-blue-600 to-cyan-500 text-white',
+    emerald: 'from-emerald-600 to-teal-500 text-white',
+    amber: 'from-amber-500 to-orange-500 text-white',
+    rose: 'from-rose-600 to-pink-500 text-white',
+  };
+  return (
+    <div className={`rounded-2xl bg-gradient-to-br ${toneClasses[tone] || toneClasses.slate} p-4 shadow-lg`}>
+      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">{label}</p>
+      <p className="mt-3 text-3xl font-bold">{value}</p>
+      {helper && <p className="mt-2 text-xs opacity-85">{helper}</p>}
+    </div>
+  );
+};
+
+const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados' }) => {
+  const safeData = (data || []).filter((item) => item && Number(item.value) > 0).slice(0, 6);
+  const max = Math.max(...safeData.map((item) => Number(item.value)), 1);
+  if (!safeData.length) {
+    return <p className="text-sm text-slate-400">{emptyLabel}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {safeData.map((item) => (
+        <div key={item.label} className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-600 gap-3">
+            <span className="font-medium truncate">{item.label}</span>
+            <span className="font-semibold text-slate-800">{item.value}</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${(Number(item.value) / max) * 100}%`, backgroundColor: color }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico suficiente' }) => {
+  const safeData = (data || []).slice(-6);
+  const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
+  if (!safeData.length) {
+    return <p className="text-sm text-slate-400">{emptyLabel}</p>;
+  }
+  const points = safeData
+    .map((item, index) => {
+      const x = (index / Math.max(safeData.length - 1, 1)) * 100;
+      const y = 100 - (Number(item.value || 0) / max) * 100;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <div className="space-y-3">
+      <svg viewBox="0 0 100 100" className="w-full h-28 overflow-visible">
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+        {safeData.map((item, index) => {
+          const x = (index / Math.max(safeData.length - 1, 1)) * 100;
+          const y = 100 - (Number(item.value || 0) / max) * 100;
+          return <circle key={item.label} cx={x} cy={y} r="2.5" fill={color} />;
+        })}
+      </svg>
+      <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500">
+        {safeData.map((item) => (
+          <div key={item.label} className="rounded-lg bg-slate-50 px-2 py-1 text-center">
+            <div className="font-semibold text-slate-700">{item.value}</div>
+            <div>{item.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 const SEGMENT_OPTIONS = [
   { value: '', label: 'Sem perfil' },
@@ -165,6 +310,7 @@ const App = () => {
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
+  const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard'
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -519,6 +665,7 @@ const App = () => {
         if (parsed.sortKey) setSortKey(parsed.sortKey);
         if (parsed.sortDir) setSortDir(parsed.sortDir);
         if (parsed.viewMode) setViewMode(parsed.viewMode);
+        if (parsed.activeTab) setActiveTab(parsed.activeTab);
       }
     } catch {
       /* ignore */
@@ -538,9 +685,10 @@ const App = () => {
       sortKey,
       sortDir,
       viewMode,
+      activeTab,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode]);
+  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
 
   useEffect(() => {
     if (!user) return;
@@ -865,6 +1013,156 @@ const App = () => {
     acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
     return acc;
   }, [filteredLeads]);
+
+  const dashboardData = useMemo(() => {
+    const channelMap = new Map();
+    const campaignMap = new Map();
+    const segmentMap = new Map();
+    const monthlyMap = new Map();
+    const statusMap = new Map();
+    const source = filteredLeads;
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const sixMonths = [];
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+      const key = monthKey(date);
+      monthlyMap.set(key, 0);
+      sixMonths.push(key);
+    }
+
+    let customers = 0;
+    let leadsThisMonth = 0;
+    let overdueFollowups = 0;
+
+    source.forEach((lead) => {
+      const channel = lead.channel_name || lead.campaign || 'Sem canal';
+      const campaign = lead.campaign || 'Sem campanha';
+      const segment = lead.segment || 'sem_perfil';
+      const status = lead.status || 'sem_status';
+      const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
+      const nextDate = parseLeadDate(lead.next_contact);
+
+      channelMap.set(channel, (channelMap.get(channel) || 0) + 1);
+      campaignMap.set(campaign, (campaignMap.get(campaign) || 0) + 1);
+      segmentMap.set(segment, (segmentMap.get(segment) || 0) + 1);
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+
+      if (lead.is_customer) customers += 1;
+      if (createdDate) {
+        if (createdDate >= monthStart) leadsThisMonth += 1;
+        const key = monthKey(createdDate);
+        if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+      }
+      if (nextDate && nextDate < today) overdueFollowups += 1;
+    });
+
+    const sortEntries = (map) =>
+      Array.from(map.entries())
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const avgTicket = localStats.ganhos ? localStats.valorTotal / localStats.ganhos : 0;
+    const monthlyEvolution = sixMonths.map((key) => ({
+      label: monthLabel(key),
+      value: monthlyMap.get(key) || 0,
+    }));
+
+    return {
+      source,
+      leadsThisMonth,
+      customers,
+      prospects: Math.max(source.length - customers, 0),
+      overdueFollowups,
+      avgTicket,
+      byChannel: sortEntries(channelMap),
+      byCampaign: sortEntries(campaignMap),
+      bySegment: sortEntries(segmentMap).map((item) => ({
+        ...item,
+        label: SEGMENT_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
+      })),
+      byStatus: sortEntries(statusMap).map((item) => ({
+        ...item,
+        label: STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
+      })),
+      monthlyEvolution,
+    };
+  }, [filteredLeads, localStats]);
+
+  const exportDashboardExcel = () => {
+    const workbook = buildExcelWorkbook([
+      {
+        name: 'Resumo',
+        rows: [
+          ['Indicador', 'Valor'],
+          ['Total de leads', localStats.total || 0],
+          ['Leads no mês', dashboardData.leadsThisMonth || 0],
+          ['Prospects', dashboardData.prospects || 0],
+          ['Clientes', dashboardData.customers || 0],
+          ['Ganhos', localStats.ganhos || 0],
+          ['Perdidos', localStats.perdidos || 0],
+          ['Taxa de conversão (%)', localStats.taxaConversao || 0],
+          ['Valor convertido', Number(localStats.valorTotal || 0)],
+          ['Valor em negociação', Number(localStats.valorNegociacao || 0)],
+          ['Ticket médio ganho', Number(dashboardData.avgTicket || 0)],
+          ['Follow-ups vencidos', dashboardData.overdueFollowups || 0],
+        ],
+      },
+      {
+        name: 'Marketing',
+        rows: [
+          ['Canal', 'Leads'],
+          ...dashboardData.byChannel.map((item) => [item.label, item.value]),
+          [],
+          ['Campanha', 'Leads'],
+          ...dashboardData.byCampaign.map((item) => [item.label, item.value]),
+          [],
+          ['Mês', 'Entradas'],
+          ...dashboardData.monthlyEvolution.map((item) => [item.label, item.value]),
+        ],
+      },
+      {
+        name: 'Comercial',
+        rows: [
+          ['Status', 'Quantidade'],
+          ...dashboardData.byStatus.map((item) => [item.label, item.value]),
+          [],
+          ['Perfil', 'Quantidade'],
+          ...dashboardData.bySegment.map((item) => [item.label, item.value]),
+        ],
+      },
+      {
+        name: 'Leads',
+        rows: [
+          ['ID', 'Nome', 'Empresa', 'Perfil', 'Canal', 'Campanha', 'Status', 'Responsável', 'Valor', 'Cliente', 'Criado em'],
+          ...dashboardData.source.map((lead) => [
+            lead.id,
+            lead.name || '',
+            lead.company || '',
+            SEGMENT_OPTIONS.find((item) => item.value === lead.segment)?.label || lead.segment || '',
+            lead.channel_name || '',
+            lead.campaign || '',
+            lead.status || '',
+            lead.owner || lead.responsible_name || '',
+            Number(lead.value || 0),
+            lead.is_customer ? 'Sim' : 'Não',
+            lead.created_at || lead.first_contact || '',
+          ]),
+        ],
+      },
+    ]);
+
+    const blob = new Blob([workbook], {
+      type: 'application/vnd.ms-excel;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-diretoria-${new Date().toISOString().slice(0, 10)}.xls`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
 
   const followUpLeads = useMemo(() => {
@@ -1694,6 +1992,26 @@ const App = () => {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Leads - BHS Eletronica</h1>
             <p className="text-sm text-slate-600">Bem-vindo(a), {user.name}</p>
+            <div className="mt-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                onClick={() => setActiveTab('crm')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition ${activeTab === 'crm'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+                  }`}
+              >
+                CRM
+              </button>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`px-3 py-1.5 text-sm rounded-lg transition ${activeTab === 'dashboard'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+                  }`}
+              >
+                Dashboard
+              </button>
+            </div>
           </div>
           <div className="flex gap-3 flex-wrap justify-end">
             <button
@@ -1718,6 +2036,92 @@ const App = () => {
           </div>
         </header>
 
+        {activeTab === 'dashboard' && (
+          <section className="space-y-6">
+            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Executive Dashboard</p>
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">Marketing e Comercial</h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Os indicadores abaixo respeitam os filtros atuais do CRM e servem para acompanhamento da diretoria.
+                  </p>
+                </div>
+                <button
+                  onClick={exportDashboardExcel}
+                  className="px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition"
+                >
+                  Baixar relatório em Excel
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Leads Totais" value={localStats.total || 0} helper={`${dashboardData.leadsThisMonth || 0} no mês`} tone="slate" />
+              <StatCard label="Taxa de Conversão" value={`${localStats.taxaConversao || 0}%`} helper={`${localStats.ganhos || 0} ganhos`} tone="blue" />
+              <StatCard label="Valor Convertido" value={formatCurrencyBR(localStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
+              <StatCard label="Pipeline Ativo" value={formatCurrencyBR(localStats.valorNegociacao || 0)} helper={`${localStats.qtdNegociacao || 0} em negociação`} tone="amber" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Prospects</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.prospects || 0}</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Clientes</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.customers || 0}</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Perdidos</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
+                <p className="mt-2 text-xs text-slate-500">{formatCurrencyBR(localStats.valorPerdido || 0)} perdidos</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Follow-up vencido</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.overdueFollowups || 0}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                    <h3 className="text-lg font-bold text-slate-900">Entradas por mês</h3>
+                  </div>
+                </div>
+                <MiniLineChart data={dashboardData.monthlyEvolution} color="#0f766e" />
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Leads por canal</h3>
+                <MiniBarChart data={dashboardData.byChannel} color="#2563eb" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Campanhas</h3>
+                <MiniBarChart data={dashboardData.byCampaign} color="#7c3aed" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Funil por status</h3>
+                <MiniBarChart data={dashboardData.byStatus} color="#f97316" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Perfis de cliente</h3>
+                <MiniBarChart data={dashboardData.bySegment} color="#059669" />
+              </div>
+            </div>
+          </section>
+        )}
+
+        <div className={activeTab === 'crm' ? '' : 'hidden'}>
         <section className="mb-3">
           <button
             onClick={() => setShowStats((prev) => !prev)}
@@ -2426,6 +2830,8 @@ const App = () => {
             </div>
           )}
         </section>
+
+        </div>
 
         {showLeadModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
