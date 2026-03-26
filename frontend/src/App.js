@@ -1019,6 +1019,8 @@ const App = () => {
     const campaignMap = new Map();
     const segmentMap = new Map();
     const monthlyMap = new Map();
+    const convertedMonthlyMap = new Map();
+    const pipelineMonthlyMap = new Map();
     const statusMap = new Map();
     const source = filteredLeads;
     const today = new Date();
@@ -1029,6 +1031,8 @@ const App = () => {
       const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
       const key = monthKey(date);
       monthlyMap.set(key, 0);
+      convertedMonthlyMap.set(key, 0);
+      pipelineMonthlyMap.set(key, 0);
       sixMonths.push(key);
     }
 
@@ -1041,8 +1045,10 @@ const App = () => {
       const campaign = lead.campaign || 'Sem campanha';
       const segment = lead.segment || 'sem_perfil';
       const status = lead.status || 'sem_status';
+      const statusNormalized = normalizeOptionValue(status);
       const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
       const nextDate = parseLeadDate(lead.next_contact);
+      const leadValue = Number(lead.value || 0);
 
       channelMap.set(channel, (channelMap.get(channel) || 0) + 1);
       campaignMap.set(campaign, (campaignMap.get(campaign) || 0) + 1);
@@ -1053,7 +1059,15 @@ const App = () => {
       if (createdDate) {
         if (createdDate >= monthStart) leadsThisMonth += 1;
         const key = monthKey(createdDate);
-        if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+        if (monthlyMap.has(key)) {
+          monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+          if (statusNormalized === 'ganho') {
+            convertedMonthlyMap.set(key, (convertedMonthlyMap.get(key) || 0) + leadValue);
+          }
+          if (['negociacao', 'proposta'].includes(statusNormalized)) {
+            pipelineMonthlyMap.set(key, (pipelineMonthlyMap.get(key) || 0) + leadValue);
+          }
+        }
       }
       if (nextDate && nextDate < today) overdueFollowups += 1;
     });
@@ -1067,6 +1081,14 @@ const App = () => {
     const monthlyEvolution = sixMonths.map((key) => ({
       label: monthLabel(key),
       value: monthlyMap.get(key) || 0,
+    }));
+    const convertedEvolution = sixMonths.map((key) => ({
+      label: monthLabel(key),
+      value: convertedMonthlyMap.get(key) || 0,
+    }));
+    const pipelineEvolution = sixMonths.map((key) => ({
+      label: monthLabel(key),
+      value: pipelineMonthlyMap.get(key) || 0,
     }));
 
     return {
@@ -1087,6 +1109,8 @@ const App = () => {
         label: STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
       })),
       monthlyEvolution,
+      convertedEvolution,
+      pipelineEvolution,
     };
   }, [filteredLeads, localStats]);
 
@@ -1120,6 +1144,12 @@ const App = () => {
           [],
           ['Mês', 'Entradas'],
           ...dashboardData.monthlyEvolution.map((item) => [item.label, item.value]),
+          [],
+          ['Mês', 'Valor convertido'],
+          ...dashboardData.convertedEvolution.map((item) => [item.label, item.value]),
+          [],
+          ['Mês', 'Pipeline ativo'],
+          ...dashboardData.pipelineEvolution.map((item) => [item.label, item.value]),
         ],
       },
       {
@@ -2088,7 +2118,7 @@ const App = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -2100,13 +2130,24 @@ const App = () => {
               </div>
 
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Leads por canal</h3>
-                <MiniBarChart data={dashboardData.byChannel} color="#2563eb" />
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do valor convertido</h3>
+                <MiniLineChart data={dashboardData.convertedEvolution} color="#2563eb" />
+              </div>
+
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do pipeline ativo</h3>
+                <MiniLineChart data={dashboardData.pipelineEvolution} color="#f97316" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Leads por canal</h3>
+                <MiniBarChart data={dashboardData.byChannel} color="#2563eb" />
+              </div>
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Campanhas</h3>
