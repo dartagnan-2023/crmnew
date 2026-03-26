@@ -348,6 +348,8 @@ const App = () => {
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard'
   const [dashboardPeriod, setDashboardPeriod] = useState('90d');
+  const [dashboardStartDate, setDashboardStartDate] = useState('');
+  const [dashboardEndDate, setDashboardEndDate] = useState('');
   const [dashboardOwnerFilter, setDashboardOwnerFilter] = useState('all');
   const [dashboardSegmentFilter, setDashboardSegmentFilter] = useState('all');
   const [dashboardChannelFilter, setDashboardChannelFilter] = useState('all');
@@ -719,6 +721,8 @@ const App = () => {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (parsed.period) setDashboardPeriod(parsed.period);
+      if (parsed.startDate) setDashboardStartDate(parsed.startDate);
+      if (parsed.endDate) setDashboardEndDate(parsed.endDate);
       if (parsed.ownerFilter) setDashboardOwnerFilter(parsed.ownerFilter);
       if (parsed.segmentFilter) setDashboardSegmentFilter(parsed.segmentFilter);
       if (parsed.channelFilter) setDashboardChannelFilter(parsed.channelFilter);
@@ -749,13 +753,15 @@ const App = () => {
   useEffect(() => {
     const payload = {
       period: dashboardPeriod,
+      startDate: dashboardStartDate,
+      endDate: dashboardEndDate,
       ownerFilter: dashboardOwnerFilter,
       segmentFilter: dashboardSegmentFilter,
       channelFilter: dashboardChannelFilter,
       campaignFilter: dashboardCampaignFilter,
     };
     localStorage.setItem('dashboardFilters', JSON.stringify(payload));
-  }, [dashboardPeriod, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -1061,9 +1067,16 @@ const App = () => {
     };
 
     return leads.filter((lead) => {
-      if (dashboardPeriod !== 'all') {
+      const baseDate = parseLeadDate(lead.created_at || lead.first_contact || lead.next_contact);
+      if (dashboardPeriod === 'custom') {
+        if (!baseDate) return false;
+        const leadTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+        const startTime = dashboardStartDate ? new Date(`${dashboardStartDate}T00:00:00`).getTime() : null;
+        const endTime = dashboardEndDate ? new Date(`${dashboardEndDate}T23:59:59`).getTime() : null;
+        if (startTime && leadTime < startTime) return false;
+        if (endTime && leadTime > endTime) return false;
+      } else if (dashboardPeriod !== 'all') {
         const periodDays = daysByPeriod[dashboardPeriod];
-        const baseDate = parseLeadDate(lead.created_at || lead.first_contact || lead.next_contact);
         if (!baseDate) return false;
         const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
         if (diffDays > periodDays) return false;
@@ -1108,7 +1121,7 @@ const App = () => {
 
       return true;
     });
-  }, [leads, users, dashboardPeriod, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [leads, users, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
 
   const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
 
@@ -2196,6 +2209,8 @@ const App = () => {
                   <button
                     onClick={() => {
                       setDashboardPeriod('90d');
+                      setDashboardStartDate('');
+                      setDashboardEndDate('');
                       setDashboardOwnerFilter('all');
                       setDashboardSegmentFilter('all');
                       setDashboardChannelFilter('all');
@@ -2216,6 +2231,7 @@ const App = () => {
                     <option value="90d">Últimos 90 dias</option>
                     <option value="6m">Últimos 6 meses</option>
                     <option value="12m">Últimos 12 meses</option>
+                    <option value="custom">Período personalizado</option>
                     <option value="all">Todo o período</option>
                   </select>
                   <select
@@ -2262,6 +2278,28 @@ const App = () => {
                     placeholder="Filtrar campanha..."
                   />
                 </div>
+                {dashboardPeriod === 'custom' && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
+                      <input
+                        type="date"
+                        value={dashboardStartDate}
+                        onChange={(e) => setDashboardStartDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                      />
+                    </div>
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
+                      <input
+                        type="date"
+                        value={dashboardEndDate}
+                        onChange={(e) => setDashboardEndDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
