@@ -69,6 +69,42 @@ const monthLabel = (key) => {
   });
 };
 
+const buildStatsSummary = (items) => {
+  const negotiationStatuses = ['negociacao', 'proposta'];
+  const acc = {
+    total: items.length,
+    novos: 0,
+    emContato: 0,
+    ganhos: 0,
+    perdidos: 0,
+    valorTotal: 0,
+    valorPerdido: 0,
+    qtdNegociacao: 0,
+    valorNegociacao: 0,
+  };
+
+  items.forEach((lead) => {
+    const status = (lead.status || '').toLowerCase();
+    if (status === 'novo') acc.novos += 1;
+    if (status === 'contato') acc.emContato += 1;
+    if (status === 'ganho') {
+      acc.ganhos += 1;
+      acc.valorTotal += Number(lead.value || 0);
+    }
+    if (status === 'perdido') {
+      acc.perdidos += 1;
+      acc.valorPerdido += Number(lead.value || 0);
+    }
+    if (negotiationStatuses.includes(status)) {
+      acc.qtdNegociacao += 1;
+      acc.valorNegociacao += Number(lead.value || 0);
+    }
+  });
+
+  acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
+  return acc;
+};
+
 const escapeXml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -311,6 +347,10 @@ const App = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard'
+  const [dashboardPeriod, setDashboardPeriod] = useState('90d');
+  const [dashboardSegmentFilter, setDashboardSegmentFilter] = useState('all');
+  const [dashboardChannelFilter, setDashboardChannelFilter] = useState('all');
+  const [dashboardCampaignFilter, setDashboardCampaignFilter] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -673,6 +713,20 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dashboardFilters');
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (parsed.period) setDashboardPeriod(parsed.period);
+      if (parsed.segmentFilter) setDashboardSegmentFilter(parsed.segmentFilter);
+      if (parsed.channelFilter) setDashboardChannelFilter(parsed.channelFilter);
+      if (parsed.campaignFilter) setDashboardCampaignFilter(parsed.campaignFilter);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
     const payload = {
       ownerFilter,
       statusFilter,
@@ -689,6 +743,16 @@ const App = () => {
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
   }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
+
+  useEffect(() => {
+    const payload = {
+      period: dashboardPeriod,
+      segmentFilter: dashboardSegmentFilter,
+      channelFilter: dashboardChannelFilter,
+      campaignFilter: dashboardCampaignFilter,
+    };
+    localStorage.setItem('dashboardFilters', JSON.stringify(payload));
+  }, [dashboardPeriod, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -981,38 +1045,53 @@ const App = () => {
     return showAllAgenda ? agendaBase : agendaBase.slice(0, 5);
   }, [agendaBase, showAllAgenda]);
   const localStats = useMemo(() => {
-    const negotiationStatuses = ['negociacao', 'proposta'];
-    const acc = {
-      total: filteredLeads.length,
-      novos: 0,
-      emContato: 0,
-      ganhos: 0,
-      perdidos: 0,
-      valorTotal: 0,
-      valorPerdido: 0,
-      qtdNegociacao: 0,
-      valorNegociacao: 0,
-    };
-    filteredLeads.forEach((lead) => {
-      const status = (lead.status || '').toLowerCase();
-      if (status === 'novo') acc.novos += 1;
-      if (status === 'contato') acc.emContato += 1;
-      if (status === 'ganho') {
-        acc.ganhos += 1;
-        acc.valorTotal += Number(lead.value || 0);
-      }
-      if (status === 'perdido') {
-        acc.perdidos += 1;
-        acc.valorPerdido += Number(lead.value || 0);
-      }
-      if (negotiationStatuses.includes(status)) {
-        acc.qtdNegociacao += 1;
-        acc.valorNegociacao += Number(lead.value || 0);
-      }
-    });
-    acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
-    return acc;
+    return buildStatsSummary(filteredLeads);
   }, [filteredLeads]);
+
+  const dashboardFilteredLeads = useMemo(() => {
+    const now = new Date();
+    const daysByPeriod = {
+      '30d': 30,
+      '90d': 90,
+      '6m': 183,
+      '12m': 365,
+    };
+
+    return leads.filter((lead) => {
+      if (dashboardPeriod !== 'all') {
+        const periodDays = daysByPeriod[dashboardPeriod];
+        const baseDate = parseLeadDate(lead.created_at || lead.first_contact || lead.next_contact);
+        if (!baseDate) return false;
+        const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > periodDays) return false;
+      }
+
+      if (dashboardSegmentFilter !== 'all') {
+        const norm = normalizeOptionValue(lead.segment);
+        if (dashboardSegmentFilter === 'montador') {
+          if (!norm.includes('montador')) return false;
+        } else if (dashboardSegmentFilter === 'usuario_final') {
+          if (norm !== 'usuario final') return false;
+        } else if (norm !== dashboardSegmentFilter) {
+          return false;
+        }
+      }
+
+      if (dashboardChannelFilter !== 'all' && String(lead.channel_id || '') !== String(dashboardChannelFilter)) {
+        return false;
+      }
+
+      if (dashboardCampaignFilter.trim()) {
+        const term = dashboardCampaignFilter.toLowerCase();
+        const campaign = String(lead.campaign || '').toLowerCase();
+        if (!campaign.includes(term)) return false;
+      }
+
+      return true;
+    });
+  }, [leads, dashboardPeriod, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+
+  const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
 
   const dashboardData = useMemo(() => {
     const channelMap = new Map();
@@ -1022,7 +1101,7 @@ const App = () => {
     const convertedMonthlyMap = new Map();
     const pipelineMonthlyMap = new Map();
     const statusMap = new Map();
-    const source = filteredLeads;
+    const source = dashboardFilteredLeads;
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const sixMonths = [];
@@ -1077,7 +1156,7 @@ const App = () => {
         .map(([label, value]) => ({ label, value }))
         .sort((a, b) => b.value - a.value);
 
-    const avgTicket = localStats.ganhos ? localStats.valorTotal / localStats.ganhos : 0;
+    const avgTicket = dashboardLocalStats.ganhos ? dashboardLocalStats.valorTotal / dashboardLocalStats.ganhos : 0;
     const monthlyEvolution = sixMonths.map((key) => ({
       label: monthLabel(key),
       value: monthlyMap.get(key) || 0,
@@ -1112,7 +1191,7 @@ const App = () => {
       convertedEvolution,
       pipelineEvolution,
     };
-  }, [filteredLeads, localStats]);
+  }, [dashboardFilteredLeads, dashboardLocalStats]);
 
   const exportDashboardExcel = () => {
     const workbook = buildExcelWorkbook([
@@ -1120,15 +1199,15 @@ const App = () => {
         name: 'Resumo',
         rows: [
           ['Indicador', 'Valor'],
-          ['Total de leads', localStats.total || 0],
+          ['Total de leads', dashboardLocalStats.total || 0],
           ['Leads no mês', dashboardData.leadsThisMonth || 0],
           ['Prospects', dashboardData.prospects || 0],
           ['Clientes', dashboardData.customers || 0],
-          ['Ganhos', localStats.ganhos || 0],
-          ['Perdidos', localStats.perdidos || 0],
-          ['Taxa de conversão (%)', localStats.taxaConversao || 0],
-          ['Valor convertido', Number(localStats.valorTotal || 0)],
-          ['Valor em negociação', Number(localStats.valorNegociacao || 0)],
+          ['Ganhos', dashboardLocalStats.ganhos || 0],
+          ['Perdidos', dashboardLocalStats.perdidos || 0],
+          ['Taxa de conversão (%)', dashboardLocalStats.taxaConversao || 0],
+          ['Valor convertido', Number(dashboardLocalStats.valorTotal || 0)],
+          ['Valor em negociação', Number(dashboardLocalStats.valorNegociacao || 0)],
           ['Ticket médio ganho', Number(dashboardData.avgTicket || 0)],
           ['Follow-ups vencidos', dashboardData.overdueFollowups || 0],
         ],
@@ -2089,13 +2168,76 @@ const App = () => {
                   Baixar relatório em Excel
                 </button>
               </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros da dashboard</p>
+                    <p className="text-sm text-slate-500">Esses filtros são independentes dos filtros operacionais do CRM.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setDashboardPeriod('90d');
+                      setDashboardSegmentFilter('all');
+                      setDashboardChannelFilter('all');
+                      setDashboardCampaignFilter('');
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <select
+                    value={dashboardPeriod}
+                    onChange={(e) => setDashboardPeriod(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  >
+                    <option value="30d">Últimos 30 dias</option>
+                    <option value="90d">Últimos 90 dias</option>
+                    <option value="6m">Últimos 6 meses</option>
+                    <option value="12m">Últimos 12 meses</option>
+                    <option value="all">Todo o período</option>
+                  </select>
+                  <select
+                    value={dashboardSegmentFilter}
+                    onChange={(e) => setDashboardSegmentFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  >
+                    <option value="all">Todos os perfis</option>
+                    {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={dashboardChannelFilter}
+                    onChange={(e) => setDashboardChannelFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  >
+                    <option value="all">Todos os canais</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={dashboardCampaignFilter}
+                    onChange={(e) => setDashboardCampaignFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    placeholder="Filtrar campanha..."
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Leads Totais" value={localStats.total || 0} helper={`${dashboardData.leadsThisMonth || 0} no mês`} tone="slate" />
-              <StatCard label="Taxa de Conversão" value={`${localStats.taxaConversao || 0}%`} helper={`${localStats.ganhos || 0} ganhos`} tone="blue" />
-              <StatCard label="Valor Convertido" value={formatCurrencyBR(localStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
-              <StatCard label="Pipeline Ativo" value={formatCurrencyBR(localStats.valorNegociacao || 0)} helper={`${localStats.qtdNegociacao || 0} em negociação`} tone="amber" />
+              <StatCard label="Leads Totais" value={dashboardLocalStats.total || 0} helper={`${dashboardData.leadsThisMonth || 0} no mês`} tone="slate" />
+              <StatCard label="Taxa de Conversão" value={`${dashboardLocalStats.taxaConversao || 0}%`} helper={`${dashboardLocalStats.ganhos || 0} ganhos`} tone="blue" />
+              <StatCard label="Valor Convertido" value={formatCurrencyBR(dashboardLocalStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
+              <StatCard label="Pipeline Ativo" value={formatCurrencyBR(dashboardLocalStats.valorNegociacao || 0)} helper={`${dashboardLocalStats.qtdNegociacao || 0} em negociação`} tone="amber" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -2109,8 +2251,8 @@ const App = () => {
               </div>
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Perdidos</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
-                <p className="mt-2 text-xs text-slate-500">{formatCurrencyBR(localStats.valorPerdido || 0)} perdidos</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardLocalStats.perdidos || 0}</p>
+                <p className="mt-2 text-xs text-slate-500">{formatCurrencyBR(dashboardLocalStats.valorPerdido || 0)} perdidos</p>
               </div>
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Follow-up vencido</p>
