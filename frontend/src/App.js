@@ -2224,14 +2224,7 @@ const App = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                   <select
                     value={dashboardPeriod}
-                    onChange={(e) => {
-                      const nextPeriod = e.target.value;
-                      setDashboardPeriod(nextPeriod);
-                      if (nextPeriod !== 'custom') {
-                        setDashboardStartDate('');
-                        setDashboardEndDate('');
-                      }
-                    }}
+                    onChange={(e) => setDashboardPeriod(e.target.value)}
                     className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
                   >
                     <option value="30d">Últimos 30 dias</option>
