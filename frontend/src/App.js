@@ -348,6 +348,7 @@ const App = () => {
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard'
   const [dashboardPeriod, setDashboardPeriod] = useState('90d');
+  const [dashboardOwnerFilter, setDashboardOwnerFilter] = useState('all');
   const [dashboardSegmentFilter, setDashboardSegmentFilter] = useState('all');
   const [dashboardChannelFilter, setDashboardChannelFilter] = useState('all');
   const [dashboardCampaignFilter, setDashboardCampaignFilter] = useState('');
@@ -718,6 +719,7 @@ const App = () => {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (parsed.period) setDashboardPeriod(parsed.period);
+      if (parsed.ownerFilter) setDashboardOwnerFilter(parsed.ownerFilter);
       if (parsed.segmentFilter) setDashboardSegmentFilter(parsed.segmentFilter);
       if (parsed.channelFilter) setDashboardChannelFilter(parsed.channelFilter);
       if (parsed.campaignFilter) setDashboardCampaignFilter(parsed.campaignFilter);
@@ -747,12 +749,13 @@ const App = () => {
   useEffect(() => {
     const payload = {
       period: dashboardPeriod,
+      ownerFilter: dashboardOwnerFilter,
       segmentFilter: dashboardSegmentFilter,
       channelFilter: dashboardChannelFilter,
       campaignFilter: dashboardCampaignFilter,
     };
     localStorage.setItem('dashboardFilters', JSON.stringify(payload));
-  }, [dashboardPeriod, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [dashboardPeriod, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -1077,6 +1080,22 @@ const App = () => {
         }
       }
 
+      if (dashboardOwnerFilter !== 'all') {
+        const targetUser = users.find((u) => String(u.id) === String(dashboardOwnerFilter));
+        const targetName = normalizeOptionValue(targetUser?.name);
+        const oid = String(lead.ownerId || lead.user_id || lead.userId || lead.owner_id || '');
+        const oname = normalizeOptionValue(lead.owner || lead.responsible_name);
+        if (oid) {
+          if (oid !== String(dashboardOwnerFilter)) return false;
+        } else if (targetName) {
+          if (!(oname === targetName || oname.includes(targetName) || targetName.includes(oname))) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+
       if (dashboardChannelFilter !== 'all' && String(lead.channel_id || '') !== String(dashboardChannelFilter)) {
         return false;
       }
@@ -1089,7 +1108,7 @@ const App = () => {
 
       return true;
     });
-  }, [leads, dashboardPeriod, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [leads, users, dashboardPeriod, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
 
   const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
 
@@ -2177,6 +2196,7 @@ const App = () => {
                   <button
                     onClick={() => {
                       setDashboardPeriod('90d');
+                      setDashboardOwnerFilter('all');
                       setDashboardSegmentFilter('all');
                       setDashboardChannelFilter('all');
                       setDashboardCampaignFilter('');
@@ -2197,6 +2217,18 @@ const App = () => {
                     <option value="6m">Últimos 6 meses</option>
                     <option value="12m">Últimos 12 meses</option>
                     <option value="all">Todo o período</option>
+                  </select>
+                  <select
+                    value={dashboardOwnerFilter}
+                    onChange={(e) => setDashboardOwnerFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  >
+                    <option value="all">Todos os responsáveis</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
                   </select>
                   <select
                     value={dashboardSegmentFilter}
