@@ -926,10 +926,10 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
         users.find((u) => String(u.id) === String(ownerId)) ||
         users.find((u) => String(u.id) === String(req.user.id));
       if (!hasOwnerInput) {
-        const candidates = users.filter((u) => ['2', '3'].includes(String(u.id)));
-        if (candidates.length) {
-          ownerUser = candidates[Math.floor(Math.random() * candidates.length)];
-        }
+        ownerUser =
+          users.find((u) => String(u.id) === '2') ||
+          users.find((u) => (u.username || u.name || '').toLowerCase().includes('ines')) ||
+          ownerUser;
       }
     }
     const channelName = req.body.channel_name || '';
@@ -1240,12 +1240,11 @@ app.post('/api/webhook/manychat', async (req, res) => {
       loadTable('users'),
     ]);
 
-    // Seleciona aleatoriamente entre Ines e Victor (se existirem)
-    const pool = users.filter((u) => {
-      const uname = (u.username || u.name || '').toLowerCase();
-      return uname.includes('ines') || uname.includes('victor');
-    });
-    const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    // Novos leads de Manychat devem ir somente para a Ines
+    const chosen =
+      users.find((u) => String(u.id) === '2') ||
+      users.find((u) => (u.username || u.name || '').toLowerCase().includes('ines')) ||
+      null;
 
     const id = nextId(leads);
     const now = new Date().toISOString();
