@@ -16,12 +16,7 @@ log() {
 log "Deploy automático iniciado (script moderno)."
 
 cd "$BASE_DIR"
-log "Atualizando código (git pull)..."
-git config --global --add safe.directory "$BASE_DIR"
-git fetch origin
-git reset --hard origin/main
-
-log "Instalando backend/buildando e reiniciando PM2..."
+log "Executando deploy como bhs-crm..."
 su - bhs-crm -c "cd $BASE_DIR && ./deploy.sh"
 
 log "Recarregando Nginx..."
