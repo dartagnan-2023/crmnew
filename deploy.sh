@@ -1,10 +1,14 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -euo pipefail
 
 BASE="/home/bhs-crm/htdocs/crm.bhseletrica.com.br"
 export NVM_DIR="/home/bhs-crm/.nvm"
 
 cd "$BASE"
+REAL_BASE="$(pwd -P)"
+
+git config --global --add safe.directory "$BASE" || true
+git config --global --add safe.directory "$REAL_BASE" || true
 
 if [ -s "$NVM_DIR/nvm.sh" ]; then
   . "$NVM_DIR/nvm.sh"
