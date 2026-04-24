@@ -87,6 +87,47 @@ const parseMoneyValue = (val) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const toIsoStringOrEmpty = (val) => {
+  if (!val) return '';
+  const date = val instanceof Date ? val : new Date(val);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+};
+
+const normalizeListParam = (val) =>
+  String(val || '')
+    .split(',')
+    .map((item) => normalizeName(item))
+    .filter(Boolean);
+
+const dateInRange = (value, from, to) => {
+  if (!from && !to) return true;
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return false;
+  if (from && date < from) return false;
+  if (to && date > to) return false;
+  return true;
+};
+
+const deriveLeadSource = (lead) => {
+  const explicitSource = normalizeName(lead.source);
+  if (explicitSource) return lead.source;
+
+  const channel = normalizeName(lead.channel_name);
+  const campaign = normalizeName(lead.campaign);
+
+  if (channel.includes('whatsapp')) return 'WhatsApp';
+  if (channel.includes('landing')) return 'Landing Page';
+  if (channel.includes('manychat')) return 'Manychat';
+  if (campaign.includes('meta')) return 'Meta Ads';
+  if (campaign.includes('facebook') || campaign.includes('instagram')) return 'Meta Ads';
+  if (campaign.includes('google')) return 'Google Ads';
+  if (campaign.includes('organico') || campaign.includes('organic')) return 'Orgânico';
+  if (campaign.includes('indicacao') || campaign.includes('refer')) return 'Indicação';
+  if (lead.channel_name) return lead.channel_name;
+  if (lead.campaign) return lead.campaign;
+  return '';
+};
+
 const DDD_REGION_MAP = {
   '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
   '21': 'RJ', '22': 'RJ', '24': 'RJ',
@@ -188,7 +229,9 @@ const SHEETS_CONFIG = {
     'first_contact',
     'next_contact',
     'notes',
+    'source',
     'created_at',
+    'updated_at',
     'is_private',
     'is_customer',
     'is_out_of_scope',
@@ -845,12 +888,16 @@ const filterLeadsByUser = (leads, user, query) => {
 const hydrateLeads = (leads, channels) => {
   return leads.map((l) => {
     const channel = channels.find((c) => String(c.id) === String(l.channel_id));
+    const createdAt = toIsoStringOrEmpty(l.created_at);
+    const updatedAt = toIsoStringOrEmpty(l.updated_at || l.created_at);
     return {
       ...l,
       ownerId: l.ownerId || l.user_id || l.owner_id || '',
       value: parseMoneyValue(l.value),
       channel_name: l.channel_name || channel?.name || '',
-      created_at: l.created_at || '',
+      source: deriveLeadSource({ ...l, channel_name: l.channel_name || channel?.name || '' }),
+      created_at: createdAt,
+      updated_at: updatedAt,
       is_private: normalizeBool(l.is_private),
       is_customer: normalizeBool(l.is_customer),
       is_out_of_scope: normalizeBool(l.is_out_of_scope),
@@ -859,13 +906,80 @@ const hydrateLeads = (leads, channels) => {
   });
 };
 
+const applyLeadFilters = (leads, query) => {
+  const createdFrom = toIsoStringOrEmpty(query.created_from || query.createdAtFrom || query.date_from);
+  const createdToBase = toIsoStringOrEmpty(query.created_to || query.createdAtTo || query.date_to);
+  const updatedFrom = toIsoStringOrEmpty(query.updated_from || query.updatedAtFrom);
+  const updatedToBase = toIsoStringOrEmpty(query.updated_to || query.updatedAtTo);
+  const createdFromDate = createdFrom ? new Date(createdFrom) : null;
+  const createdToDate = createdToBase ? new Date(createdToBase) : null;
+  const updatedFromDate = updatedFrom ? new Date(updatedFrom) : null;
+  const updatedToDate = updatedToBase ? new Date(updatedToBase) : null;
+
+  if (createdToDate) createdToDate.setUTCHours(23, 59, 59, 999);
+  if (updatedToDate) updatedToDate.setUTCHours(23, 59, 59, 999);
+
+  const statusFilter = normalizeListParam(query.status);
+  const campaignFilter = normalizeListParam(query.campaign);
+  const channelFilter = normalizeListParam(query.channel || query.channel_name);
+  const ownerIds = String(query.ownerId || '')
+    .split(',')
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+
+  return leads.filter((lead) => {
+    if (!dateInRange(lead.created_at, createdFromDate, createdToDate)) return false;
+    if (!dateInRange(lead.updated_at, updatedFromDate, updatedToDate)) return false;
+    if (statusFilter.length && !statusFilter.includes(normalizeName(lead.status))) return false;
+    if (campaignFilter.length && !campaignFilter.includes(normalizeName(lead.campaign))) return false;
+    if (
+      channelFilter.length &&
+      !channelFilter.includes(normalizeName(lead.channel_name)) &&
+      !channelFilter.includes(normalizeName(lead.channel_id))
+    ) {
+      return false;
+    }
+    if (ownerIds.length && !ownerIds.includes(String(lead.ownerId || '').trim())) return false;
+    return true;
+  });
+};
+
+const paginateLeads = (leads, query) => {
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const limit = Math.max(1, Math.min(500, Number.parseInt(query.limit || query.per_page, 10) || 100));
+  const shouldPaginate = query.page !== undefined || query.limit !== undefined || query.per_page !== undefined;
+
+  if (!shouldPaginate) return null;
+
+  const total = leads.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const start = (page - 1) * limit;
+  const items = leads.slice(start, start + limit);
+
+  return {
+    items,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+      nextPage: page < totalPages ? page + 1 : null,
+      prevPage: page > 1 ? page - 1 : null,
+    },
+  };
+};
+
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
     loadTable(SHEET_LEADS),
     loadTable(SHEET_CHANNELS),
   ]);
-  const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
-  return res.json(filtered);
+  const visible = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
+  const filtered = applyLeadFilters(visible, req.query);
+  const paginated = paginateLeads(filtered, req.query);
+  return res.json(paginated || filtered);
 });
 
 app.get('/api/leads/:id', apiKeyLeadsMiddleware, async (req, res) => {
@@ -968,7 +1082,9 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       first_contact: first_contact || '',
       next_contact: next_contact || '',
       notes: notes || '',
+      source: req.body.source || deriveLeadSource({ channel_name: channelName, campaign }),
       created_at: now,
+      updated_at: now,
       is_private: normalizeBool(is_private),
       is_customer: normalizeBool(is_customer),
       is_out_of_scope: normalizeBool(is_out_of_scope),
@@ -1042,6 +1158,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     highlighted_categories,
     customer_type,
     cooling_reason,
+    source,
   } = req.body;
 
   return withTableLock('leads', async () => {
@@ -1086,6 +1203,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
       if (notes !== undefined && String(notes || '') !== String(current.notes || '')) return true;
       if (company !== undefined && String(company || '') !== String(current.company || '')) return true;
       if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
+      if (source !== undefined && String(source || '') !== String(current.source || '')) return true;
       if (
         is_private !== undefined &&
         normalizeBool(is_private) !== normalizeBool(current.is_private)
@@ -1129,6 +1247,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (first_contact !== undefined) leads[idx].first_contact = first_contact;
     if (next_contact !== undefined) leads[idx].next_contact = next_contact;
     if (notes !== undefined) leads[idx].notes = notes;
+    if (source !== undefined) leads[idx].source = source;
     if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
     if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);
     if (is_out_of_scope !== undefined) leads[idx].is_out_of_scope = normalizeBool(is_out_of_scope);
@@ -1141,6 +1260,11 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
       leads[idx].ownerId = ownerUser?.id || ownerId || leads[idx].ownerId;
       leads[idx].owner = ownerUser?.name || owner || leads[idx].owner;
     }
+
+    if (!leads[idx].source) {
+      leads[idx].source = deriveLeadSource(leads[idx]);
+    }
+    leads[idx].updated_at = new Date().toISOString();
 
     await saveTable('leads', leads);
     return res.json(leads[idx]);
