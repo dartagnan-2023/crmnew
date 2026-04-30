@@ -128,6 +128,8 @@ const deriveLeadSource = (lead) => {
   return '';
 };
 
+const isCompetitorLead = (lead) => normalizeName(lead?.segment) === 'concorrente';
+
 const DDD_REGION_MAP = {
   '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
   '21': 'RJ', '22': 'RJ', '24': 'RJ',
@@ -1317,7 +1319,8 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
     loadTable('leads'),
     loadTable('channels'),
   ]);
-  const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
+  const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query)
+    .filter((lead) => !isCompetitorLead(lead));
   const total = filtered.length;
   const negotiationStatuses = ['negociacao', 'proposta'];
   const statusCount = filtered.reduce(

@@ -70,9 +70,10 @@ const monthLabel = (key) => {
 };
 
 const buildStatsSummary = (items) => {
+  const validItems = items.filter((lead) => normalizeOptionValue(lead?.segment) !== 'concorrente');
   const negotiationStatuses = ['negociacao', 'proposta'];
   const acc = {
-    total: items.length,
+    total: validItems.length,
     novos: 0,
     emContato: 0,
     ganhos: 0,
@@ -83,7 +84,7 @@ const buildStatsSummary = (items) => {
     valorNegociacao: 0,
   };
 
-  items.forEach((lead) => {
+  validItems.forEach((lead) => {
     const status = (lead.status || '').toLowerCase();
     if (status === 'novo') acc.novos += 1;
     if (status === 'contato') acc.emContato += 1;
@@ -235,6 +236,7 @@ const SEGMENT_OPTIONS = [
   { value: 'instalador', label: 'Instalador' },
   { value: 'montador', label: 'Montador de Painel' },
   { value: 'fabricante_maquinas', label: 'Fabricante de Máquinas' },
+  { value: 'concorrente', label: 'Concorrente' },
   { value: 'representante', label: 'Representante' },
   { value: 'usuario_final', label: 'Usuario Final' },
   { value: 'rep_comercial', label: 'Rep Comercial' },
@@ -1041,7 +1043,7 @@ const App = () => {
   const statsSegments = useMemo(() => {
     const bySegment = {};
     let empresas = 0;
-    leads.forEach((l) => {
+    leads.filter((l) => normalizeOptionValue(l.segment) !== 'concorrente').forEach((l) => {
       if (l.company) empresas += 1;
       const seg = l.segment || '';
       if (!bySegment[seg]) bySegment[seg] = 0;
@@ -1067,6 +1069,7 @@ const App = () => {
     };
 
     return leads.filter((lead) => {
+      if (normalizeOptionValue(lead.segment) === 'concorrente') return false;
       const baseDate = parseLeadDate(lead.created_at || lead.first_contact || lead.next_contact);
       if (dashboardPeriod === 'custom') {
         if (!baseDate) return false;
