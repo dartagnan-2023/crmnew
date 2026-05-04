@@ -367,20 +367,28 @@ const ensureSheetExists = async (sheetName) => {
   if (existing) return;
 
   console.log(`[INIT] Criando aba ausente: ${sheetName}...`);
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      requests: [
-        {
-          addSheet: {
-            properties: {
-              title: sheetName,
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+              },
             },
           },
-        },
-      ],
-    },
-  });
+        ],
+      },
+    });
+  } catch (err) {
+    const message = err?.response?.data?.error?.message || err?.message || '';
+    if (message.includes(`A sheet with the name "${sheetName}" already exists`)) {
+      return;
+    }
+    throw err;
+  }
 };
 
 const writeSheet = async (sheetName, headers, rows) => {
