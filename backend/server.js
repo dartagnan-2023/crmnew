@@ -130,6 +130,33 @@ const deriveLeadSource = (lead) => {
 
 const isCompetitorLead = (lead) => normalizeName(lead?.segment) === 'concorrente';
 
+const hydrateBudgets = (budgets) =>
+  budgets.map((budget) => ({
+    ...budget,
+    budget_value: parseMoneyValue(budget.budget_value),
+    closed_value: parseMoneyValue(budget.closed_value),
+    created_at: toIsoStringOrEmpty(budget.created_at),
+    updated_at: toIsoStringOrEmpty(budget.updated_at || budget.created_at),
+    requested_at: toIsoStringOrEmpty(budget.requested_at),
+    sent_at: toIsoStringOrEmpty(budget.sent_at),
+    closed_at: toIsoStringOrEmpty(budget.closed_at),
+  }));
+
+const hydrateBudget = (budget) => hydrateBudgets([budget])[0];
+
+const markLeadAsCustomer = async (leadId) => {
+  const targetId = String(leadId || '').trim();
+  if (!targetId) return;
+  await withTableLock('leads', async () => {
+    const { items: leads } = await loadTable('leads', true);
+    const idx = leads.findIndex((lead) => String(lead.id) === targetId);
+    if (idx === -1) return;
+    leads[idx].is_customer = true;
+    leads[idx].updated_at = new Date().toISOString();
+    await saveTable('leads', leads);
+  });
+};
+
 const DDD_REGION_MAP = {
   '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
   '21': 'RJ', '22': 'RJ', '24': 'RJ',
@@ -166,6 +193,7 @@ const getRegionByPhone = (phone) => {
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_USERS = process.env.SHEET_USERS || 'users';
 const SHEET_LEADS = process.env.SHEET_LEADS || process.env.SHEET_NAME || 'leads';
+const SHEET_BUDGETS = process.env.SHEET_BUDGETS || 'budgets';
 const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 
@@ -213,6 +241,29 @@ const SHEETS_CONFIG = {
   users: ['id', 'name', 'username', 'email', 'phone', 'password', 'role'],
   channels: ['id', 'name'],
   negative_terms: ['id', 'term', 'active', 'notes', 'created_at'],
+  budgets: [
+    'id',
+    'lead_id',
+    'client_name',
+    'company',
+    'segment',
+    'status',
+    'loss_reason',
+    'owner_id',
+    'owner_name',
+    'estimator_id',
+    'estimator_name',
+    'budget_value',
+    'closed_value',
+    'requested_at',
+    'sent_at',
+    'closed_at',
+    'created_at',
+    'updated_at',
+    'channel_name',
+    'campaign',
+    'notes',
+  ],
   leads: [
     'id',
     'name',
@@ -332,6 +383,7 @@ const ensureHeaders = async () => {
     [SHEET_USERS]: SHEETS_CONFIG.users,
     [SHEET_CHANNELS]: SHEETS_CONFIG.channels,
     [SHEET_NEGATIVE_TERMS]: SHEETS_CONFIG.negative_terms,
+    [SHEET_BUDGETS]: SHEETS_CONFIG.budgets,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
 
@@ -1310,6 +1362,140 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
 
     console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${afterSave.length}`);
     return res.json({ success: true, removed: leads.length - afterSave.length });
+  });
+});
+
+// ===================== BUDGETS =====================
+app.get('/api/budgets', authMiddleware, async (_req, res) => {
+  const { items: budgets } = await loadTable('budgets');
+  return res.json(hydrateBudgets(budgets));
+});
+
+app.post('/api/budgets', authMiddleware, async (req, res) => {
+  const {
+    lead_id = '',
+    client_name = '',
+    company = '',
+    segment = '',
+    status = 'novo',
+    loss_reason = '',
+    owner_id = '',
+    owner_name = '',
+    estimator_id = '',
+    estimator_name = '',
+    budget_value = 0,
+    closed_value = 0,
+    requested_at = '',
+    sent_at = '',
+    closed_at = '',
+    channel_name = '',
+    campaign = '',
+    notes = '',
+  } = req.body || {};
+
+  if (!client_name && !company) {
+    return res.status(400).json({ error: 'Cliente ou empresa obrigatorio' });
+  }
+
+  return withTableLock('budgets', async () => {
+    const { items: budgets } = await loadTable('budgets', true);
+    const id = nextId(budgets);
+    const now = new Date().toISOString();
+    const ownerIdFinal = owner_id || req.user.id || '';
+    const ownerNameFinal = owner_name || req.user.name || '';
+    const budget = {
+      id,
+      lead_id: lead_id || '',
+      client_name: client_name || '',
+      company: company || '',
+      segment: segment || '',
+      status: status || 'novo',
+      loss_reason: loss_reason || '',
+      owner_id: ownerIdFinal,
+      owner_name: ownerNameFinal,
+      estimator_id: estimator_id || '',
+      estimator_name: estimator_name || '',
+      budget_value: parseMoneyValue(budget_value),
+      closed_value: parseMoneyValue(closed_value),
+      requested_at: requested_at || now,
+      sent_at: sent_at || '',
+      closed_at: closed_at || '',
+      created_at: now,
+      updated_at: now,
+      channel_name: channel_name || '',
+      campaign: campaign || '',
+      notes: notes || '',
+    };
+    budgets.push(budget);
+    await saveTable('budgets', budgets);
+    if (normalizeName(budget.status) === 'aprovado' && budget.lead_id) {
+      await markLeadAsCustomer(budget.lead_id);
+    }
+    return res.json(hydrateBudget(budget));
+  });
+});
+
+app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
+  const {
+    lead_id,
+    client_name,
+    company,
+    segment,
+    status,
+    loss_reason,
+    owner_id,
+    owner_name,
+    estimator_id,
+    estimator_name,
+    budget_value,
+    closed_value,
+    requested_at,
+    sent_at,
+    closed_at,
+    channel_name,
+    campaign,
+    notes,
+  } = req.body || {};
+
+  return withTableLock('budgets', async () => {
+    const { items: budgets } = await loadTable('budgets', true);
+    const idx = budgets.findIndex((budget) => String(budget.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Orcamento nao encontrado' });
+
+    if (lead_id !== undefined) budgets[idx].lead_id = lead_id || '';
+    if (client_name !== undefined) budgets[idx].client_name = client_name || '';
+    if (company !== undefined) budgets[idx].company = company || '';
+    if (segment !== undefined) budgets[idx].segment = segment || '';
+    if (status !== undefined) budgets[idx].status = status || 'novo';
+    if (loss_reason !== undefined) budgets[idx].loss_reason = loss_reason || '';
+    if (owner_id !== undefined) budgets[idx].owner_id = owner_id || '';
+    if (owner_name !== undefined) budgets[idx].owner_name = owner_name || '';
+    if (estimator_id !== undefined) budgets[idx].estimator_id = estimator_id || '';
+    if (estimator_name !== undefined) budgets[idx].estimator_name = estimator_name || '';
+    if (budget_value !== undefined) budgets[idx].budget_value = parseMoneyValue(budget_value);
+    if (closed_value !== undefined) budgets[idx].closed_value = parseMoneyValue(closed_value);
+    if (requested_at !== undefined) budgets[idx].requested_at = requested_at || '';
+    if (sent_at !== undefined) budgets[idx].sent_at = sent_at || '';
+    if (closed_at !== undefined) budgets[idx].closed_at = closed_at || '';
+    if (channel_name !== undefined) budgets[idx].channel_name = channel_name || '';
+    if (campaign !== undefined) budgets[idx].campaign = campaign || '';
+    if (notes !== undefined) budgets[idx].notes = notes || '';
+    budgets[idx].updated_at = new Date().toISOString();
+
+    await saveTable('budgets', budgets);
+    if (normalizeName(budgets[idx].status) === 'aprovado' && budgets[idx].lead_id) {
+      await markLeadAsCustomer(budgets[idx].lead_id);
+    }
+    return res.json(hydrateBudget(budgets[idx]));
+  });
+});
+
+app.delete('/api/budgets/:id', authMiddleware, async (req, res) => {
+  return withTableLock('budgets', async () => {
+    const { items: budgets } = await loadTable('budgets', true);
+    const filtered = budgets.filter((budget) => String(budget.id) !== String(req.params.id));
+    await saveTable('budgets', filtered);
+    return res.json({ success: true });
   });
 });
 

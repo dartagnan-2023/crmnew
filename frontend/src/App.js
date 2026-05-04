@@ -11,6 +11,27 @@ const STATUS_OPTIONS = [
   { value: 'perdido', label: 'Perdido' },
 ];
 
+const BUDGET_STATUS_OPTIONS = [
+  { value: 'novo', label: 'Novo' },
+  { value: 'em_orcamento', label: 'Em orçamento' },
+  { value: 'enviado', label: 'Enviado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'reprovado', label: 'Reprovado' },
+  { value: 'nao_feito', label: 'Não feito' },
+];
+
+const BUDGET_LOSS_REASON_OPTIONS = [
+  { value: 'preco', label: 'Preço' },
+  { value: 'prazo', label: 'Prazo' },
+  { value: 'sem_retorno', label: 'Sem retorno' },
+  { value: 'concorrente', label: 'Concorrente' },
+  { value: 'escopo', label: 'Escopo' },
+  { value: 'cliente_desistiu', label: 'Cliente desistiu' },
+  { value: 'sem_viabilidade', label: 'Sem viabilidade' },
+  { value: 'sem_material', label: 'Sem material' },
+  { value: 'outros', label: 'Outros' },
+];
+
 
 // Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
 const formatPhone = (value) => {
@@ -103,6 +124,34 @@ const buildStatsSummary = (items) => {
   });
 
   acc.taxaConversao = acc.total ? Math.round((acc.ganhos / acc.total) * 100) : 0;
+  return acc;
+};
+
+const buildBudgetStatsSummary = (items) => {
+  const acc = {
+    total: items.length,
+    enviados: 0,
+    aprovados: 0,
+    reprovados: 0,
+    naoFeitos: 0,
+    valorOrcado: 0,
+    valorFechado: 0,
+  };
+
+  items.forEach((item) => {
+    const status = normalizeOptionValue(item.status);
+    if (status === 'enviado') acc.enviados += 1;
+    if (status === 'aprovado') {
+      acc.aprovados += 1;
+      acc.valorFechado += Number(item.closed_value || 0);
+    }
+    if (status === 'reprovado') acc.reprovados += 1;
+    if (status === 'nao feito') acc.naoFeitos += 1;
+    acc.valorOrcado += Number(item.budget_value || 0);
+  });
+
+  acc.taxaAprovacao = acc.total ? Math.round((acc.aprovados / acc.total) * 100) : 0;
+  acc.ticketMedio = acc.aprovados ? acc.valorFechado / acc.aprovados : 0;
   return acc;
 };
 
@@ -323,6 +372,27 @@ const emptyLead = {
   cooling_reason: [],
 };
 
+const emptyBudget = {
+  lead_id: '',
+  client_name: '',
+  company: '',
+  segment: '',
+  status: 'novo',
+  loss_reason: '',
+  owner_id: '',
+  owner_name: '',
+  estimator_id: '',
+  estimator_name: '',
+  budget_value: 0,
+  closed_value: 0,
+  requested_at: '',
+  sent_at: '',
+  closed_at: '',
+  channel_name: '',
+  campaign: '',
+  notes: '',
+};
+
 const App = () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -334,6 +404,7 @@ const App = () => {
   const [authHint, setAuthHint] = useState('');
 
   const [leads, setLeads] = useState([]);
+  const [budgets, setBudgets] = useState([]);
   const [channels, setChannels] = useState([]);
   const [stats, setStats] = useState({});
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
@@ -348,7 +419,7 @@ const App = () => {
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
-  const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard'
+  const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard' | 'orcamentos'
   const [dashboardPeriod, setDashboardPeriod] = useState('90d');
   const [dashboardStartDate, setDashboardStartDate] = useState('');
   const [dashboardEndDate, setDashboardEndDate] = useState('');
@@ -363,6 +434,18 @@ const App = () => {
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
   const [savingLead, setSavingLead] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(null);
+  const [budgetForm, setBudgetForm] = useState(emptyBudget);
+  const [savingBudget, setSavingBudget] = useState(false);
+  const [budgetPeriod, setBudgetPeriod] = useState('90d');
+  const [budgetStartDate, setBudgetStartDate] = useState('');
+  const [budgetEndDate, setBudgetEndDate] = useState('');
+  const [budgetStatusFilter, setBudgetStatusFilter] = useState('all');
+  const [budgetOwnerFilter, setBudgetOwnerFilter] = useState('all');
+  const [budgetEstimatorFilter, setBudgetEstimatorFilter] = useState('all');
+  const [budgetLossReasonFilter, setBudgetLossReasonFilter] = useState('all');
+  const [budgetSearch, setBudgetSearch] = useState('');
   const highlightedField = ensureArray(leadForm.highlighted_categories);
   const coolingField = ensureArray(leadForm.cooling_reason);
   const toggleLeadListField = (field, option) => {
@@ -444,6 +527,7 @@ const App = () => {
     setToken(null);
     setUser(null);
     setLeads([]);
+    setBudgets([]);
     setChannels([]);
     setStats({});
     setUsers([]);
@@ -626,6 +710,21 @@ const App = () => {
     }
   };
 
+  const loadBudgets = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/budgets`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setBudgets(data);
+    } catch (err) {
+      console.error('Erro ao carregar orçamentos:', err);
+    }
+  };
+
   const loadUsers = async () => {
     if (!token) return;
     try {
@@ -665,7 +764,7 @@ const App = () => {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      await Promise.all([loadLeads(), loadChannels(), loadUsers(), loadStats()]);
+      await Promise.all([loadLeads(), loadBudgets(), loadChannels(), loadUsers(), loadStats()]);
     } finally {
       setLoadingData(false);
     }
@@ -1228,6 +1327,143 @@ const App = () => {
     };
   }, [dashboardFilteredLeads, dashboardLocalStats]);
 
+  const budgetFilteredItems = useMemo(() => {
+    const now = new Date();
+    const daysByPeriod = {
+      '30d': 30,
+      '90d': 90,
+      '6m': 183,
+      '12m': 365,
+    };
+
+    return budgets.filter((budget) => {
+      const baseDate = parseLeadDate(budget.requested_at || budget.created_at || budget.sent_at || budget.closed_at);
+      if (budgetPeriod === 'custom') {
+        if (!baseDate) return false;
+        const budgetTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+        const startTime = budgetStartDate ? new Date(`${budgetStartDate}T00:00:00`).getTime() : null;
+        const endTime = budgetEndDate ? new Date(`${budgetEndDate}T23:59:59`).getTime() : null;
+        if (startTime && budgetTime < startTime) return false;
+        if (endTime && budgetTime > endTime) return false;
+      } else if (budgetPeriod !== 'all') {
+        const periodDays = daysByPeriod[budgetPeriod];
+        if (!baseDate) return false;
+        const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > periodDays) return false;
+      }
+
+      if (budgetStatusFilter !== 'all' && normalizeOptionValue(budget.status) !== normalizeOptionValue(budgetStatusFilter)) {
+        return false;
+      }
+      if (budgetOwnerFilter !== 'all' && String(budget.owner_id || '') !== String(budgetOwnerFilter)) {
+        return false;
+      }
+      if (budgetEstimatorFilter !== 'all' && String(budget.estimator_id || '') !== String(budgetEstimatorFilter)) {
+        return false;
+      }
+      if (
+        budgetLossReasonFilter !== 'all' &&
+        normalizeOptionValue(budget.loss_reason) !== normalizeOptionValue(budgetLossReasonFilter)
+      ) {
+        return false;
+      }
+      if (budgetSearch.trim()) {
+        const term = budgetSearch.toLowerCase();
+        const haystack = [
+          budget.client_name,
+          budget.company,
+          budget.owner_name,
+          budget.estimator_name,
+          budget.campaign,
+          budget.channel_name,
+          budget.notes,
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [
+    budgets,
+    budgetPeriod,
+    budgetStartDate,
+    budgetEndDate,
+    budgetStatusFilter,
+    budgetOwnerFilter,
+    budgetEstimatorFilter,
+    budgetLossReasonFilter,
+    budgetSearch,
+  ]);
+
+  const budgetStats = useMemo(() => buildBudgetStatsSummary(budgetFilteredItems), [budgetFilteredItems]);
+
+  const budgetDashboardData = useMemo(() => {
+    const statusMap = new Map();
+    const lossReasonMap = new Map();
+    const ownerMap = new Map();
+    const estimatorMap = new Map();
+    const monthlyMap = new Map();
+    const closedMonthlyMap = new Map();
+    const today = new Date();
+    const sixMonths = [];
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+      const key = monthKey(date);
+      monthlyMap.set(key, 0);
+      closedMonthlyMap.set(key, 0);
+      sixMonths.push(key);
+    }
+
+    budgetFilteredItems.forEach((budget) => {
+      const status = budget.status || 'sem_status';
+      const lossReason = budget.loss_reason || 'sem_motivo';
+      const owner = budget.owner_name || 'Sem vendedor';
+      const estimator = budget.estimator_name || 'Sem orçamentista';
+      const createdDate = parseLeadDate(budget.requested_at || budget.created_at);
+      const closedDate = parseLeadDate(budget.closed_at || budget.updated_at);
+
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      if (normalizeOptionValue(lossReason) !== 'sem motivo') {
+        lossReasonMap.set(lossReason, (lossReasonMap.get(lossReason) || 0) + 1);
+      }
+      ownerMap.set(owner, (ownerMap.get(owner) || 0) + 1);
+      estimatorMap.set(estimator, (estimatorMap.get(estimator) || 0) + 1);
+
+      if (createdDate) {
+        const key = monthKey(createdDate);
+        if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+      }
+      if (closedDate && normalizeOptionValue(status) === 'aprovado') {
+        const key = monthKey(closedDate);
+        if (closedMonthlyMap.has(key)) {
+          closedMonthlyMap.set(key, (closedMonthlyMap.get(key) || 0) + Number(budget.closed_value || 0));
+        }
+      }
+    });
+
+    const sortEntries = (map) =>
+      Array.from(map.entries())
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+
+    return {
+      byStatus: sortEntries(statusMap).map((item) => ({
+        ...item,
+        label: BUDGET_STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
+      })),
+      byLossReason: sortEntries(lossReasonMap).map((item) => ({
+        ...item,
+        label: BUDGET_LOSS_REASON_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
+      })),
+      byOwner: sortEntries(ownerMap),
+      byEstimator: sortEntries(estimatorMap),
+      monthlyEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: monthlyMap.get(key) || 0 })),
+      closedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: closedMonthlyMap.get(key) || 0 })),
+    };
+  }, [budgetFilteredItems]);
+
   const exportDashboardExcel = () => {
     const workbook = buildExcelWorkbook([
       {
@@ -1529,6 +1765,101 @@ const App = () => {
     } catch (err) {
       console.error('Erro ao excluir lead:', err);
       showToast('Erro ao excluir lead', 'error');
+    }
+  };
+
+  const openNewBudgetModal = () => {
+    setEditingBudget(null);
+    setBudgetForm({
+      ...emptyBudget,
+      owner_id: user?.id || '',
+      owner_name: user?.name || '',
+      requested_at: toDateInput(new Date().toISOString()),
+    });
+    setShowBudgetModal(true);
+  };
+
+  const openEditBudgetModal = (budget) => {
+    setEditingBudget(budget);
+    setBudgetForm({
+      lead_id: budget.lead_id || '',
+      client_name: budget.client_name || '',
+      company: budget.company || '',
+      segment: budget.segment || '',
+      status: budget.status || 'novo',
+      loss_reason: budget.loss_reason || '',
+      owner_id: budget.owner_id || '',
+      owner_name: budget.owner_name || '',
+      estimator_id: budget.estimator_id || '',
+      estimator_name: budget.estimator_name || '',
+      budget_value: Number(budget.budget_value || 0),
+      closed_value: Number(budget.closed_value || 0),
+      requested_at: toDateInput(budget.requested_at),
+      sent_at: toDateInput(budget.sent_at),
+      closed_at: toDateInput(budget.closed_at),
+      channel_name: budget.channel_name || '',
+      campaign: budget.campaign || '',
+      notes: budget.notes || '',
+    });
+    setShowBudgetModal(true);
+  };
+
+  const saveBudget = async () => {
+    if (!budgetForm.client_name && !budgetForm.company) {
+      showToast('Cliente ou empresa obrigatórios', 'error');
+      return;
+    }
+    const method = editingBudget ? 'PUT' : 'POST';
+    const url = editingBudget ? `${API_URL}/budgets/${editingBudget.id}` : `${API_URL}/budgets`;
+    const payload = {
+      ...budgetForm,
+      budget_value: Number(budgetForm.budget_value) || 0,
+      closed_value: Number(budgetForm.closed_value) || 0,
+    };
+    try {
+      setSavingBudget(true);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao salvar orçamento', 'error');
+        return;
+      }
+      await Promise.all([loadBudgets(), loadLeads(), loadStats()]);
+      setShowBudgetModal(false);
+      setEditingBudget(null);
+      showToast(editingBudget ? 'Orçamento atualizado' : 'Orçamento criado', 'success');
+    } catch (err) {
+      console.error('Erro ao salvar orçamento:', err);
+      showToast('Erro ao salvar orçamento', 'error');
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const deleteBudget = async (id) => {
+    if (!window.confirm('Deseja realmente excluir este orçamento?')) return;
+    try {
+      const res = await fetch(`${API_URL}/budgets/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao excluir orçamento', 'error');
+        return;
+      }
+      await loadBudgets();
+      showToast('Orçamento excluído', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir orçamento:', err);
+      showToast('Erro ao excluir orçamento', 'error');
     }
   };
 
@@ -2159,6 +2490,15 @@ const App = () => {
               >
                 Dashboard
               </button>
+              <button
+                onClick={() => setActiveTab('orcamentos')}
+                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'orcamentos'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-200 hover:text-white'
+                  }`}
+              >
+                Orçamentos
+              </button>
             </div>
           </div>
           <div className="flex gap-3 flex-wrap justify-end">
@@ -2378,6 +2718,202 @@ const App = () => {
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Perfis de cliente</h3>
                 <MiniBarChart data={dashboardData.bySegment} color="#059669" />
               </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'orcamentos' && (
+          <section className="space-y-6">
+            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Budget Dashboard</p>
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">Orçamentos</h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Indicadores de produção comercial e de orçamentação para acompanhamento da diretoria.
+                  </p>
+                </div>
+                <button
+                  onClick={openNewBudgetModal}
+                  className="px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
+                >
+                  Novo orçamento
+                </button>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros de orçamentos</p>
+                    <p className="text-sm text-slate-500">Filtros próprios do módulo de orçamentos.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setBudgetPeriod('90d');
+                      setBudgetStartDate('');
+                      setBudgetEndDate('');
+                      setBudgetStatusFilter('all');
+                      setBudgetOwnerFilter('all');
+                      setBudgetEstimatorFilter('all');
+                      setBudgetLossReasonFilter('all');
+                      setBudgetSearch('');
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <select value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="30d">Últimos 30 dias</option>
+                    <option value="90d">Últimos 90 dias</option>
+                    <option value="6m">Últimos 6 meses</option>
+                    <option value="12m">Últimos 12 meses</option>
+                    <option value="custom">Período personalizado</option>
+                    <option value="all">Todo o período</option>
+                  </select>
+                  <select value={budgetStatusFilter} onChange={(e) => setBudgetStatusFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="all">Todos os status</option>
+                    {BUDGET_STATUS_OPTIONS.map((status) => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
+                  </select>
+                  <select value={budgetOwnerFilter} onChange={(e) => setBudgetOwnerFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="all">Todos os vendedores</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                  <select value={budgetEstimatorFilter} onChange={(e) => setBudgetEstimatorFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="all">Todos os orçamentistas</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                  <select value={budgetLossReasonFilter} onChange={(e) => setBudgetLossReasonFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="all">Todos os motivos de perda</option>
+                    {BUDGET_LOSS_REASON_OPTIONS.map((reason) => (
+                      <option key={reason.value} value={reason.value}>{reason.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={budgetSearch}
+                    onChange={(e) => setBudgetSearch(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    placeholder="Buscar cliente, empresa, campanha..."
+                  />
+                </div>
+
+                {budgetPeriod === 'custom' && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
+                      <input type="date" value={budgetStartDate} onChange={(e) => setBudgetStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
+                    </div>
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
+                      <input type="date" value={budgetEndDate} onChange={(e) => setBudgetEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Orçamentos" value={budgetStats.total || 0} helper={`${budgetStats.enviados || 0} enviados`} tone="slate" />
+              <StatCard label="Taxa de Aprovação" value={`${budgetStats.taxaAprovacao || 0}%`} helper={`${budgetStats.aprovados || 0} aprovados`} tone="blue" />
+              <StatCard label="Valor Orçado" value={formatCurrencyBR(budgetStats.valorOrcado || 0)} helper={`Ticket médio ${formatCurrencyBR(budgetStats.ticketMedio || 0)}`} tone="emerald" />
+              <StatCard label="Valor Fechado" value={formatCurrencyBR(budgetStats.valorFechado || 0)} helper={`${budgetStats.reprovados || 0} reprovados`} tone="amber" />
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Evolução</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Solicitações por mês</h3>
+                <MiniLineChart data={budgetDashboardData.monthlyEvolution} color="#0f766e" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Resultado</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Valor fechado por mês</h3>
+                <MiniLineChart data={budgetDashboardData.closedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Motivos</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Perdas</h3>
+                <MiniBarChart data={budgetDashboardData.byLossReason} color="#dc2626" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Produção</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Status dos orçamentos</h3>
+                <MiniBarChart data={budgetDashboardData.byStatus} color="#f97316" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Time Comercial</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Por vendedor</h3>
+                <MiniBarChart data={budgetDashboardData.byOwner} color="#7c3aed" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Time Técnico</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Por orçamentista</h3>
+                <MiniBarChart data={budgetDashboardData.byEstimator} color="#059669" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200 overflow-x-auto">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Tabela operacional</p>
+                  <h3 className="text-lg font-bold text-slate-900">Lista de orçamentos</h3>
+                </div>
+                <button onClick={openNewBudgetModal} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium">Cadastrar</button>
+              </div>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b border-slate-200">
+                    <th className="py-2 pr-3">Cliente</th>
+                    <th className="py-2 pr-3">Empresa</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Vendedor</th>
+                    <th className="py-2 pr-3">Orçamentista</th>
+                    <th className="py-2 pr-3">Valor Orçado</th>
+                    <th className="py-2 pr-3">Valor Fechado</th>
+                    <th className="py-2 pr-3">Solicitado</th>
+                    <th className="py-2 pr-3">Motivo perda</th>
+                    <th className="py-2 pr-0">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {budgetFilteredItems.map((budget) => (
+                    <tr key={budget.id} className="border-b border-slate-100">
+                      <td className="py-3 pr-3 font-medium text-slate-900">{budget.client_name || '-'}</td>
+                      <td className="py-3 pr-3 text-slate-600">{budget.company || '-'}</td>
+                      <td className="py-3 pr-3 text-slate-600">{BUDGET_STATUS_OPTIONS.find((item) => item.value === budget.status)?.label || budget.status}</td>
+                      <td className="py-3 pr-3 text-slate-600">{budget.owner_name || '-'}</td>
+                      <td className="py-3 pr-3 text-slate-600">{budget.estimator_name || '-'}</td>
+                      <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.budget_value || 0)}</td>
+                      <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.closed_value || 0)}</td>
+                      <td className="py-3 pr-3 text-slate-600">{formatDateBR(budget.requested_at)}</td>
+                      <td className="py-3 pr-3 text-slate-600">{BUDGET_LOSS_REASON_OPTIONS.find((item) => item.value === budget.loss_reason)?.label || '-'}</td>
+                      <td className="py-3 pr-0">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openEditBudgetModal(budget)} className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700">Editar</button>
+                          <button onClick={() => deleteBudget(budget.id)} className="px-3 py-1 rounded-lg border border-rose-200 text-rose-600">Excluir</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!budgetFilteredItems.length && (
+                    <tr>
+                      <td colSpan="10" className="py-8 text-center text-slate-400">Nenhum orçamento encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
         )}
@@ -3501,6 +4037,201 @@ const App = () => {
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
                 >
                   {savingLead ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showBudgetModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {editingBudget ? 'Editar Orçamento' : 'Novo Orçamento'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowBudgetModal(false);
+                    setEditingBudget(null);
+                  }}
+                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
+                >
+                  Fechar
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Lead relacionado</label>
+                    <select
+                      value={budgetForm.lead_id || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, lead_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Sem lead relacionado</option>
+                      {leads.map((lead) => (
+                        <option key={lead.id} value={lead.id}>{lead.name} {lead.company ? `- ${lead.company}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                    <select
+                      value={budgetForm.status}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, status: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      {BUDGET_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Cliente</label>
+                    <input
+                      type="text"
+                      value={budgetForm.client_name}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, client_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Empresa</label>
+                    <input
+                      type="text"
+                      value={budgetForm.company}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, company: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Perfil</label>
+                    <select
+                      value={budgetForm.segment || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, segment: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      {CLIENT_SEGMENT_OPTIONS.map((opt) => (
+                        <option key={opt.value || 'none'} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo da perda</label>
+                    <select
+                      value={budgetForm.loss_reason || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, loss_reason: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Selecione</option>
+                      {BUDGET_LOSS_REASON_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Vendedor</label>
+                    <select
+                      value={budgetForm.owner_id || ''}
+                      onChange={(e) => {
+                        const selectedUser = users.find((u) => String(u.id) === String(e.target.value));
+                        setBudgetForm({
+                          ...budgetForm,
+                          owner_id: e.target.value,
+                          owner_name: selectedUser?.name || '',
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Selecione</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Orçamentista</label>
+                    <select
+                      value={budgetForm.estimator_id || ''}
+                      onChange={(e) => {
+                        const selectedUser = users.find((u) => String(u.id) === String(e.target.value));
+                        setBudgetForm({
+                          ...budgetForm,
+                          estimator_id: e.target.value,
+                          estimator_name: selectedUser?.name || '',
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Selecione</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor orçado</label>
+                    <input type="number" step="0.01" value={budgetForm.budget_value} onChange={(e) => setBudgetForm({ ...budgetForm, budget_value: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor fechado</label>
+                    <input type="number" step="0.01" value={budgetForm.closed_value} onChange={(e) => setBudgetForm({ ...budgetForm, closed_value: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Solicitado em</label>
+                    <input type="date" value={budgetForm.requested_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, requested_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Enviado em</label>
+                    <input type="date" value={budgetForm.sent_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, sent_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Fechado em</label>
+                    <input type="date" value={budgetForm.closed_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, closed_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Canal</label>
+                    <input type="text" value={budgetForm.channel_name || ''} onChange={(e) => setBudgetForm({ ...budgetForm, channel_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Campanha</label>
+                    <input type="text" value={budgetForm.campaign || ''} onChange={(e) => setBudgetForm({ ...budgetForm, campaign: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Observações</label>
+                  <textarea value={budgetForm.notes} onChange={(e) => setBudgetForm({ ...budgetForm, notes: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" rows={3} />
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowBudgetModal(false);
+                    setEditingBudget(null);
+                  }}
+                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveBudget}
+                  disabled={savingBudget}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                >
+                  {savingBudget ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </div>
