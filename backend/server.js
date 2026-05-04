@@ -361,8 +361,32 @@ const ensureSheetCapacity = async (sheetName, requiredRows) => {
   }
 };
 
+const ensureSheetExists = async (sheetName) => {
+  const ss = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const existing = ss.data.sheets.find((s) => s.properties.title === sheetName);
+  if (existing) return;
+
+  console.log(`[INIT] Criando aba ausente: ${sheetName}...`);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: sheetName,
+            },
+          },
+        },
+      ],
+    },
+  });
+};
+
 const writeSheet = async (sheetName, headers, rows) => {
   const values = [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))];
+
+  await ensureSheetExists(sheetName);
 
   // Garante que a planilha tem espaço suficiente
   await ensureSheetCapacity(sheetName, values.length + 1);

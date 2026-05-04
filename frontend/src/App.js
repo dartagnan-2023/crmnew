@@ -690,7 +690,7 @@ const App = () => {
         cache: 'no-store',
       });
       const data = await res.json();
-      setLeads(data);
+      setLeads(Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []);
       pendingLeadsRef.current = null;
     } catch (err) {
       console.error('Erro ao carregar leads:', err);
@@ -704,7 +704,7 @@ const App = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      setChannels(data);
+      setChannels(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Erro ao carregar canais:', err);
     }
@@ -719,7 +719,7 @@ const App = () => {
       });
       if (!res.ok) return;
       const data = await res.json();
-      setBudgets(data);
+      setBudgets(Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []);
     } catch (err) {
       console.error('Erro ao carregar orçamentos:', err);
     }
@@ -733,8 +733,9 @@ const App = () => {
       });
       if (!res.ok) return;
       const data = await res.json();
-      console.log(`[DEBUG] loadUsers returned ${data.length} users:`, data);
-      setUsers(data);
+      const safeUsers = Array.isArray(data) ? data : [];
+      console.log(`[DEBUG] loadUsers returned ${safeUsers.length} users:`, safeUsers);
+      setUsers(safeUsers);
     } catch (err) {
       console.error('Erro ao carregar usuarios:', err);
     }
