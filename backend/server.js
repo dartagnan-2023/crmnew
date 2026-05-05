@@ -243,18 +243,25 @@ const SHEETS_CONFIG = {
   negative_terms: ['id', 'term', 'active', 'notes', 'created_at'],
   budgets: [
     'id',
+    'external_id',
     'lead_id',
     'client_name',
     'company',
     'segment',
+    'stage',
     'status',
     'loss_reason',
+    'raw_status',
+    'raw_loss_reason',
     'owner_id',
     'owner_name',
     'estimator_id',
     'estimator_name',
     'budget_value',
     'closed_value',
+    'branch',
+    'customer_order',
+    'payment_terms',
     'requested_at',
     'sent_at',
     'closed_at',
@@ -1405,18 +1412,25 @@ app.get('/api/budgets', authMiddleware, async (_req, res) => {
 
 app.post('/api/budgets', authMiddleware, async (req, res) => {
   const {
+    external_id = '',
     lead_id = '',
     client_name = '',
     company = '',
     segment = '',
+    stage = '',
     status = 'novo',
     loss_reason = '',
+    raw_status = '',
+    raw_loss_reason = '',
     owner_id = '',
     owner_name = '',
     estimator_id = '',
     estimator_name = '',
     budget_value = 0,
     closed_value = 0,
+    branch = '',
+    customer_order = '',
+    payment_terms = '',
     requested_at = '',
     sent_at = '',
     closed_at = '',
@@ -1437,18 +1451,25 @@ app.post('/api/budgets', authMiddleware, async (req, res) => {
     const ownerNameFinal = owner_name || req.user.name || '';
     const budget = {
       id,
+      external_id: external_id || '',
       lead_id: lead_id || '',
       client_name: client_name || '',
       company: company || '',
       segment: segment || '',
+      stage: stage || '',
       status: status || 'novo',
       loss_reason: loss_reason || '',
+      raw_status: raw_status || '',
+      raw_loss_reason: raw_loss_reason || '',
       owner_id: ownerIdFinal,
       owner_name: ownerNameFinal,
       estimator_id: estimator_id || '',
       estimator_name: estimator_name || '',
       budget_value: parseMoneyValue(budget_value),
       closed_value: parseMoneyValue(closed_value),
+      branch: branch || '',
+      customer_order: customer_order || '',
+      payment_terms: payment_terms || '',
       requested_at: requested_at || now,
       sent_at: sent_at || '',
       closed_at: closed_at || '',
@@ -1469,18 +1490,25 @@ app.post('/api/budgets', authMiddleware, async (req, res) => {
 
 app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
   const {
+    external_id,
     lead_id,
     client_name,
     company,
     segment,
+    stage,
     status,
     loss_reason,
+    raw_status,
+    raw_loss_reason,
     owner_id,
     owner_name,
     estimator_id,
     estimator_name,
     budget_value,
     closed_value,
+    branch,
+    customer_order,
+    payment_terms,
     requested_at,
     sent_at,
     closed_at,
@@ -1494,18 +1522,25 @@ app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
     const idx = budgets.findIndex((budget) => String(budget.id) === String(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Orcamento nao encontrado' });
 
+    if (external_id !== undefined) budgets[idx].external_id = external_id || '';
     if (lead_id !== undefined) budgets[idx].lead_id = lead_id || '';
     if (client_name !== undefined) budgets[idx].client_name = client_name || '';
     if (company !== undefined) budgets[idx].company = company || '';
     if (segment !== undefined) budgets[idx].segment = segment || '';
+    if (stage !== undefined) budgets[idx].stage = stage || '';
     if (status !== undefined) budgets[idx].status = status || 'novo';
     if (loss_reason !== undefined) budgets[idx].loss_reason = loss_reason || '';
+    if (raw_status !== undefined) budgets[idx].raw_status = raw_status || '';
+    if (raw_loss_reason !== undefined) budgets[idx].raw_loss_reason = raw_loss_reason || '';
     if (owner_id !== undefined) budgets[idx].owner_id = owner_id || '';
     if (owner_name !== undefined) budgets[idx].owner_name = owner_name || '';
     if (estimator_id !== undefined) budgets[idx].estimator_id = estimator_id || '';
     if (estimator_name !== undefined) budgets[idx].estimator_name = estimator_name || '';
     if (budget_value !== undefined) budgets[idx].budget_value = parseMoneyValue(budget_value);
     if (closed_value !== undefined) budgets[idx].closed_value = parseMoneyValue(closed_value);
+    if (branch !== undefined) budgets[idx].branch = branch || '';
+    if (customer_order !== undefined) budgets[idx].customer_order = customer_order || '';
+    if (payment_terms !== undefined) budgets[idx].payment_terms = payment_terms || '';
     if (requested_at !== undefined) budgets[idx].requested_at = requested_at || '';
     if (sent_at !== undefined) budgets[idx].sent_at = sent_at || '';
     if (closed_at !== undefined) budgets[idx].closed_at = closed_at || '';
@@ -1528,6 +1563,106 @@ app.delete('/api/budgets/:id', authMiddleware, async (req, res) => {
     const filtered = budgets.filter((budget) => String(budget.id) !== String(req.params.id));
     await saveTable('budgets', filtered);
     return res.json({ success: true });
+  });
+});
+
+app.post('/api/budgets/import', authMiddleware, async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (!items.length) {
+    return res.status(400).json({ error: 'Nenhum item para importar' });
+  }
+
+  return withTableLock('budgets', async () => {
+    const { items: budgets } = await loadTable('budgets', true);
+    let created = 0;
+    let updated = 0;
+    const errors = [];
+    const imported = [];
+
+    for (const [index, rawItem] of items.entries()) {
+      const externalId = String(rawItem?.external_id || '').trim();
+      const company = String(rawItem?.company || '').trim();
+      const clientName = String(rawItem?.client_name || '').trim();
+
+      if (!externalId) {
+        errors.push({ index, error: 'external_id ausente' });
+        continue;
+      }
+      if (!company && !clientName) {
+        errors.push({ index, external_id: externalId, error: 'Cliente/empresa ausente' });
+        continue;
+      }
+
+      const now = new Date().toISOString();
+      const payload = {
+        external_id: externalId,
+        lead_id: rawItem.lead_id || '',
+        client_name: clientName,
+        company,
+        segment: rawItem.segment || '',
+        stage: rawItem.stage || '',
+        status: rawItem.status || 'novo',
+        loss_reason: rawItem.loss_reason || '',
+        raw_status: rawItem.raw_status || '',
+        raw_loss_reason: rawItem.raw_loss_reason || '',
+        owner_id: rawItem.owner_id || '',
+        owner_name: rawItem.owner_name || '',
+        estimator_id: rawItem.estimator_id || '',
+        estimator_name: rawItem.estimator_name || '',
+        budget_value: parseMoneyValue(rawItem.budget_value),
+        closed_value: parseMoneyValue(rawItem.closed_value),
+        branch: rawItem.branch || '',
+        customer_order: rawItem.customer_order || '',
+        payment_terms: rawItem.payment_terms || '',
+        requested_at: rawItem.requested_at || now,
+        sent_at: rawItem.sent_at || '',
+        closed_at: rawItem.closed_at || '',
+        channel_name: rawItem.channel_name || '',
+        campaign: rawItem.campaign || '',
+        notes: rawItem.notes || '',
+      };
+
+      const existingIdx = budgets.findIndex((budget) => String(budget.external_id || '').trim() === externalId);
+
+      if (existingIdx >= 0) {
+        budgets[existingIdx] = {
+          ...budgets[existingIdx],
+          ...payload,
+          id: budgets[existingIdx].id,
+          created_at: budgets[existingIdx].created_at || now,
+          updated_at: now,
+        };
+        updated += 1;
+        imported.push(budgets[existingIdx]);
+        if (normalizeName(budgets[existingIdx].status) === 'aprovado' && budgets[existingIdx].lead_id) {
+          await markLeadAsCustomer(budgets[existingIdx].lead_id);
+        }
+        continue;
+      }
+
+      const budget = {
+        id: nextId(budgets),
+        ...payload,
+        created_at: now,
+        updated_at: now,
+      };
+      budgets.push(budget);
+      created += 1;
+      imported.push(budget);
+      if (normalizeName(budget.status) === 'aprovado' && budget.lead_id) {
+        await markLeadAsCustomer(budget.lead_id);
+      }
+    }
+
+    await saveTable('budgets', budgets);
+    return res.json({
+      success: true,
+      created,
+      updated,
+      errors,
+      imported: imported.slice(0, 20).map(hydrateBudget),
+      totalReceived: items.length,
+    });
   });
 });
 

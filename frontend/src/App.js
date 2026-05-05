@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
@@ -73,6 +74,75 @@ const formatCurrencyBR = (value) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+
+const normalizeSpreadsheetHeader = (value) =>
+  String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const excelDateToIso = (value) => {
+  if (!value && value !== 0) return '';
+  if (typeof value === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return '';
+    const date = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    return date.toISOString();
+  }
+  const text = String(value).trim();
+  if (!text) return '';
+  const brMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) {
+    const [, dd, mm, yyyy] = brMatch;
+    return new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd))).toISOString();
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+};
+
+const mapBudgetImportStatus = (rawLib) => {
+  const normalized = normalizeOptionValue(String(rawLib || '').replace(/&nbsp;/gi, ' '));
+  const lossMap = {
+    'cliente nao retornou os contatos': 'sem_retorno',
+    'cliente desistiu da compra': 'cliente_desistiu',
+    'cliente possui restricoes no mercado': 'sem_viabilidade',
+    'precos maiores que a concorrencia': 'concorrente',
+    'os produtos nao preenchem os requisitos do cliente': 'escopo',
+    'as formas de pagamento oferecidas nao suprem a necessidade do cliente': 'outros',
+  };
+
+  if (!normalized) {
+    return { stage: '', status: 'novo', loss_reason: '', raw_status: '', raw_loss_reason: '' };
+  }
+
+  if (lossMap[normalized]) {
+    return {
+      stage: '',
+      status: 'reprovado',
+      loss_reason: lossMap[normalized],
+      raw_status: '',
+      raw_loss_reason: String(rawLib || '').trim(),
+    };
+  }
+
+  if (normalized.includes('pendente') && normalized.includes('prospeccao')) {
+    return {
+      stage: 'prospeccao',
+      status: 'em_orcamento',
+      loss_reason: '',
+      raw_status: String(rawLib || '').trim(),
+      raw_loss_reason: '',
+    };
+  }
+
+  return {
+    stage: '',
+    status: 'novo',
+    loss_reason: '',
+    raw_status: String(rawLib || '').trim(),
+    raw_loss_reason: '',
+  };
+};
 
 const parseLeadDate = (value) => {
   if (!value) return null;
@@ -373,18 +443,25 @@ const emptyLead = {
 };
 
 const emptyBudget = {
+  external_id: '',
   lead_id: '',
   client_name: '',
   company: '',
   segment: '',
+  stage: '',
   status: 'novo',
   loss_reason: '',
+  raw_status: '',
+  raw_loss_reason: '',
   owner_id: '',
   owner_name: '',
   estimator_id: '',
   estimator_name: '',
   budget_value: 0,
   closed_value: 0,
+  branch: '',
+  customer_order: '',
+  payment_terms: '',
   requested_at: '',
   sent_at: '',
   closed_at: '',
@@ -438,6 +515,7 @@ const App = () => {
   const [editingBudget, setEditingBudget] = useState(null);
   const [budgetForm, setBudgetForm] = useState(emptyBudget);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [importingBudgets, setImportingBudgets] = useState(false);
   const [budgetPeriod, setBudgetPeriod] = useState('90d');
   const [budgetStartDate, setBudgetStartDate] = useState('');
   const [budgetEndDate, setBudgetEndDate] = useState('');
@@ -446,6 +524,7 @@ const App = () => {
   const [budgetEstimatorFilter, setBudgetEstimatorFilter] = useState('all');
   const [budgetLossReasonFilter, setBudgetLossReasonFilter] = useState('all');
   const [budgetSearch, setBudgetSearch] = useState('');
+  const budgetImportInputRef = useRef(null);
   const highlightedField = ensureArray(leadForm.highlighted_categories);
   const coolingField = ensureArray(leadForm.cooling_reason);
   const toggleLeadListField = (field, option) => {
@@ -1783,18 +1862,25 @@ const App = () => {
   const openEditBudgetModal = (budget) => {
     setEditingBudget(budget);
     setBudgetForm({
+      external_id: budget.external_id || '',
       lead_id: budget.lead_id || '',
       client_name: budget.client_name || '',
       company: budget.company || '',
       segment: budget.segment || '',
+      stage: budget.stage || '',
       status: budget.status || 'novo',
       loss_reason: budget.loss_reason || '',
+      raw_status: budget.raw_status || '',
+      raw_loss_reason: budget.raw_loss_reason || '',
       owner_id: budget.owner_id || '',
       owner_name: budget.owner_name || '',
       estimator_id: budget.estimator_id || '',
       estimator_name: budget.estimator_name || '',
       budget_value: Number(budget.budget_value || 0),
       closed_value: Number(budget.closed_value || 0),
+      branch: budget.branch || '',
+      customer_order: budget.customer_order || '',
+      payment_terms: budget.payment_terms || '',
       requested_at: toDateInput(budget.requested_at),
       sent_at: toDateInput(budget.sent_at),
       closed_at: toDateInput(budget.closed_at),
@@ -1861,6 +1947,132 @@ const App = () => {
     } catch (err) {
       console.error('Erro ao excluir orçamento:', err);
       showToast('Erro ao excluir orçamento', 'error');
+    }
+  };
+
+  const parseBudgetWorkbook = async (file) => {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: true });
+    const headerRowIndex = rows.findIndex((row) =>
+      Array.isArray(row) && row.some((cell) => normalizeSpreadsheetHeader(cell) === 'número' || normalizeSpreadsheetHeader(cell) === 'numero')
+    );
+
+    if (headerRowIndex === -1) {
+      throw new Error('Cabeçalho da planilha não encontrado');
+    }
+
+    const headerRow = rows[headerRowIndex].map((cell) => normalizeSpreadsheetHeader(cell));
+    const colIndex = (names) => headerRow.findIndex((header) => names.includes(header));
+
+    const idxNumero = colIndex(['número', 'numero']);
+    const idxData = colIndex(['data']);
+    const idxFilial = colIndex(['filial']);
+    const idxCliente = colIndex(['cliente']);
+    const idxVendedor = colIndex(['vendedor']);
+    const idxPedidoCliente = colIndex(['ped. cliente', 'ped cliente', 'pedido cliente']);
+    const idxPlanoPagto = colIndex(['plano pagto', 'plano pagamento', 'plano pagto.']);
+    const idxValorTotal = colIndex(['valor total']);
+    const idxLib = colIndex(['lib']);
+
+    if (idxNumero === -1 || idxCliente === -1 || idxValorTotal === -1) {
+      throw new Error('Colunas obrigatórias não encontradas na planilha');
+    }
+
+    const items = [];
+    const skipped = [];
+
+    rows.slice(headerRowIndex + 1).forEach((row, offset) => {
+      if (!Array.isArray(row)) return;
+      const externalId = String(row[idxNumero] || '').trim();
+      const company = String(row[idxCliente] || '').trim();
+      if (!externalId && !company) return;
+      if (!externalId) {
+        skipped.push(`Linha ${headerRowIndex + offset + 2}: sem Número`);
+        return;
+      }
+
+      const rawLib = idxLib >= 0 ? String(row[idxLib] || '').trim() : '';
+      const mapped = mapBudgetImportStatus(rawLib);
+      const vendedor = idxVendedor >= 0 ? String(row[idxVendedor] || '').trim() : '';
+      const filial = idxFilial >= 0 ? String(row[idxFilial] || '').trim() : '';
+      const pedidoCliente = idxPedidoCliente >= 0 ? String(row[idxPedidoCliente] || '').trim() : '';
+      const planoPagto = idxPlanoPagto >= 0 ? String(row[idxPlanoPagto] || '').trim() : '';
+      const notesParts = [
+        filial ? `Filial: ${filial}` : '',
+        vendedor ? `Vendedor ERP: ${vendedor}` : '',
+        pedidoCliente ? `Pedido do cliente: ${pedidoCliente}` : '',
+        planoPagto ? `Plano de pagamento: ${planoPagto}` : '',
+        rawLib ? `Lib original: ${rawLib}` : '',
+      ].filter(Boolean);
+
+      items.push({
+        external_id: externalId,
+        client_name: company,
+        company,
+        stage: mapped.stage,
+        status: mapped.status,
+        loss_reason: mapped.loss_reason,
+        raw_status: mapped.raw_status,
+        raw_loss_reason: mapped.raw_loss_reason,
+        budget_value: row[idxValorTotal] || 0,
+        requested_at: idxData >= 0 ? excelDateToIso(row[idxData]) : '',
+        branch: filial,
+        customer_order: pedidoCliente,
+        payment_terms: planoPagto,
+        owner_name: '',
+        notes: notesParts.join('\n'),
+      });
+    });
+
+    return { items, skipped };
+  };
+
+  const handleBudgetImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      setImportingBudgets(true);
+      const { items, skipped } = await parseBudgetWorkbook(file);
+      if (!items.length) {
+        showToast('Nenhum orçamento válido encontrado na planilha', 'error');
+        return;
+      }
+
+      const preview = items.slice(0, 5).map((item) => `#${item.external_id} - ${item.company}`).join('\n');
+      const confirmed = window.confirm(
+        `Importar ${items.length} orçamento(s)?\n\nPrévia:\n${preview}${skipped.length ? `\n\nIgnorados: ${skipped.length}` : ''}`
+      );
+      if (!confirmed) return;
+
+      const res = await fetch(`${API_URL}/budgets/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao importar planilha', 'error');
+        return;
+      }
+
+      await loadBudgets();
+      showToast(`Importação concluída: ${data.created || 0} criado(s), ${data.updated || 0} atualizado(s)`, 'success');
+      if (data.errors?.length) {
+        console.warn('Erros de importação:', data.errors);
+      }
+    } catch (err) {
+      console.error('Erro ao importar planilha de orçamentos:', err);
+      showToast(err.message || 'Erro ao importar planilha', 'error');
+    } finally {
+      setImportingBudgets(false);
     }
   };
 
@@ -2734,12 +2946,28 @@ const App = () => {
                     Indicadores de produção comercial e de orçamentação para acompanhamento da diretoria.
                   </p>
                 </div>
-                <button
-                  onClick={openNewBudgetModal}
-                  className="px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
-                >
-                  Novo orçamento
-                </button>
+                <div className="flex gap-3 flex-wrap">
+                  <input
+                    ref={budgetImportInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={handleBudgetImportFile}
+                  />
+                  <button
+                    onClick={() => budgetImportInputRef.current?.click()}
+                    disabled={importingBudgets}
+                    className="px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition disabled:opacity-60"
+                  >
+                    {importingBudgets ? 'Importando...' : 'Importar planilha'}
+                  </button>
+                  <button
+                    onClick={openNewBudgetModal}
+                    className="px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
+                  >
+                    Novo orçamento
+                  </button>
+                </div>
               </div>
 
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2871,7 +3099,16 @@ const App = () => {
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Tabela operacional</p>
                   <h3 className="text-lg font-bold text-slate-900">Lista de orçamentos</h3>
                 </div>
-                <button onClick={openNewBudgetModal} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium">Cadastrar</button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => budgetImportInputRef.current?.click()}
+                    disabled={importingBudgets}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium disabled:opacity-60"
+                  >
+                    {importingBudgets ? 'Importando...' : 'Importar'}
+                  </button>
+                  <button onClick={openNewBudgetModal} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium">Cadastrar</button>
+                </div>
               </div>
               <table className="min-w-full text-sm">
                 <thead>
@@ -4064,6 +4301,15 @@ const App = () => {
               <div className="p-4 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">ID externo (ERP)</label>
+                    <input
+                      type="text"
+                      value={budgetForm.external_id || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, external_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Lead relacionado</label>
                     <select
                       value={budgetForm.lead_id || ''}
@@ -4123,6 +4369,22 @@ const App = () => {
                     </select>
                   </div>
                   <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Fase</label>
+                    <select
+                      value={budgetForm.stage || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, stage: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      <option value="">Selecione</option>
+                      <option value="prospeccao">Prospecção</option>
+                      <option value="qualificacao">Qualificação</option>
+                      <option value="negociacao">Negociação</option>
+                      <option value="fechamento">Fechamento</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo da perda</label>
                     <select
                       value={budgetForm.loss_reason || ''}
@@ -4135,8 +4397,6 @@ const App = () => {
                       ))}
                     </select>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Vendedor</label>
                     <select
@@ -4176,6 +4436,20 @@ const App = () => {
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Filial</label>
+                    <input type="text" value={budgetForm.branch || ''} onChange={(e) => setBudgetForm({ ...budgetForm, branch: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Pedido do cliente</label>
+                    <input type="text" value={budgetForm.customer_order || ''} onChange={(e) => setBudgetForm({ ...budgetForm, customer_order: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Plano de pagamento</label>
+                    <input type="text" value={budgetForm.payment_terms || ''} onChange={(e) => setBudgetForm({ ...budgetForm, payment_terms: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -4488,11 +4762,9 @@ const App = () => {
               )}
             </div>
           </div>
-        )
-        }
+        )}
 
-        {
-          showChannelModal && (
+        {showChannelModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-slate-200">
@@ -4550,8 +4822,7 @@ const App = () => {
                 </div>
               </div>
             </div>
-          )
-        }
+        )}
       </div>
     </div>
   );
