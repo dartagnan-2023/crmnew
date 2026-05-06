@@ -92,6 +92,25 @@ const formatRatio = (value) =>
     })}x`
     : '-';
 
+const formatCurrencyInputBR = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const numeric = Number(digits) / 100;
+  return numeric.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const parseCurrencyInputBR = (value) => {
+  const normalized = String(value || '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.-]/g, '');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const normalizeSpreadsheetHeader = (value) =>
   String(value || '')
     .replace(/\s+/g, ' ')
@@ -246,7 +265,7 @@ const emptyAdSpend = {
   date: '',
   platform: 'Meta Ads',
   campaign: '',
-  amount: 0,
+  amount: '',
   notes: '',
 };
 
@@ -2245,7 +2264,7 @@ const App = () => {
       date: toDateInput(entry.date),
       platform: entry.platform || 'Meta Ads',
       campaign: entry.campaign || '',
-      amount: Number(entry.amount || 0),
+      amount: formatCurrencyInputBR(entry.amount || 0),
       notes: entry.notes || '',
     });
     setShowAdSpendModal(true);
@@ -2273,7 +2292,7 @@ const App = () => {
         },
         body: JSON.stringify({
           ...adSpendForm,
-          amount: Number(adSpendForm.amount) || 0,
+          amount: parseCurrencyInputBR(adSpendForm.amount),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -5108,10 +5127,11 @@ const App = () => {
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Valor investido</label>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={adSpendForm.amount}
-                      onChange={(e) => setAdSpendForm({ ...adSpendForm, amount: e.target.value })}
+                      onChange={(e) => setAdSpendForm({ ...adSpendForm, amount: formatCurrencyInputBR(e.target.value) })}
+                      placeholder="0,00"
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                     />
                   </div>
