@@ -2384,6 +2384,26 @@ const App = () => {
     }
   };
 
+  const unifyMetaAdsChannel = async () => {
+    if (!window.confirm('Isso vai unificar Instagram Ads e Facebook Ads em Meta Ads. Deseja continuar?')) return;
+    try {
+      const res = await fetch(`${API_URL}/channels/unify-meta`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao unificar canais Meta Ads', 'error');
+        return;
+      }
+      await Promise.all([loadChannels(), loadLeads(), loadBudgets(), loadAdSpend(), loadStats()]);
+      showToast(`Meta Ads unificado. Leads: ${data.leadsUpdated || 0}, Ads: ${data.adSpendUpdated || 0}`, 'success');
+    } catch (err) {
+      console.error('Erro ao unificar Meta Ads:', err);
+      showToast('Erro ao unificar Meta Ads', 'error');
+    }
+  };
+
   const parseBudgetWorkbook = async (file) => {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
@@ -3156,16 +3176,24 @@ const App = () => {
             >
               Perfil
             </button>
-            <button
-              onClick={() => setShowChannelModal(true)}
-              className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
-            >
-              Canais
-            </button>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2.5 text-sm bg-rose-500 text-white rounded-xl shadow hover:bg-rose-600 transition"
-            >
+                <button
+                  onClick={() => setShowChannelModal(true)}
+                  className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
+                >
+                  Canais
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={unifyMetaAdsChannel}
+                    className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
+                  >
+                    Unificar Meta Ads
+                  </button>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2.5 text-sm bg-rose-500 text-white rounded-xl shadow hover:bg-rose-600 transition"
+                >
               Sair
             </button>
           </div>

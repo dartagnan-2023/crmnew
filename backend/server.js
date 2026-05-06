@@ -891,6 +891,108 @@ app.delete('/api/channels/:id', authMiddleware, async (req, res) => {
   });
 });
 
+app.post('/api/channels/unify-meta', authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+
+  return withTableLock('channels', async () =>
+    withTableLock('leads', async () =>
+      withTableLock('budgets', async () =>
+        withTableLock('ad_spend', async () => {
+          const [
+            { items: channels },
+            { items: leads },
+            { items: budgets },
+            { items: adSpendItems },
+          ] = await Promise.all([
+            loadTable('channels', true),
+            loadTable('leads', true),
+            loadTable('budgets', true),
+            loadTable('ad_spend', true),
+          ]);
+
+          const isMetaLike = (value) => {
+            const normalized = normalizeName(value);
+            return normalized === 'instagram ads' || normalized === 'facebook ads' || normalized === 'meta ads';
+          };
+
+          let metaChannel = channels.find((channel) => normalizeName(channel.name) === 'meta ads');
+          if (!metaChannel) {
+            metaChannel = { id: nextId(channels), name: 'Meta Ads' };
+            channels.push(metaChannel);
+          }
+
+          const oldChannelIds = channels
+            .filter((channel) => isMetaLike(channel.name) && String(channel.id) !== String(metaChannel.id))
+            .map((channel) => String(channel.id));
+
+          let leadsUpdated = 0;
+          leads.forEach((lead) => {
+            const shouldMigrate =
+              oldChannelIds.includes(String(lead.channel_id || '')) ||
+              isMetaLike(lead.channel_name) ||
+              isMetaLike(lead.source);
+            if (!shouldMigrate) return;
+            lead.channel_id = metaChannel.id;
+            lead.channel_name = 'Meta Ads';
+            if (!lead.source || isMetaLike(lead.source)) {
+              lead.source = 'Meta Ads';
+            }
+            lead.updated_at = new Date().toISOString();
+            leadsUpdated += 1;
+          });
+
+          let budgetsUpdated = 0;
+          budgets.forEach((budget) => {
+            if (!isMetaLike(budget.channel_name)) return;
+            budget.channel_name = 'Meta Ads';
+            budget.updated_at = new Date().toISOString();
+            budgetsUpdated += 1;
+          });
+
+          let adSpendUpdated = 0;
+          adSpendItems.forEach((entry) => {
+            const shouldMigrate =
+              oldChannelIds.includes(String(entry.channel_id || '')) ||
+              isMetaLike(entry.channel_name) ||
+              isMetaLike(entry.platform);
+            if (!shouldMigrate) return;
+            entry.channel_id = metaChannel.id;
+            entry.channel_name = 'Meta Ads';
+            entry.platform = 'Meta Ads';
+            entry.updated_at = new Date().toISOString();
+            adSpendUpdated += 1;
+          });
+
+          const dedupedChannels = channels.filter((channel, index, arr) => {
+            if (String(channel.id) === String(metaChannel.id)) return true;
+            if (!isMetaLike(channel.name)) return true;
+            return arr.findIndex((item) => normalizeName(item.name) === normalizeName(channel.name)) === index;
+          }).filter((channel) => {
+            if (String(channel.id) === String(metaChannel.id)) return true;
+            return !isMetaLike(channel.name);
+          });
+
+          await Promise.all([
+            saveTable('channels', dedupedChannels),
+            saveTable('leads', leads),
+            saveTable('budgets', budgets),
+            saveTable('ad_spend', adSpendItems),
+          ]);
+
+          return res.json({
+            success: true,
+            metaChannel,
+            removedChannels: oldChannelIds.length,
+            leadsUpdated,
+            budgetsUpdated,
+            adSpendUpdated,
+          });
+        })
+      )
+    )
+  );
+});
+
 // ===================== NEGATIVE TERMS =====================
 app.get('/api/negative-terms', apiKeyLeadsMiddleware, async (_req, res) => {
   const { items } = await loadTable('negative_terms');
