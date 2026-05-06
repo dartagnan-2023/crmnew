@@ -143,6 +143,12 @@ const hydrateBudgets = (budgets) =>
   }));
 
 const hydrateBudget = (budget) => hydrateBudgets([budget])[0];
+const hydrateAdSpendItems = (items) =>
+  items.map((item) => ({
+    ...item,
+    amount: parseMoneyValue(item.amount),
+  }));
+const hydrateAdSpendItem = (item) => hydrateAdSpendItems([item])[0];
 
 const markLeadAsCustomer = async (leadId) => {
   const targetId = String(leadId || '').trim();
@@ -194,6 +200,7 @@ const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_USERS = process.env.SHEET_USERS || 'users';
 const SHEET_LEADS = process.env.SHEET_LEADS || process.env.SHEET_NAME || 'leads';
 const SHEET_BUDGETS = process.env.SHEET_BUDGETS || 'budgets';
+const SHEET_AD_SPEND = process.env.SHEET_AD_SPEND || 'ad_spend';
 const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 
@@ -270,6 +277,16 @@ const SHEETS_CONFIG = {
     'channel_name',
     'campaign',
     'notes',
+  ],
+  ad_spend: [
+    'id',
+    'date',
+    'platform',
+    'campaign',
+    'amount',
+    'notes',
+    'created_at',
+    'updated_at',
   ],
   leads: [
     'id',
@@ -423,6 +440,7 @@ const ensureHeaders = async () => {
     [SHEET_CHANNELS]: SHEETS_CONFIG.channels,
     [SHEET_NEGATIVE_TERMS]: SHEETS_CONFIG.negative_terms,
     [SHEET_BUDGETS]: SHEETS_CONFIG.budgets,
+    [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
 
@@ -1663,6 +1681,83 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
       imported: imported.slice(0, 20).map(hydrateBudget),
       totalReceived: items.length,
     });
+  });
+});
+
+// ===================== AD SPEND =====================
+app.get('/api/ad-spend', authMiddleware, async (_req, res) => {
+  const { items } = await loadTable('ad_spend');
+  return res.json(hydrateAdSpendItems(items));
+});
+
+app.post('/api/ad-spend', authMiddleware, async (req, res) => {
+  const {
+    date = '',
+    platform = '',
+    campaign = '',
+    amount = 0,
+    notes = '',
+  } = req.body || {};
+
+  if (!date) {
+    return res.status(400).json({ error: 'Data obrigatoria' });
+  }
+  if (!platform) {
+    return res.status(400).json({ error: 'Plataforma obrigatoria' });
+  }
+
+  return withTableLock('ad_spend', async () => {
+    const { items } = await loadTable('ad_spend', true);
+    const id = nextId(items);
+    const now = new Date().toISOString();
+    const entry = {
+      id,
+      date,
+      platform: platform || '',
+      campaign: campaign || '',
+      amount: parseMoneyValue(amount),
+      notes: notes || '',
+      created_at: now,
+      updated_at: now,
+    };
+    items.push(entry);
+    await saveTable('ad_spend', items);
+    return res.json(hydrateAdSpendItem(entry));
+  });
+});
+
+app.put('/api/ad-spend/:id', authMiddleware, async (req, res) => {
+  const {
+    date,
+    platform,
+    campaign,
+    amount,
+    notes,
+  } = req.body || {};
+
+  return withTableLock('ad_spend', async () => {
+    const { items } = await loadTable('ad_spend', true);
+    const idx = items.findIndex((entry) => String(entry.id) === String(req.params.id));
+    if (idx === -1) return res.status(404).json({ error: 'Lancamento nao encontrado' });
+
+    if (date !== undefined) items[idx].date = date || '';
+    if (platform !== undefined) items[idx].platform = platform || '';
+    if (campaign !== undefined) items[idx].campaign = campaign || '';
+    if (amount !== undefined) items[idx].amount = parseMoneyValue(amount);
+    if (notes !== undefined) items[idx].notes = notes || '';
+    items[idx].updated_at = new Date().toISOString();
+
+    await saveTable('ad_spend', items);
+    return res.json(hydrateAdSpendItem(items[idx]));
+  });
+});
+
+app.delete('/api/ad-spend/:id', authMiddleware, async (req, res) => {
+  return withTableLock('ad_spend', async () => {
+    const { items } = await loadTable('ad_spend', true);
+    const filtered = items.filter((entry) => String(entry.id) !== String(req.params.id));
+    await saveTable('ad_spend', filtered);
+    return res.json({ success: true });
   });
 });
 

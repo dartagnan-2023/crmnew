@@ -33,6 +33,15 @@ const BUDGET_LOSS_REASON_OPTIONS = [
   { value: 'outros', label: 'Outros' },
 ];
 
+const AD_PLATFORM_OPTIONS = [
+  'Meta Ads',
+  'Google Ads',
+  'LinkedIn Ads',
+  'TikTok Ads',
+  'YouTube Ads',
+  'Outro',
+];
+
 
 // Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
 const formatPhone = (value) => {
@@ -74,6 +83,14 @@ const formatCurrencyBR = (value) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+
+const formatRatio = (value) =>
+  Number.isFinite(Number(value)) && Number(value) > 0
+    ? `${Number(value).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}x`
+    : '-';
 
 const normalizeSpreadsheetHeader = (value) =>
   String(value || '')
@@ -223,6 +240,14 @@ const buildBudgetStatsSummary = (items) => {
   acc.taxaAprovacao = acc.total ? Math.round((acc.aprovados / acc.total) * 100) : 0;
   acc.ticketMedio = acc.aprovados ? acc.valorFechado / acc.aprovados : 0;
   return acc;
+};
+
+const emptyAdSpend = {
+  date: '',
+  platform: 'Meta Ads',
+  campaign: '',
+  amount: 0,
+  notes: '',
 };
 
 const escapeXml = (value) =>
@@ -482,6 +507,7 @@ const App = () => {
 
   const [leads, setLeads] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [adSpendItems, setAdSpendItems] = useState([]);
   const [channels, setChannels] = useState([]);
   const [stats, setStats] = useState({});
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
@@ -525,6 +551,10 @@ const App = () => {
   const [budgetLossReasonFilter, setBudgetLossReasonFilter] = useState('all');
   const [budgetSearch, setBudgetSearch] = useState('');
   const budgetImportInputRef = useRef(null);
+  const [showAdSpendModal, setShowAdSpendModal] = useState(false);
+  const [editingAdSpend, setEditingAdSpend] = useState(null);
+  const [adSpendForm, setAdSpendForm] = useState(emptyAdSpend);
+  const [savingAdSpend, setSavingAdSpend] = useState(false);
   const highlightedField = ensureArray(leadForm.highlighted_categories);
   const coolingField = ensureArray(leadForm.cooling_reason);
   const toggleLeadListField = (field, option) => {
@@ -804,6 +834,21 @@ const App = () => {
     }
   };
 
+  const loadAdSpend = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ad-spend`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAdSpendItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Erro ao carregar gastos de Ads:', err);
+    }
+  };
+
   const loadUsers = async () => {
     if (!token) return;
     try {
@@ -844,7 +889,7 @@ const App = () => {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      await Promise.all([loadLeads(), loadBudgets(), loadChannels(), loadUsers(), loadStats()]);
+      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadChannels(), loadUsers(), loadStats()]);
     } finally {
       setLoadingData(false);
     }
@@ -1407,6 +1452,219 @@ const App = () => {
     };
   }, [dashboardFilteredLeads, dashboardLocalStats]);
 
+  const dashboardMediaBudgets = useMemo(() => {
+    const now = new Date();
+    const daysByPeriod = {
+      '30d': 30,
+      '90d': 90,
+      '6m': 183,
+      '12m': 365,
+    };
+    const selectedChannelName = channels.find((c) => String(c.id) === String(dashboardChannelFilter))?.name || '';
+
+    return budgets.filter((budget) => {
+      const baseDate = parseLeadDate(budget.requested_at || budget.created_at || budget.sent_at || budget.closed_at);
+      if (dashboardPeriod === 'custom') {
+        if (!baseDate) return false;
+        const budgetTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+        const startTime = dashboardStartDate ? new Date(`${dashboardStartDate}T00:00:00`).getTime() : null;
+        const endTime = dashboardEndDate ? new Date(`${dashboardEndDate}T23:59:59`).getTime() : null;
+        if (startTime && budgetTime < startTime) return false;
+        if (endTime && budgetTime > endTime) return false;
+      } else if (dashboardPeriod !== 'all') {
+        const periodDays = daysByPeriod[dashboardPeriod];
+        if (!baseDate) return false;
+        const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > periodDays) return false;
+      }
+
+      if (dashboardSegmentFilter !== 'all' && normalizeOptionValue(budget.segment) !== normalizeOptionValue(dashboardSegmentFilter)) {
+        return false;
+      }
+      if (dashboardOwnerFilter !== 'all' && String(budget.owner_id || '') !== String(dashboardOwnerFilter)) {
+        return false;
+      }
+      if (dashboardCampaignFilter.trim()) {
+        const term = dashboardCampaignFilter.toLowerCase();
+        if (!String(budget.campaign || '').toLowerCase().includes(term)) return false;
+      }
+      if (dashboardChannelFilter !== 'all' && selectedChannelName) {
+        const haystack = `${budget.channel_name || ''} ${budget.campaign || ''}`.toLowerCase();
+        if (!haystack.includes(selectedChannelName.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [
+    budgets,
+    channels,
+    dashboardPeriod,
+    dashboardStartDate,
+    dashboardEndDate,
+    dashboardSegmentFilter,
+    dashboardOwnerFilter,
+    dashboardCampaignFilter,
+    dashboardChannelFilter,
+  ]);
+
+  const dashboardAdSpendFiltered = useMemo(() => {
+    const now = new Date();
+    const daysByPeriod = {
+      '30d': 30,
+      '90d': 90,
+      '6m': 183,
+      '12m': 365,
+    };
+
+    return adSpendItems.filter((entry) => {
+      const baseDate = parseLeadDate(entry.date || entry.created_at);
+      if (dashboardPeriod === 'custom') {
+        if (!baseDate) return false;
+        const spendTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+        const startTime = dashboardStartDate ? new Date(`${dashboardStartDate}T00:00:00`).getTime() : null;
+        const endTime = dashboardEndDate ? new Date(`${dashboardEndDate}T23:59:59`).getTime() : null;
+        if (startTime && spendTime < startTime) return false;
+        if (endTime && spendTime > endTime) return false;
+      } else if (dashboardPeriod !== 'all') {
+        const periodDays = daysByPeriod[dashboardPeriod];
+        if (!baseDate) return false;
+        const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > periodDays) return false;
+      }
+
+      if (dashboardCampaignFilter.trim()) {
+        const term = dashboardCampaignFilter.toLowerCase();
+        if (!String(entry.campaign || '').toLowerCase().includes(term)) return false;
+      }
+
+      return true;
+    });
+  }, [adSpendItems, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardCampaignFilter]);
+
+  const dashboardMediaData = useMemo(() => {
+    const normalize = (value) => normalizeOptionValue(value);
+    const groupMap = new Map();
+    const spendByMonth = new Map();
+    const leadsByMonth = new Map();
+    const estimatedByMonth = new Map();
+    const closedByMonth = new Map();
+    const today = new Date();
+    const sixMonths = [];
+
+    for (let offset = 5; offset >= 0; offset -= 1) {
+      const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+      const key = monthKey(date);
+      sixMonths.push(key);
+      spendByMonth.set(key, 0);
+      leadsByMonth.set(key, 0);
+      estimatedByMonth.set(key, 0);
+      closedByMonth.set(key, 0);
+    }
+
+    const getGroupKey = (entry) => normalize(entry.campaign) || normalize(entry.platform) || 'sem-campanha';
+    const ensureGroup = (entry) => {
+      const key = getGroupKey(entry);
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          key,
+          campaign: entry.campaign || '',
+          platform: entry.platform || '',
+          investment: 0,
+          leads: 0,
+          estimated: 0,
+          closed: 0,
+        });
+      }
+      return groupMap.get(key);
+    };
+
+    dashboardAdSpendFiltered.forEach((entry) => {
+      const group = ensureGroup(entry);
+      const amount = Number(entry.amount || 0);
+      group.investment += amount;
+      const date = parseLeadDate(entry.date || entry.created_at);
+      const key = date ? monthKey(date) : '';
+      if (spendByMonth.has(key)) spendByMonth.set(key, (spendByMonth.get(key) || 0) + amount);
+    });
+
+    dashboardFilteredLeads.forEach((lead) => {
+      const key = normalize(lead.campaign) || normalize(lead.source) || 'sem-campanha';
+      const group = groupMap.get(key);
+      if (!group) return;
+      group.leads += 1;
+      const date = parseLeadDate(lead.created_at || lead.first_contact);
+      const month = date ? monthKey(date) : '';
+      if (leadsByMonth.has(month)) leadsByMonth.set(month, (leadsByMonth.get(month) || 0) + 1);
+    });
+
+    dashboardMediaBudgets.forEach((budget) => {
+      const key = normalize(budget.campaign) || normalize(budget.channel_name) || 'sem-campanha';
+      const group = groupMap.get(key);
+      if (!group) return;
+      const status = normalize(budget.status);
+      const budgetValue = Number(budget.budget_value || 0);
+      const closedValue = Number(budget.closed_value || budget.budget_value || 0);
+      const date = parseLeadDate(budget.requested_at || budget.created_at || budget.closed_at);
+      const month = date ? monthKey(date) : '';
+
+      if (!['reprovado', 'nao feito'].includes(status)) {
+        group.estimated += budgetValue;
+        if (estimatedByMonth.has(month)) {
+          estimatedByMonth.set(month, (estimatedByMonth.get(month) || 0) + budgetValue);
+        }
+      }
+      if (status === 'aprovado') {
+        group.closed += closedValue;
+        if (closedByMonth.has(month)) {
+          closedByMonth.set(month, (closedByMonth.get(month) || 0) + closedValue);
+        }
+      }
+    });
+
+    const rows = Array.from(groupMap.values())
+      .map((item) => ({
+        ...item,
+        cpl: item.leads ? item.investment / item.leads : 0,
+        roasEstimated: item.investment ? item.estimated / item.investment : 0,
+        roasClosed: item.investment ? item.closed / item.investment : 0,
+      }))
+      .sort((a, b) => b.investment - a.investment);
+
+    const investment = rows.reduce((sum, item) => sum + item.investment, 0);
+    const leadsGenerated = rows.reduce((sum, item) => sum + item.leads, 0);
+    const estimatedReturn = rows.reduce((sum, item) => sum + item.estimated, 0);
+    const closedReturn = rows.reduce((sum, item) => sum + item.closed, 0);
+
+    return {
+      rows,
+      investment,
+      leadsGenerated,
+      campaignsWithSpend: rows.length,
+      cpl: leadsGenerated ? investment / leadsGenerated : 0,
+      estimatedReturn,
+      closedReturn,
+      roasEstimated: investment ? estimatedReturn / investment : 0,
+      roasClosed: investment ? closedReturn / investment : 0,
+      estimatedPerLead: leadsGenerated ? estimatedReturn / leadsGenerated : 0,
+      closedPerLead: leadsGenerated ? closedReturn / leadsGenerated : 0,
+      topPlatform: rows[0]?.platform || '-',
+      spendVsLeads: sixMonths.map((key) => ({
+        label: monthLabel(key),
+        spend: spendByMonth.get(key) || 0,
+        leads: leadsByMonth.get(key) || 0,
+      })),
+      roasEvolution: sixMonths.map((key) => {
+        const spend = spendByMonth.get(key) || 0;
+        const estimated = estimatedByMonth.get(key) || 0;
+        const closed = closedByMonth.get(key) || 0;
+        return {
+          label: monthLabel(key),
+          estimated: spend ? estimated / spend : 0,
+          closed: spend ? closed / spend : 0,
+        };
+      }),
+    };
+  }, [dashboardAdSpendFiltered, dashboardFilteredLeads, dashboardMediaBudgets]);
+
   const budgetFilteredItems = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -1561,6 +1819,11 @@ const App = () => {
           ['Valor em negociação', Number(dashboardLocalStats.valorNegociacao || 0)],
           ['Ticket médio ganho', Number(dashboardData.avgTicket || 0)],
           ['Follow-ups vencidos', dashboardData.overdueFollowups || 0],
+          ['Investimento em Ads', Number(dashboardMediaData.investment || 0)],
+          ['Leads gerados (Ads)', dashboardMediaData.leadsGenerated || 0],
+          ['CPL', Number(dashboardMediaData.cpl || 0)],
+          ['ROAS estimado', Number(dashboardMediaData.roasEstimated || 0)],
+          ['ROAS fechado', Number(dashboardMediaData.roasClosed || 0)],
         ],
       },
       {
@@ -1590,6 +1853,23 @@ const App = () => {
           [],
           ['Perfil', 'Quantidade'],
           ...dashboardData.bySegment.map((item) => [item.label, item.value]),
+        ],
+      },
+      {
+        name: 'Ads',
+        rows: [
+          ['Campanha', 'Plataforma', 'Investimento', 'Leads', 'CPL', 'Estimado', 'Fechado', 'ROAS estimado', 'ROAS fechado'],
+          ...dashboardMediaData.rows.map((item) => [
+            item.campaign || '-',
+            item.platform || '-',
+            Number(item.investment || 0),
+            item.leads || 0,
+            Number(item.cpl || 0),
+            Number(item.estimated || 0),
+            Number(item.closed || 0),
+            Number(item.roasEstimated || 0),
+            Number(item.roasClosed || 0),
+          ]),
         ],
       },
       {
@@ -1947,6 +2227,89 @@ const App = () => {
     } catch (err) {
       console.error('Erro ao excluir orçamento:', err);
       showToast('Erro ao excluir orçamento', 'error');
+    }
+  };
+
+  const openNewAdSpendModal = () => {
+    setEditingAdSpend(null);
+    setAdSpendForm({
+      ...emptyAdSpend,
+      date: toDateInput(new Date().toISOString()),
+    });
+    setShowAdSpendModal(true);
+  };
+
+  const openEditAdSpendModal = (entry) => {
+    setEditingAdSpend(entry);
+    setAdSpendForm({
+      date: toDateInput(entry.date),
+      platform: entry.platform || 'Meta Ads',
+      campaign: entry.campaign || '',
+      amount: Number(entry.amount || 0),
+      notes: entry.notes || '',
+    });
+    setShowAdSpendModal(true);
+  };
+
+  const saveAdSpend = async () => {
+    if (!adSpendForm.date) {
+      showToast('Data obrigatória', 'error');
+      return;
+    }
+    if (!adSpendForm.platform) {
+      showToast('Plataforma obrigatória', 'error');
+      return;
+    }
+
+    const method = editingAdSpend ? 'PUT' : 'POST';
+    const url = editingAdSpend ? `${API_URL}/ad-spend/${editingAdSpend.id}` : `${API_URL}/ad-spend`;
+    try {
+      setSavingAdSpend(true);
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...adSpendForm,
+          amount: Number(adSpendForm.amount) || 0,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao salvar gasto de Ads', 'error');
+        return;
+      }
+      await loadAdSpend();
+      setShowAdSpendModal(false);
+      setEditingAdSpend(null);
+      showToast(editingAdSpend ? 'Gasto atualizado' : 'Gasto lançado', 'success');
+    } catch (err) {
+      console.error('Erro ao salvar gasto de Ads:', err);
+      showToast('Erro ao salvar gasto de Ads', 'error');
+    } finally {
+      setSavingAdSpend(false);
+    }
+  };
+
+  const deleteAdSpend = async (id) => {
+    if (!window.confirm('Deseja realmente excluir este lançamento de Ads?')) return;
+    try {
+      const res = await fetch(`${API_URL}/ad-spend/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao excluir gasto de Ads', 'error');
+        return;
+      }
+      await loadAdSpend();
+      showToast('Gasto excluído', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir gasto de Ads:', err);
+      showToast('Erro ao excluir gasto de Ads', 'error');
     }
   };
 
@@ -2750,6 +3113,12 @@ const App = () => {
                   </p>
                 </div>
                 <button
+                  onClick={openNewAdSpendModal}
+                  className="px-4 py-3 rounded-2xl bg-slate-900 text-white font-semibold shadow hover:bg-slate-800 transition"
+                >
+                  Lançar Ads
+                </button>
+                <button
                   onClick={exportDashboardExcel}
                   className="px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition"
                 >
@@ -2867,6 +3236,13 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
+              <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
+              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
+              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Prospects</p>
                 <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.prospects || 0}</p>
@@ -2883,6 +3259,25 @@ const App = () => {
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Follow-up vencido</p>
                 <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.overdueFollowups || 0}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">CPL</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.cpl || 0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Orçamento estimado</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Estimado por lead</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Fechado por lead</p>
+                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}</p>
               </div>
             </div>
 
@@ -2910,6 +3305,40 @@ const App = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Investimento x Leads</h3>
+                <MiniLineChart
+                  data={dashboardMediaData.spendVsLeads.map((item) => ({ label: item.label, value: item.spend }))}
+                  color="#e11d48"
+                  formatValue={formatCurrencyBR}
+                />
+                <div className="mt-4">
+                  <MiniBarChart
+                    data={dashboardMediaData.spendVsLeads.map((item) => ({ label: item.label, value: item.leads }))}
+                    color="#2563eb"
+                  />
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Performance</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">ROAS estimado x fechado</h3>
+                <MiniLineChart
+                  data={dashboardMediaData.roasEvolution.map((item) => ({ label: item.label, value: item.estimated }))}
+                  color="#2563eb"
+                  formatValue={formatRatio}
+                />
+                <div className="mt-4">
+                  <MiniLineChart
+                    data={dashboardMediaData.roasEvolution.map((item) => ({ label: item.label, value: item.closed }))}
+                    color="#059669"
+                    formatValue={formatRatio}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
@@ -2930,6 +3359,118 @@ const App = () => {
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
                 <h3 className="text-lg font-bold text-slate-900 mb-4">Perfis de cliente</h3>
                 <MiniBarChart data={dashboardData.bySegment} color="#059669" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Ads</p>
+                  <h3 className="text-lg font-bold text-slate-900">Performance por campanha</h3>
+                </div>
+                <span className="text-xs text-slate-500">
+                  Plataforma principal: {dashboardMediaData.topPlatform || '-'}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-slate-500">
+                      <th className="py-2 px-2">Campanha</th>
+                      <th className="py-2 px-2">Plataforma</th>
+                      <th className="py-2 px-2">Investimento</th>
+                      <th className="py-2 px-2">Leads</th>
+                      <th className="py-2 px-2">CPL</th>
+                      <th className="py-2 px-2">Estimado</th>
+                      <th className="py-2 px-2">Fechado</th>
+                      <th className="py-2 px-2">ROAS est.</th>
+                      <th className="py-2 px-2">ROAS fech.</th>
+                      <th className="py-2 px-2 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashboardMediaData.rows.map((row) => (
+                      <tr key={row.key} className="border-b last:border-none">
+                        <td className="py-2 px-2">{row.campaign || '-'}</td>
+                        <td className="py-2 px-2">{row.platform || '-'}</td>
+                        <td className="py-2 px-2">{formatCurrencyBR(row.investment || 0)}</td>
+                        <td className="py-2 px-2">{row.leads || 0}</td>
+                        <td className="py-2 px-2">{formatCurrencyBR(row.cpl || 0)}</td>
+                        <td className="py-2 px-2">{formatCurrencyBR(row.estimated || 0)}</td>
+                        <td className="py-2 px-2">{formatCurrencyBR(row.closed || 0)}</td>
+                        <td className="py-2 px-2">{formatRatio(row.roasEstimated)}</td>
+                        <td className="py-2 px-2">{formatRatio(row.roasClosed)}</td>
+                        <td className="py-2 px-2 text-right text-xs text-slate-400">—</td>
+                      </tr>
+                    ))}
+                    {dashboardMediaData.rows.length === 0 && (
+                      <tr>
+                        <td colSpan={10} className="py-4 text-center text-slate-500 text-sm">
+                          Nenhum lançamento de Ads encontrado para os filtros atuais.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Ads</p>
+                  <h3 className="text-lg font-bold text-slate-900">Lançamentos recentes</h3>
+                </div>
+                <button
+                  onClick={openNewAdSpendModal}
+                  className="px-3 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium"
+                >
+                  Novo lançamento
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-slate-500">
+                      <th className="py-2 px-2">Data</th>
+                      <th className="py-2 px-2">Plataforma</th>
+                      <th className="py-2 px-2">Campanha</th>
+                      <th className="py-2 px-2">Valor</th>
+                      <th className="py-2 px-2">Observações</th>
+                      <th className="py-2 px-2 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adSpendItems
+                      .slice()
+                      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+                      .slice(0, 8)
+                      .map((entry) => (
+                        <tr key={entry.id} className="border-b last:border-none">
+                          <td className="py-2 px-2">{formatDateBR(entry.date)}</td>
+                          <td className="py-2 px-2">{entry.platform || '-'}</td>
+                          <td className="py-2 px-2">{entry.campaign || '-'}</td>
+                          <td className="py-2 px-2">{formatCurrencyBR(entry.amount || 0)}</td>
+                          <td className="py-2 px-2">{entry.notes || '-'}</td>
+                          <td className="py-2 px-2 text-right space-x-2">
+                            <button onClick={() => openEditAdSpendModal(entry)} className="text-blue-600 text-xs">
+                              Editar
+                            </button>
+                            <button onClick={() => deleteAdSpend(entry.id)} className="text-red-600 text-xs">
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    {adSpendItems.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-4 text-center text-slate-500 text-sm">
+                          Nenhum gasto lançado ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </section>
@@ -4507,6 +5048,100 @@ const App = () => {
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
                 >
                   {savingBudget ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAdSpendModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {editingAdSpend ? 'Editar lançamento de Ads' : 'Novo lançamento de Ads'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAdSpendModal(false);
+                    setEditingAdSpend(null);
+                  }}
+                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
+                >
+                  Fechar
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Data</label>
+                    <input
+                      type="date"
+                      value={adSpendForm.date || ''}
+                      onChange={(e) => setAdSpendForm({ ...adSpendForm, date: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma</label>
+                    <select
+                      value={adSpendForm.platform || 'Meta Ads'}
+                      onChange={(e) => setAdSpendForm({ ...adSpendForm, platform: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    >
+                      {AD_PLATFORM_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Campanha</label>
+                    <input
+                      type="text"
+                      value={adSpendForm.campaign || ''}
+                      onChange={(e) => setAdSpendForm({ ...adSpendForm, campaign: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor investido</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={adSpendForm.amount}
+                      onChange={(e) => setAdSpendForm({ ...adSpendForm, amount: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Observações</label>
+                  <textarea
+                    value={adSpendForm.notes}
+                    onChange={(e) => setAdSpendForm({ ...adSpendForm, notes: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowAdSpendModal(false);
+                    setEditingAdSpend(null);
+                  }}
+                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveAdSpend}
+                  disabled={savingAdSpend}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                >
+                  {savingAdSpend ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </div>
