@@ -561,6 +561,7 @@ const App = () => {
   const [dashboardSegmentFilter, setDashboardSegmentFilter] = useState('all');
   const [dashboardChannelFilter, setDashboardChannelFilter] = useState('all');
   const [dashboardCampaignFilter, setDashboardCampaignFilter] = useState('');
+  const [dashboardFollowUpFilter, setDashboardFollowUpFilter] = useState('all');
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -984,6 +985,7 @@ const App = () => {
       if (parsed.segmentFilter) setDashboardSegmentFilter(parsed.segmentFilter);
       if (parsed.channelFilter) setDashboardChannelFilter(parsed.channelFilter);
       if (parsed.campaignFilter) setDashboardCampaignFilter(parsed.campaignFilter);
+      if (parsed.followUpFilter) setDashboardFollowUpFilter(parsed.followUpFilter);
     } catch {
       /* ignore */
     }
@@ -1016,9 +1018,10 @@ const App = () => {
       segmentFilter: dashboardSegmentFilter,
       channelFilter: dashboardChannelFilter,
       campaignFilter: dashboardCampaignFilter,
+      followUpFilter: dashboardFollowUpFilter,
     };
     localStorage.setItem('dashboardFilters', JSON.stringify(payload));
-  }, [dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter, dashboardFollowUpFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -1377,9 +1380,18 @@ const App = () => {
         if (!campaign.includes(term)) return false;
       }
 
+      if (dashboardFollowUpFilter === 'overdue') {
+        const nextDate = parseLeadDate(lead.next_contact);
+        if (!nextDate) return false;
+        const leadDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate()).getTime();
+        const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const diffDays = (leadDate - todayDate) / (1000 * 60 * 60 * 24);
+        if (diffDays >= 0) return false;
+      }
+
       return true;
     });
-  }, [leads, users, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter]);
+  }, [leads, users, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter, dashboardFollowUpFilter]);
 
   const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
 
@@ -3239,13 +3251,14 @@ const App = () => {
                       setDashboardSegmentFilter('all');
                       setDashboardChannelFilter('all');
                       setDashboardCampaignFilter('');
+                      setDashboardFollowUpFilter('all');
                     }}
                     className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
                   >
                     Limpar filtros
                   </button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
                   <select
                     value={dashboardPeriod}
                     onChange={(e) => setDashboardPeriod(e.target.value)}
@@ -3301,6 +3314,14 @@ const App = () => {
                     className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
                     placeholder="Filtrar campanha..."
                   />
+                  <select
+                    value={dashboardFollowUpFilter}
+                    onChange={(e) => setDashboardFollowUpFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  >
+                    <option value="all">Toda agenda</option>
+                    <option value="overdue">Follow-up vencido</option>
+                  </select>
                 </div>
                 {dashboardPeriod === 'custom' && (
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
