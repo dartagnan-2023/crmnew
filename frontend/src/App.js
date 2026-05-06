@@ -33,15 +33,6 @@ const BUDGET_LOSS_REASON_OPTIONS = [
   { value: 'outros', label: 'Outros' },
 ];
 
-const AD_PLATFORM_OPTIONS = [
-  'Meta Ads',
-  'Google Ads',
-  'LinkedIn Ads',
-  'TikTok Ads',
-  'YouTube Ads',
-  'Outro',
-];
-
 
 // Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
 const formatPhone = (value) => {
@@ -109,6 +100,25 @@ const parseCurrencyInputBR = (value) => {
     .replace(/[^\d.-]/g, '');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const deriveMediaChannelLabel = (value) => {
+  const normalized = normalizeOptionValue(value);
+  if (!normalized) return '';
+  if (
+    normalized.includes('meta') ||
+    normalized.includes('facebook') ||
+    normalized.includes('instagram')
+  ) return 'Meta Ads';
+  if (normalized.includes('google') || normalized.includes('youtube')) return 'Google Ads';
+  if (normalized.includes('linkedin')) return 'LinkedIn Ads';
+  if (normalized.includes('tiktok')) return 'TikTok Ads';
+  if (normalized.includes('whatsapp')) return 'WhatsApp';
+  if (normalized.includes('landing')) return 'Landing Page';
+  if (normalized.includes('manychat')) return 'Manychat';
+  if (normalized.includes('organico') || normalized.includes('organic')) return 'Orgânico';
+  if (normalized.includes('indicacao') || normalized.includes('refer')) return 'Indicação';
+  return String(value || '').trim();
 };
 
 const normalizeSpreadsheetHeader = (value) =>
@@ -263,7 +273,9 @@ const buildBudgetStatsSummary = (items) => {
 
 const emptyAdSpend = {
   date: '',
-  platform: 'Meta Ads',
+  channel_id: '',
+  channel_name: '',
+  platform: '',
   campaign: '',
   amount: '',
   notes: '',
@@ -1533,6 +1545,7 @@ const App = () => {
       '6m': 183,
       '12m': 365,
     };
+    const selectedChannelName = channels.find((c) => String(c.id) === String(dashboardChannelFilter))?.name || '';
 
     return adSpendItems.filter((entry) => {
       const baseDate = parseLeadDate(entry.date || entry.created_at);
@@ -1555,9 +1568,16 @@ const App = () => {
         if (!String(entry.campaign || '').toLowerCase().includes(term)) return false;
       }
 
+      if (dashboardChannelFilter !== 'all' && selectedChannelName) {
+        const entryChannel = entry.channel_name || entry.platform || '';
+        if (normalizeOptionValue(entryChannel) !== normalizeOptionValue(selectedChannelName)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [adSpendItems, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardCampaignFilter]);
+  }, [adSpendItems, channels, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardCampaignFilter, dashboardChannelFilter]);
 
   const dashboardMediaData = useMemo(() => {
     const normalize = (value) => normalizeOptionValue(value);
@@ -1579,14 +1599,20 @@ const App = () => {
       closedByMonth.set(key, 0);
     }
 
-    const getGroupKey = (entry) => normalize(entry.campaign) || normalize(entry.platform) || 'sem-campanha';
+    const getGroupKey = (entry) =>
+      normalize(entry.channel_name) ||
+      normalize(entry.platform) ||
+      normalize(deriveMediaChannelLabel(entry.campaign)) ||
+      'sem-canal';
     const ensureGroup = (entry) => {
       const key = getGroupKey(entry);
+      const channelLabel = entry.channel_name || entry.platform || deriveMediaChannelLabel(entry.campaign) || 'Sem canal';
       if (!groupMap.has(key)) {
         groupMap.set(key, {
           key,
+          channel: channelLabel,
           campaign: entry.campaign || '',
-          platform: entry.platform || '',
+          platform: channelLabel,
           investment: 0,
           leads: 0,
           estimated: 0,
@@ -1606,17 +1632,34 @@ const App = () => {
     });
 
     dashboardFilteredLeads.forEach((lead) => {
-      const key = normalize(lead.campaign) || normalize(lead.source) || 'sem-campanha';
+      const key =
+        normalize(lead.channel_name) ||
+        normalize(lead.source) ||
+        normalize(deriveMediaChannelLabel(lead.campaign)) ||
+        'sem-canal';
       const group = groupMap.get(key);
       if (!group) return;
       group.leads += 1;
+      const leadValue = Number(lead.value || 0);
+      const status = normalize(lead.status);
       const date = parseLeadDate(lead.created_at || lead.first_contact);
       const month = date ? monthKey(date) : '';
+      if (status !== 'perdido') {
+        group.estimated += leadValue;
+        if (estimatedByMonth.has(month)) estimatedByMonth.set(month, (estimatedByMonth.get(month) || 0) + leadValue);
+      }
+      if (status === 'ganho') {
+        group.closed += leadValue;
+        if (closedByMonth.has(month)) closedByMonth.set(month, (closedByMonth.get(month) || 0) + leadValue);
+      }
       if (leadsByMonth.has(month)) leadsByMonth.set(month, (leadsByMonth.get(month) || 0) + 1);
     });
 
     dashboardMediaBudgets.forEach((budget) => {
-      const key = normalize(budget.campaign) || normalize(budget.channel_name) || 'sem-campanha';
+      const key =
+        normalize(budget.channel_name) ||
+        normalize(deriveMediaChannelLabel(budget.campaign)) ||
+        'sem-canal';
       const group = groupMap.get(key);
       if (!group) return;
       const status = normalize(budget.status);
@@ -1625,13 +1668,13 @@ const App = () => {
       const date = parseLeadDate(budget.requested_at || budget.created_at || budget.closed_at);
       const month = date ? monthKey(date) : '';
 
-      if (!['reprovado', 'nao feito'].includes(status)) {
+      if (!group.estimated && !['reprovado', 'nao feito'].includes(status)) {
         group.estimated += budgetValue;
         if (estimatedByMonth.has(month)) {
           estimatedByMonth.set(month, (estimatedByMonth.get(month) || 0) + budgetValue);
         }
       }
-      if (status === 'aprovado') {
+      if (!group.closed && status === 'aprovado') {
         group.closed += closedValue;
         if (closedByMonth.has(month)) {
           closedByMonth.set(month, (closedByMonth.get(month) || 0) + closedValue);
@@ -2250,10 +2293,16 @@ const App = () => {
   };
 
   const openNewAdSpendModal = () => {
+    const defaultChannel = channels.find((channel) =>
+      normalizeOptionValue(channel.name).includes('meta')
+    ) || channels[0];
     setEditingAdSpend(null);
     setAdSpendForm({
       ...emptyAdSpend,
       date: toDateInput(new Date().toISOString()),
+      channel_id: defaultChannel?.id ? String(defaultChannel.id) : '',
+      channel_name: defaultChannel?.name || '',
+      platform: defaultChannel?.name || '',
     });
     setShowAdSpendModal(true);
   };
@@ -2262,7 +2311,9 @@ const App = () => {
     setEditingAdSpend(entry);
     setAdSpendForm({
       date: toDateInput(entry.date),
-      platform: entry.platform || 'Meta Ads',
+      channel_id: entry.channel_id ? String(entry.channel_id) : '',
+      channel_name: entry.channel_name || entry.platform || '',
+      platform: entry.platform || entry.channel_name || '',
       campaign: entry.campaign || '',
       amount: formatCurrencyInputBR(entry.amount || 0),
       notes: entry.notes || '',
@@ -2275,8 +2326,8 @@ const App = () => {
       showToast('Data obrigatória', 'error');
       return;
     }
-    if (!adSpendForm.platform) {
-      showToast('Plataforma obrigatória', 'error');
+    if (!adSpendForm.channel_id && !adSpendForm.channel_name) {
+      showToast('Canal obrigatório', 'error');
       return;
     }
 
@@ -2292,6 +2343,7 @@ const App = () => {
         },
         body: JSON.stringify({
           ...adSpendForm,
+          platform: adSpendForm.channel_name || adSpendForm.platform || '',
           amount: parseCurrencyInputBR(adSpendForm.amount),
         }),
       });
@@ -5102,14 +5154,23 @@ const App = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Plataforma</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Canal</label>
                     <select
-                      value={adSpendForm.platform || 'Meta Ads'}
-                      onChange={(e) => setAdSpendForm({ ...adSpendForm, platform: e.target.value })}
+                      value={adSpendForm.channel_id || ''}
+                      onChange={(e) => {
+                        const selectedChannel = channels.find((channel) => String(channel.id) === String(e.target.value));
+                        setAdSpendForm({
+                          ...adSpendForm,
+                          channel_id: e.target.value,
+                          channel_name: selectedChannel?.name || '',
+                          platform: selectedChannel?.name || '',
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                     >
-                      {AD_PLATFORM_OPTIONS.map((option) => (
-                        <option key={option} value={option}>{option}</option>
+                      <option value="">Selecione</option>
+                      {channels.map((channel) => (
+                        <option key={channel.id} value={channel.id}>{channel.name}</option>
                       ))}
                     </select>
                   </div>

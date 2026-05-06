@@ -281,6 +281,8 @@ const SHEETS_CONFIG = {
   ad_spend: [
     'id',
     'date',
+    'channel_id',
+    'channel_name',
     'platform',
     'campaign',
     'amount',
@@ -1693,6 +1695,8 @@ app.get('/api/ad-spend', authMiddleware, async (_req, res) => {
 app.post('/api/ad-spend', authMiddleware, async (req, res) => {
   const {
     date = '',
+    channel_id = '',
+    channel_name = '',
     platform = '',
     campaign = '',
     amount = 0,
@@ -1702,8 +1706,8 @@ app.post('/api/ad-spend', authMiddleware, async (req, res) => {
   if (!date) {
     return res.status(400).json({ error: 'Data obrigatoria' });
   }
-  if (!platform) {
-    return res.status(400).json({ error: 'Plataforma obrigatoria' });
+  if (!channel_id && !channel_name && !platform) {
+    return res.status(400).json({ error: 'Canal obrigatorio' });
   }
 
   return withTableLock('ad_spend', async () => {
@@ -1713,7 +1717,9 @@ app.post('/api/ad-spend', authMiddleware, async (req, res) => {
     const entry = {
       id,
       date,
-      platform: platform || '',
+      channel_id: channel_id || '',
+      channel_name: channel_name || platform || '',
+      platform: platform || channel_name || '',
       campaign: campaign || '',
       amount: parseMoneyValue(amount),
       notes: notes || '',
@@ -1729,6 +1735,8 @@ app.post('/api/ad-spend', authMiddleware, async (req, res) => {
 app.put('/api/ad-spend/:id', authMiddleware, async (req, res) => {
   const {
     date,
+    channel_id,
+    channel_name,
     platform,
     campaign,
     amount,
@@ -1741,6 +1749,8 @@ app.put('/api/ad-spend/:id', authMiddleware, async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'Lancamento nao encontrado' });
 
     if (date !== undefined) items[idx].date = date || '';
+    if (channel_id !== undefined) items[idx].channel_id = channel_id || '';
+    if (channel_name !== undefined) items[idx].channel_name = channel_name || '';
     if (platform !== undefined) items[idx].platform = platform || '';
     if (campaign !== undefined) items[idx].campaign = campaign || '';
     if (amount !== undefined) items[idx].amount = parseMoneyValue(amount);
