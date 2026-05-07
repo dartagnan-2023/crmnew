@@ -108,11 +108,20 @@ const dateInRange = (value, from, to) => {
   return true;
 };
 
-const deriveLeadSource = (lead) => {
+const resolveChannelName = (lead, channels = []) => {
+  if (lead.channel_name) return lead.channel_name;
+  const channelId = String(lead.channel_id || '').trim();
+  if (!channelId) return '';
+  const matched = channels.find((channel) => String(channel.id || '').trim() === channelId);
+  return matched?.name || '';
+};
+
+const deriveLeadSource = (lead, channels = []) => {
   const explicitSource = normalizeName(lead.source);
   if (explicitSource) return lead.source;
 
-  const channel = normalizeName(lead.channel_name);
+  const resolvedChannelName = resolveChannelName(lead, channels);
+  const channel = normalizeName(resolvedChannelName);
   const campaign = normalizeName(lead.campaign);
 
   if (channel.includes('whatsapp')) return 'WhatsApp';
@@ -123,7 +132,7 @@ const deriveLeadSource = (lead) => {
   if (campaign.includes('google')) return 'Google Ads';
   if (campaign.includes('organico') || campaign.includes('organic')) return 'Orgânico';
   if (campaign.includes('indicacao') || campaign.includes('refer')) return 'Indicação';
-  if (lead.channel_name) return lead.channel_name;
+  if (resolvedChannelName) return resolvedChannelName;
   if (lead.campaign) return lead.campaign;
   return '';
 };
@@ -168,7 +177,7 @@ const addMinutesIso = (baseIso, minutes) => {
 };
 
 const getLeadAutomationSource = (lead) =>
-  deriveLeadSource(lead) || lead.channel_name || lead.campaign || lead.source || '';
+  deriveLeadSource(lead) || resolveChannelName(lead) || lead.campaign || lead.source || '';
 
 const getInitialTemperatureBySource = (source) => {
   const normalized = normalizeName(source);
@@ -225,7 +234,11 @@ const applyLeadAutomationOnWrite = (lead, options = {}) => {
   const statusHint = getStatusTemperatureHint(lead.status);
 
   if (sourceChanged) {
-    nextTemperature = upgradeTemperature(nextTemperature, initialTemperature);
+    if (normalizeName(lead.status) === 'novo' && !statusHint && !budgetHint) {
+      nextTemperature = initialTemperature;
+    } else {
+      nextTemperature = upgradeTemperature(nextTemperature, initialTemperature);
+    }
     shouldResetSla = true;
   }
 
@@ -285,7 +298,9 @@ const hydrateLeadAutomationState = (lead, now = new Date()) => {
   const status = normalizeName(lead.status);
   const lastActivityAt = toIsoStringOrEmpty(lead.last_activity_at || lead.updated_at || lead.created_at);
   const initialTemperature = getInitialTemperatureBySource(source);
-  let runtimeTemperature = normalizeTemperature(lead.temperature) || initialTemperature;
+  let runtimeTemperature = status === 'novo'
+    ? initialTemperature
+    : normalizeTemperature(lead.temperature) || initialTemperature;
 
   const statusHint = getStatusTemperatureHint(status);
   if (statusHint) runtimeTemperature = upgradeTemperature(runtimeTemperature, statusHint);
@@ -1467,9 +1482,10 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   if (!name || !phone) return res.status(400).json({ error: 'Nome e telefone sao obrigatorios' });
 
   return withTableLock('leads', async () => {
-    const [{ items: leads }, { items: users }] = await Promise.all([
+    const [{ items: leads }, { items: users }, { items: channels }] = await Promise.all([
       loadTable('leads', true), // ignora cache para inserção
       loadTable('users'),      // cache ok para usuários
+      loadTable('channels'),
     ]);
     const id = nextId(leads);
     const isRepresentante = req.user.role === 'representante';
@@ -1490,7 +1506,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
           ownerUser;
       }
     }
-    const channelName = req.body.channel_name || '';
+    const channelName = req.body.channel_name || resolveChannelName({ channel_id }, channels) || '';
     const now = new Date().toISOString();
 
     const normalizedPhone = normalizePhone(phone);
@@ -1526,7 +1542,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       first_contact: first_contact || '',
       next_contact: next_contact || '',
       notes: notes || '',
-      source: req.body.source || deriveLeadSource({ channel_name: channelName, campaign }),
+      source: req.body.source || deriveLeadSource({ channel_id, channel_name: channelName, campaign }, channels),
       created_at: now,
       updated_at: now,
       is_private: normalizeBool(is_private),
@@ -1607,9 +1623,10 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
   } = req.body;
 
   return withTableLock('leads', async () => {
-    const [{ items: leads }, { items: users }] = await Promise.all([
+    const [{ items: leads }, { items: users }, { items: channels }] = await Promise.all([
       loadTable('leads', true), // ignora cache
       loadTable('users'),
+      loadTable('channels'),
     ]);
     const idx = leads.findIndex((l) => String(l.id) === String(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
@@ -1685,6 +1702,13 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     // Todos os usuários autenticados (exceto representantes) podem editar qualquer lead (incluindo reatribuir),
     // conforme regra do CRM.
 
+    const channelIdChanged =
+      channel_id !== undefined && String(channel_id || '') !== String(previousLead.channel_id || '');
+    const channelNameChanged =
+      channel_name !== undefined && String(channel_name || '') !== String(previousLead.channel_name || '');
+    const campaignChanged =
+      campaign !== undefined && String(campaign || '') !== String(previousLead.campaign || '');
+
     if (name) leads[idx].name = name;
     if (company !== undefined) leads[idx].company = company;
     if (segment !== undefined) leads[idx].segment = segment;
@@ -1694,7 +1718,11 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (status) leads[idx].status = status;
     if (campaign !== undefined) leads[idx].campaign = campaign;
     if (channel_id !== undefined) leads[idx].channel_id = channel_id;
-    if (channel_name !== undefined) leads[idx].channel_name = channel_name;
+    if (channel_name !== undefined) {
+      leads[idx].channel_name = channel_name || resolveChannelName({ channel_id: leads[idx].channel_id }, channels);
+    } else if (channelIdChanged) {
+      leads[idx].channel_name = resolveChannelName({ channel_id: leads[idx].channel_id }, channels);
+    }
     if (value !== undefined) leads[idx].value = parseMoneyValue(value);
     if (first_contact !== undefined) leads[idx].first_contact = first_contact;
     if (next_contact !== undefined) leads[idx].next_contact = next_contact;
@@ -1713,8 +1741,8 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
       leads[idx].owner = ownerUser?.name || owner || leads[idx].owner;
     }
 
-    if (!leads[idx].source) {
-      leads[idx].source = deriveLeadSource(leads[idx]);
+    if (source === undefined && (channelIdChanged || channelNameChanged || campaignChanged || !leads[idx].source)) {
+      leads[idx].source = deriveLeadSource(leads[idx], channels);
     }
     const nowIso = new Date().toISOString();
     leads[idx].updated_at = nowIso;
