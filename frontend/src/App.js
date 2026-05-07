@@ -427,13 +427,21 @@ const LeadTemperatureBadge = ({ value }) => {
   const normalized = normalizeOptionValue(value);
   const label = LEAD_TEMPERATURE_OPTIONS.find((item) => item.value === normalized)?.label || 'Sem temperatura';
   const toneClasses = {
-    frio: 'bg-slate-100 text-slate-700 border-slate-200',
-    morno: 'bg-amber-50 text-amber-700 border-amber-200',
-    quente: 'bg-rose-50 text-rose-700 border-rose-200',
+    frio: 'border-sky-200 bg-gradient-to-r from-sky-50 to-white text-sky-800 shadow-[0_8px_18px_-14px_rgba(14,165,233,0.9)]',
+    morno: 'border-amber-200 bg-gradient-to-r from-amber-50 to-white text-amber-800 shadow-[0_8px_18px_-14px_rgba(245,158,11,0.9)]',
+    quente: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white text-rose-800 shadow-[0_8px_18px_-14px_rgba(244,63,94,0.95)]',
+  };
+  const dotClasses = {
+    frio: 'bg-sky-500',
+    morno: 'bg-amber-500',
+    quente: 'bg-rose-500',
   };
 
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[11px] font-semibold ${toneClasses[normalized] || toneClasses.frio}`}>
+    <span
+      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[11px] font-semibold leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.frio}`}
+    >
+      <span className={`h-2 w-2 rounded-full ${dotClasses[normalized] || dotClasses.frio}`} />
       {label}
     </span>
   );
@@ -443,9 +451,14 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
   const normalized = normalizeOptionValue(value);
   const label = SLA_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'No prazo';
   const toneClasses = {
-    normal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-700 border-amber-200',
-    overdue: 'bg-rose-100 text-rose-700 border-rose-200',
+    normal: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white text-emerald-800 shadow-[0_8px_18px_-14px_rgba(16,185,129,0.95)]',
+    warning: 'border-amber-200 bg-gradient-to-r from-amber-50 to-white text-amber-800 shadow-[0_8px_18px_-14px_rgba(245,158,11,0.9)]',
+    overdue: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white text-rose-800 shadow-[0_8px_18px_-14px_rgba(244,63,94,0.95)]',
+  };
+  const dotClasses = {
+    normal: 'bg-emerald-500',
+    warning: 'bg-amber-500',
+    overdue: 'bg-rose-500',
   };
   const helper =
     typeof remainingMinutes === 'number'
@@ -455,8 +468,12 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
       : '';
 
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[11px] font-semibold ${toneClasses[normalized] || toneClasses.normal}`}>
-      {label}{helper ? ` · ${helper}` : ''}
+    <span
+      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[11px] font-semibold leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.normal}`}
+    >
+      <span className={`h-2 w-2 rounded-full ${dotClasses[normalized] || dotClasses.normal}`} />
+      <span>{label}</span>
+      {helper ? <span className="font-medium opacity-80">{helper}</span> : null}
     </span>
   );
 };

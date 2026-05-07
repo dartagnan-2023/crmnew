@@ -117,21 +117,25 @@ const resolveChannelName = (lead, channels = []) => {
 };
 
 const deriveLeadSource = (lead, channels = []) => {
-  const explicitSource = normalizeName(lead.source);
-  if (explicitSource) return lead.source;
-
   const resolvedChannelName = resolveChannelName(lead, channels);
   const channel = normalizeName(resolvedChannelName);
   const campaign = normalizeName(lead.campaign);
+  const explicitSource = normalizeName(lead.source);
 
   if (channel.includes('whatsapp')) return 'WhatsApp';
   if (channel.includes('landing')) return 'Landing Page';
   if (channel.includes('manychat')) return 'Manychat';
+  if (channel.includes('meta') || channel.includes('facebook') || channel.includes('instagram')) return 'Meta Ads';
+  if (channel.includes('google') || channel.includes('youtube')) return 'Google Ads';
+  if (channel.includes('scraper') || channel.includes('captura')) return resolvedChannelName;
+  if (channel.includes('organico') || channel.includes('organic')) return 'Orgânico';
+  if (channel.includes('indicacao') || channel.includes('refer')) return 'Indicação';
   if (campaign.includes('meta')) return 'Meta Ads';
   if (campaign.includes('facebook') || campaign.includes('instagram')) return 'Meta Ads';
   if (campaign.includes('google')) return 'Google Ads';
   if (campaign.includes('organico') || campaign.includes('organic')) return 'Orgânico';
   if (campaign.includes('indicacao') || campaign.includes('refer')) return 'Indicação';
+  if (explicitSource) return lead.source;
   if (resolvedChannelName) return resolvedChannelName;
   if (lead.campaign) return lead.campaign;
   return '';
