@@ -128,6 +128,194 @@ const deriveLeadSource = (lead) => {
   return '';
 };
 
+const TEMPERATURE_ORDER = {
+  frio: 0,
+  morno: 1,
+  quente: 2,
+};
+
+const SLA_MINUTES_BY_TEMPERATURE = {
+  frio: 24 * 60,
+  morno: 4 * 60,
+  quente: 30,
+};
+
+const HOT_SOURCES = ['meta ads', 'google ads', 'landing page', 'manychat', 'indicacao', 'site'];
+const WARM_SOURCES = ['organico', 'whatsapp'];
+const HOT_LEAD_STATUSES = ['negociacao', 'proposta'];
+const WARM_LEAD_STATUSES = ['contato'];
+const HOT_BUDGET_STATUSES = ['enviado', 'aprovado'];
+const WARM_BUDGET_STATUSES = ['novo', 'em_orcamento'];
+
+const normalizeTemperature = (value) => {
+  const normalized = normalizeName(value);
+  if (normalized === 'quente' || normalized === 'morno' || normalized === 'frio') return normalized;
+  return '';
+};
+
+const upgradeTemperature = (current, next) => {
+  const currentNormalized = normalizeTemperature(current) || 'frio';
+  const nextNormalized = normalizeTemperature(next) || 'frio';
+  return TEMPERATURE_ORDER[nextNormalized] > TEMPERATURE_ORDER[currentNormalized]
+    ? nextNormalized
+    : currentNormalized;
+};
+
+const addMinutesIso = (baseIso, minutes) => {
+  const base = new Date(baseIso || new Date().toISOString());
+  if (Number.isNaN(base.getTime())) return '';
+  return new Date(base.getTime() + (Number(minutes) || 0) * 60 * 1000).toISOString();
+};
+
+const getLeadAutomationSource = (lead) =>
+  deriveLeadSource(lead) || lead.channel_name || lead.campaign || lead.source || '';
+
+const getInitialTemperatureBySource = (source) => {
+  const normalized = normalizeName(source);
+  if (!normalized) return 'morno';
+  if (HOT_SOURCES.some((item) => normalized.includes(item))) return 'quente';
+  if (WARM_SOURCES.some((item) => normalized.includes(item))) return 'morno';
+  if (normalized.includes('scraper')) return 'frio';
+  return 'morno';
+};
+
+const getBudgetTemperatureHint = (status) => {
+  const normalized = normalizeName(status);
+  if (HOT_BUDGET_STATUSES.includes(normalized)) return 'quente';
+  if (WARM_BUDGET_STATUSES.includes(normalized)) return 'morno';
+  return '';
+};
+
+const getStatusTemperatureHint = (status) => {
+  const normalized = normalizeName(status);
+  if (HOT_LEAD_STATUSES.includes(normalized)) return 'quente';
+  if (WARM_LEAD_STATUSES.includes(normalized)) return 'morno';
+  return '';
+};
+
+const refreshLeadSlaFields = (lead, referenceIso, temperature) => {
+  const normalizedTemperature = normalizeTemperature(temperature) || 'morno';
+  const slaMinutes = SLA_MINUTES_BY_TEMPERATURE[normalizedTemperature] || SLA_MINUTES_BY_TEMPERATURE.morno;
+  const baseIso = toIsoStringOrEmpty(referenceIso) || new Date().toISOString();
+  lead.temperature = normalizedTemperature;
+  lead.sla_minutes = String(slaMinutes);
+  lead.last_activity_at = baseIso;
+  lead.sla_due_at = addMinutesIso(baseIso, slaMinutes);
+  return lead;
+};
+
+const applyLeadAutomationOnWrite = (lead, options = {}) => {
+  const {
+    nowIso = new Date().toISOString(),
+    previousLead = null,
+    budgetStatus = '',
+    isCreate = false,
+    manualTouch = false,
+  } = options;
+
+  const source = getLeadAutomationSource(lead);
+  const initialTemperature = getInitialTemperatureBySource(source);
+  const previousTemperature = normalizeTemperature(previousLead?.temperature);
+  let nextTemperature = normalizeTemperature(lead.temperature) || previousTemperature || initialTemperature;
+  let shouldResetSla = isCreate || manualTouch || !lead.sla_due_at || !lead.last_activity_at;
+
+  const sourceChanged = previousLead && normalizeName(source) !== normalizeName(getLeadAutomationSource(previousLead));
+  const statusChanged = previousLead && normalizeName(previousLead.status) !== normalizeName(lead.status);
+  const budgetHint = getBudgetTemperatureHint(budgetStatus);
+  const statusHint = getStatusTemperatureHint(lead.status);
+
+  if (sourceChanged) {
+    nextTemperature = upgradeTemperature(nextTemperature, initialTemperature);
+    shouldResetSla = true;
+  }
+
+  if (statusHint) {
+    const upgraded = upgradeTemperature(nextTemperature, statusHint);
+    shouldResetSla = shouldResetSla || upgraded !== nextTemperature || statusChanged;
+    nextTemperature = upgraded;
+  }
+
+  if (budgetHint) {
+    const upgraded = upgradeTemperature(nextTemperature, budgetHint);
+    shouldResetSla = shouldResetSla || upgraded !== nextTemperature;
+    nextTemperature = upgraded;
+  }
+
+  if (!statusHint && !budgetHint && isCreate) {
+    nextTemperature = initialTemperature;
+  }
+
+  if (shouldResetSla) {
+    refreshLeadSlaFields(lead, nowIso, nextTemperature);
+  } else {
+    lead.temperature = nextTemperature;
+    if (!lead.sla_minutes) lead.sla_minutes = String(SLA_MINUTES_BY_TEMPERATURE[nextTemperature] || SLA_MINUTES_BY_TEMPERATURE.morno);
+    if (!lead.last_activity_at) lead.last_activity_at = toIsoStringOrEmpty(previousLead?.last_activity_at || lead.updated_at || lead.created_at || nowIso);
+    if (!lead.sla_due_at) lead.sla_due_at = addMinutesIso(lead.last_activity_at, Number(lead.sla_minutes) || 0);
+  }
+
+  return lead;
+};
+
+const deriveSlaStatus = (lastActivityAt, slaMinutes, now = new Date()) => {
+  const lastActivity = new Date(lastActivityAt || '');
+  if (Number.isNaN(lastActivity.getTime())) {
+    return { sla_status: 'normal', sla_due_at: '', sla_remaining_minutes: null };
+  }
+
+  const totalMinutes = Math.max(1, Number(slaMinutes) || SLA_MINUTES_BY_TEMPERATURE.morno);
+  const totalMs = totalMinutes * 60 * 1000;
+  const dueAt = new Date(lastActivity.getTime() + totalMs);
+  const warningAt = new Date(lastActivity.getTime() + totalMs * 0.5);
+  let slaStatus = 'normal';
+
+  if (now >= dueAt) slaStatus = 'overdue';
+  else if (now >= warningAt) slaStatus = 'warning';
+
+  const remainingMinutes = Math.round((dueAt.getTime() - now.getTime()) / (60 * 1000));
+  return {
+    sla_status: slaStatus,
+    sla_due_at: dueAt.toISOString(),
+    sla_remaining_minutes: remainingMinutes,
+  };
+};
+
+const hydrateLeadAutomationState = (lead, now = new Date()) => {
+  const source = getLeadAutomationSource(lead);
+  const status = normalizeName(lead.status);
+  const lastActivityAt = toIsoStringOrEmpty(lead.last_activity_at || lead.updated_at || lead.created_at);
+  const initialTemperature = getInitialTemperatureBySource(source);
+  let runtimeTemperature = normalizeTemperature(lead.temperature) || initialTemperature;
+
+  const statusHint = getStatusTemperatureHint(status);
+  if (statusHint) runtimeTemperature = upgradeTemperature(runtimeTemperature, statusHint);
+
+  const lastActivity = new Date(lastActivityAt || '');
+  if (!Number.isNaN(lastActivity.getTime())) {
+    const idleHours = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
+    if (!HOT_LEAD_STATUSES.includes(status) && runtimeTemperature === 'quente' && idleHours >= 72) {
+      runtimeTemperature = 'morno';
+    }
+    if (!HOT_LEAD_STATUSES.includes(status) && runtimeTemperature === 'morno' && idleHours >= 48) {
+      runtimeTemperature = 'frio';
+    }
+  }
+
+  const runtimeSlaMinutes = SLA_MINUTES_BY_TEMPERATURE[runtimeTemperature] || SLA_MINUTES_BY_TEMPERATURE.morno;
+  const sla = deriveSlaStatus(lastActivityAt, runtimeSlaMinutes, now);
+
+  return {
+    ...lead,
+    source,
+    temperature: runtimeTemperature,
+    sla_minutes: runtimeSlaMinutes,
+    last_activity_at: lastActivityAt,
+    sla_due_at: sla.sla_due_at,
+    sla_status: sla.sla_status,
+    sla_remaining_minutes: sla.sla_remaining_minutes,
+  };
+};
+
 const isCompetitorLead = (lead) => normalizeName(lead?.segment) === 'concorrente';
 
 const hydrateBudgets = (budgets) =>
@@ -159,6 +347,25 @@ const markLeadAsCustomer = async (leadId) => {
     if (idx === -1) return;
     leads[idx].is_customer = true;
     leads[idx].updated_at = new Date().toISOString();
+    await saveTable('leads', leads);
+  });
+};
+
+const updateLeadFromBudgetEvent = async (leadId, budgetStatus) => {
+  const targetId = String(leadId || '').trim();
+  if (!targetId) return;
+  await withTableLock('leads', async () => {
+    const { items: leads } = await loadTable('leads', true);
+    const idx = leads.findIndex((lead) => String(lead.id) === targetId);
+    if (idx === -1) return;
+    const nowIso = new Date().toISOString();
+    const nextLead = { ...leads[idx], updated_at: nowIso };
+    applyLeadAutomationOnWrite(nextLead, {
+      nowIso,
+      previousLead: leads[idx],
+      budgetStatus,
+    });
+    leads[idx] = nextLead;
     await saveTable('leads', leads);
   });
 };
@@ -309,6 +516,10 @@ const SHEETS_CONFIG = {
     'next_contact',
     'notes',
     'source',
+    'temperature',
+    'sla_minutes',
+    'sla_due_at',
+    'last_activity_at',
     'created_at',
     'updated_at',
     'is_private',
@@ -325,7 +536,7 @@ const readSheet = async (sheetName, ignoreCache = false) => {
     return cache[sheetName].data;
   }
   // Remove o limite forçado de 5000 para evitar erro de grid limits
-  const range = `${sheetName}!A:Z`;
+  const range = `${sheetName}!A:AZ`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range }).catch((err) => {
     if (err.response?.status === 400) {
       return { data: { values: [] } };
@@ -349,7 +560,7 @@ const readSheet = async (sheetName, ignoreCache = false) => {
 
 const clearTrailingRows = async (sheetName, startRow) => {
   try {
-    const range = `${sheetName}!A${startRow}:Z`;
+    const range = `${sheetName}!A${startRow}:AZ`;
     await sheets.spreadsheets.values.clear({
       spreadsheetId: SHEET_ID,
       range,
@@ -363,12 +574,13 @@ const clearTrailingRows = async (sheetName, startRow) => {
   }
 };
 
-const ensureSheetCapacity = async (sheetName, requiredRows) => {
+const ensureSheetCapacity = async (sheetName, requiredRows, requiredColumns = 26) => {
   const ss = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
   const sheet = ss.data.sheets.find(s => s.properties.title === sheetName);
   if (!sheet) return;
 
   const currentRows = sheet.properties.gridProperties.rowCount;
+  const currentColumns = sheet.properties.gridProperties.columnCount || 26;
   if (currentRows < requiredRows) {
     const addRows = requiredRows - currentRows + 500; // Adiciona margem de folga
     console.log(`[GRID] Expandindo ${sheetName} de ${currentRows} para ${currentRows + addRows} linhas...`);
@@ -383,6 +595,23 @@ const ensureSheetCapacity = async (sheetName, requiredRows) => {
           }
         }]
       }
+    });
+  }
+
+  if (currentColumns < requiredColumns) {
+    const addColumns = requiredColumns - currentColumns + 5;
+    console.log(`[GRID] Expandindo ${sheetName} de ${currentColumns} para ${currentColumns + addColumns} colunas...`);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [{
+          appendDimension: {
+            sheetId: sheet.properties.sheetId,
+            dimension: 'COLUMNS',
+            length: addColumns,
+          },
+        }],
+      },
     });
   }
 };
@@ -423,7 +652,7 @@ const writeSheet = async (sheetName, headers, rows) => {
   await ensureSheetExists(sheetName);
 
   // Garante que a planilha tem espaço suficiente
-  await ensureSheetCapacity(sheetName, values.length + 1);
+  await ensureSheetCapacity(sheetName, values.length + 1, headers.length + 1);
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
@@ -1105,7 +1334,7 @@ const hydrateLeads = (leads, channels) => {
     const channel = channels.find((c) => String(c.id) === String(l.channel_id));
     const createdAt = toIsoStringOrEmpty(l.created_at);
     const updatedAt = toIsoStringOrEmpty(l.updated_at || l.created_at);
-    return {
+    return hydrateLeadAutomationState({
       ...l,
       ownerId: l.ownerId || l.user_id || l.owner_id || '',
       value: parseMoneyValue(l.value),
@@ -1117,7 +1346,7 @@ const hydrateLeads = (leads, channels) => {
       is_customer: normalizeBool(l.is_customer),
       is_out_of_scope: normalizeBool(l.is_out_of_scope),
       region: getRegionByPhone(l.phone || l.phone2),
-    };
+    });
   });
 };
 
@@ -1307,6 +1536,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       customer_type: customer_type || '',
       cooling_reason: cooling_reason || '',
     };
+    applyLeadAutomationOnWrite(lead, { nowIso: now, isCreate: true });
     leads.push(lead);
     await saveTable('leads', leads);
     return res.json(lead);
@@ -1383,6 +1613,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     ]);
     const idx = leads.findIndex((l) => String(l.id) === String(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
+    const previousLead = { ...leads[idx] };
 
     const leadOwnerId = leads[idx].ownerId || leads[idx].user_id || leads[idx].owner_id || '';
     const ownerMatchId = String(leadOwnerId) === String(req.user.id);
@@ -1394,12 +1625,18 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     const isOwner = ownerMatchId || ownerMatchName;
 
     const hasOtherChanges = (() => {
-      const current = leads[idx];
+      const current = previousLead;
       if (name !== undefined && String(name) !== String(current.name || '')) return true;
       if (email !== undefined && String(email || '') !== String(current.email || '')) return true;
       if (phone !== undefined && String(phone || '') !== String(current.phone || '')) return true;
       if (phone2 !== undefined && String(phone2 || '') !== String(current.phone2 || '')) return true;
       if (status !== undefined && String(status || '') !== String(current.status || '')) return true;
+      if (ownerId !== undefined && String(ownerId || '') !== String(current.ownerId || current.user_id || current.owner_id || '')) {
+        return true;
+      }
+      if (owner !== undefined && String(owner || '') !== String(current.owner || current.responsible_name || '')) {
+        return true;
+      }
       if (campaign !== undefined && String(campaign || '') !== String(current.campaign || '')) return true;
       if (channel_id !== undefined && String(channel_id || '') !== String(current.channel_id || '')) return true;
       if (
@@ -1479,7 +1716,13 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (!leads[idx].source) {
       leads[idx].source = deriveLeadSource(leads[idx]);
     }
-    leads[idx].updated_at = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    leads[idx].updated_at = nowIso;
+    applyLeadAutomationOnWrite(leads[idx], {
+      nowIso,
+      previousLead,
+      manualTouch: hasOtherChanges,
+    });
 
     await saveTable('leads', leads);
     return res.json(leads[idx]);
@@ -1606,6 +1849,9 @@ app.post('/api/budgets', authMiddleware, async (req, res) => {
     if (normalizeName(budget.status) === 'aprovado' && budget.lead_id) {
       await markLeadAsCustomer(budget.lead_id);
     }
+    if (budget.lead_id) {
+      await updateLeadFromBudgetEvent(budget.lead_id, budget.status);
+    }
     return res.json(hydrateBudget(budget));
   });
 });
@@ -1674,6 +1920,9 @@ app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
     await saveTable('budgets', budgets);
     if (normalizeName(budgets[idx].status) === 'aprovado' && budgets[idx].lead_id) {
       await markLeadAsCustomer(budgets[idx].lead_id);
+    }
+    if (budgets[idx].lead_id) {
+      await updateLeadFromBudgetEvent(budgets[idx].lead_id, budgets[idx].status);
     }
     return res.json(hydrateBudget(budgets[idx]));
   });
@@ -1759,6 +2008,9 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
         if (normalizeName(budgets[existingIdx].status) === 'aprovado' && budgets[existingIdx].lead_id) {
           await markLeadAsCustomer(budgets[existingIdx].lead_id);
         }
+        if (budgets[existingIdx].lead_id) {
+          await updateLeadFromBudgetEvent(budgets[existingIdx].lead_id, budgets[existingIdx].status);
+        }
         continue;
       }
 
@@ -1773,6 +2025,9 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
       imported.push(budget);
       if (normalizeName(budget.status) === 'aprovado' && budget.lead_id) {
         await markLeadAsCustomer(budget.lead_id);
+      }
+      if (budget.lead_id) {
+        await updateLeadFromBudgetEvent(budget.lead_id, budget.status);
       }
     }
 
@@ -1912,6 +2167,57 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
   });
 });
 
+app.get('/api/stats/sla', authMiddleware, async (req, res) => {
+  const [{ items: leads }, { items: channels }] = await Promise.all([
+    loadTable('leads'),
+    loadTable('channels'),
+  ]);
+  const visible = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query)
+    .filter((lead) => !isCompetitorLead(lead));
+  const filtered = applyLeadFilters(visible, req.query);
+  const overdueByOwnerMap = new Map();
+  const byTemperatureMap = new Map();
+
+  filtered.forEach((lead) => {
+    const owner = lead.owner || 'Sem responsável';
+    const temperature = normalizeTemperature(lead.temperature) || 'frio';
+    const status = normalizeName(lead.status);
+    const item = byTemperatureMap.get(temperature) || { total: 0, ganhos: 0, overdue: 0 };
+
+    item.total += 1;
+    if (status === 'ganho') item.ganhos += 1;
+    if (lead.sla_status === 'overdue') {
+      item.overdue += 1;
+      overdueByOwnerMap.set(owner, (overdueByOwnerMap.get(owner) || 0) + 1);
+    }
+
+    byTemperatureMap.set(temperature, item);
+  });
+
+  const sortEntries = (map) =>
+    Array.from(map.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+
+  const conversionByTemperature = ['quente', 'morno', 'frio'].map((temperature) => {
+    const stats = byTemperatureMap.get(temperature) || { total: 0, ganhos: 0, overdue: 0 };
+    return {
+      temperature,
+      total: stats.total,
+      ganhos: stats.ganhos,
+      overdue: stats.overdue,
+      taxaConversao: stats.total ? Math.round((stats.ganhos / stats.total) * 100) : 0,
+    };
+  });
+
+  return res.json({
+    total: filtered.length,
+    overdueTotal: conversionByTemperature.reduce((sum, item) => sum + item.overdue, 0),
+    overdueByOwner: sortEntries(overdueByOwnerMap),
+    conversionByTemperature,
+  });
+});
+
 // ===================== MANYCHAT WEBHOOK =====================
 // Simples endpoint para receber leads do Manychat sem exigir login do app.
 // Protegido por token em MANYCHAT_SECRET.
@@ -1950,9 +2256,13 @@ app.post('/api/webhook/manychat', async (req, res) => {
       first_contact: now,
       next_contact: '',
       notes: 'Capturado via Manychat',
+      source: 'Manychat',
       created_at: now,
+      updated_at: now,
       is_private: false,
     };
+
+    applyLeadAutomationOnWrite(lead, { nowIso: now, isCreate: true });
 
     leads.push(lead);
     await saveTable('leads', leads);

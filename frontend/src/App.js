@@ -12,6 +12,18 @@ const STATUS_OPTIONS = [
   { value: 'perdido', label: 'Perdido' },
 ];
 
+const LEAD_TEMPERATURE_OPTIONS = [
+  { value: 'frio', label: 'Frio' },
+  { value: 'morno', label: 'Morno' },
+  { value: 'quente', label: 'Quente' },
+];
+
+const SLA_STATUS_OPTIONS = [
+  { value: 'normal', label: 'No prazo' },
+  { value: 'warning', label: 'Atenção' },
+  { value: 'overdue', label: 'Estourado' },
+];
+
 const BUDGET_STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'em_orcamento', label: 'Em orçamento' },
@@ -67,6 +79,13 @@ const formatDateBR = (value) => {
     }
   } catch (e) { }
   return value;
+};
+
+const formatDateTimeBR = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDateBR(value);
+  return date.toLocaleString('pt-BR');
 };
 
 const formatCurrencyBR = (value) =>
@@ -404,6 +423,44 @@ const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico s
   );
 };
 
+const LeadTemperatureBadge = ({ value }) => {
+  const normalized = normalizeOptionValue(value);
+  const label = LEAD_TEMPERATURE_OPTIONS.find((item) => item.value === normalized)?.label || 'Sem temperatura';
+  const toneClasses = {
+    frio: 'bg-slate-100 text-slate-700 border-slate-200',
+    morno: 'bg-amber-50 text-amber-700 border-amber-200',
+    quente: 'bg-rose-50 text-rose-700 border-rose-200',
+  };
+
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[11px] font-semibold ${toneClasses[normalized] || toneClasses.frio}`}>
+      {label}
+    </span>
+  );
+};
+
+const LeadSlaBadge = ({ value, remainingMinutes }) => {
+  const normalized = normalizeOptionValue(value);
+  const label = SLA_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'No prazo';
+  const toneClasses = {
+    normal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    warning: 'bg-amber-50 text-amber-700 border-amber-200',
+    overdue: 'bg-rose-100 text-rose-700 border-rose-200',
+  };
+  const helper =
+    typeof remainingMinutes === 'number'
+      ? remainingMinutes >= 0
+        ? `${remainingMinutes} min`
+        : `${Math.abs(remainingMinutes)} min atrasado`
+      : '';
+
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full border text-[11px] font-semibold ${toneClasses[normalized] || toneClasses.normal}`}>
+      {label}{helper ? ` · ${helper}` : ''}
+    </span>
+  );
+};
+
 
 const SEGMENT_OPTIONS = [
   { value: '', label: 'Sem perfil' },
@@ -496,6 +553,11 @@ const emptyLead = {
   highlighted_categories: [],
   customer_type: '',
   cooling_reason: [],
+  temperature: '',
+  sla_status: '',
+  sla_due_at: '',
+  sla_minutes: 0,
+  last_activity_at: '',
 };
 
 const emptyBudget = {
@@ -544,6 +606,8 @@ const App = () => {
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
   const [statusFilter, setStatusFilter] = useState('todos');
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
+  const [temperatureFilter, setTemperatureFilter] = useState('all');
+  const [slaFilter, setSlaFilter] = useState('all');
   const [segmentFilter, setSegmentFilter] = useState('all');
   const [customerFilter, setCustomerFilter] = useState('all');
   const [searchInput, setSearchInput] = useState('');
@@ -955,6 +1019,8 @@ const App = () => {
         if (parsed.ownerFilter) setOwnerFilter(parsed.ownerFilter);
         if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
         if (parsed.urgencyFilter) setUrgencyFilter(parsed.urgencyFilter);
+        if (parsed.temperatureFilter) setTemperatureFilter(parsed.temperatureFilter);
+        if (parsed.slaFilter) setSlaFilter(parsed.slaFilter);
         if (parsed.searchTerm) {
           setSearchTerm(parsed.searchTerm);
           setSearchInput(parsed.searchTerm);
@@ -996,6 +1062,8 @@ const App = () => {
       ownerFilter,
       statusFilter,
       urgencyFilter,
+      temperatureFilter,
+      slaFilter,
       searchTerm: searchInput,
       channelFilter,
       campaignFilter,
@@ -1007,7 +1075,7 @@ const App = () => {
       activeTab,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
+  }, [ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
 
   useEffect(() => {
     const payload = {
@@ -1129,6 +1197,14 @@ const App = () => {
       base = base.filter((l) => l._status === statusFilter);
     }
 
+    if (temperatureFilter !== 'all') {
+      base = base.filter((l) => normalizeOptionValue(l.temperature) === temperatureFilter);
+    }
+
+    if (slaFilter !== 'all') {
+      base = base.filter((l) => normalizeOptionValue(l.sla_status) === slaFilter);
+    }
+
     if (segmentFilter !== 'all') {
       base = base.filter((l) => {
         const norm = normalizeOptionValue(l.segment);
@@ -1185,7 +1261,7 @@ const App = () => {
       });
     }
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
 
 
   const sorter = useCallback(
@@ -1235,6 +1311,8 @@ const App = () => {
     ownerFilter,
     statusFilter,
     urgencyFilter,
+    temperatureFilter,
+    slaFilter,
     segmentFilter,
     customerFilter,
     channelFilter,
@@ -1399,10 +1477,12 @@ const App = () => {
     const channelMap = new Map();
     const campaignMap = new Map();
     const segmentMap = new Map();
+    const temperatureMap = new Map();
     const monthlyMap = new Map();
     const convertedMonthlyMap = new Map();
     const pipelineMonthlyMap = new Map();
     const statusMap = new Map();
+    const overdueByOwnerMap = new Map();
     const source = dashboardFilteredLeads;
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -1427,6 +1507,8 @@ const App = () => {
       const segment = lead.segment || 'sem_perfil';
       const status = lead.status || 'sem_status';
       const statusNormalized = normalizeOptionValue(status);
+      const temperature = lead.temperature || 'frio';
+      const temperatureNormalized = normalizeOptionValue(temperature) || 'frio';
       const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
       const nextDate = parseLeadDate(lead.next_contact);
       const leadValue = Number(lead.value || 0);
@@ -1435,6 +1517,7 @@ const App = () => {
       campaignMap.set(campaign, (campaignMap.get(campaign) || 0) + 1);
       segmentMap.set(segment, (segmentMap.get(segment) || 0) + 1);
       statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      temperatureMap.set(temperatureNormalized, (temperatureMap.get(temperatureNormalized) || 0) + 1);
 
       if (lead.is_customer) customers += 1;
       if (createdDate) {
@@ -1451,6 +1534,9 @@ const App = () => {
         }
       }
       if (nextDate && nextDate < today) overdueFollowups += 1;
+      if (normalizeOptionValue(lead.sla_status) === 'overdue') {
+        overdueByOwnerMap.set(lead.owner || lead.responsible_name || 'Sem responsável', (overdueByOwnerMap.get(lead.owner || lead.responsible_name || 'Sem responsável') || 0) + 1);
+      }
     });
 
     const sortEntries = (map) =>
@@ -1471,6 +1557,14 @@ const App = () => {
       label: monthLabel(key),
       value: pipelineMonthlyMap.get(key) || 0,
     }));
+    const conversionByTemperature = LEAD_TEMPERATURE_OPTIONS.map((item) => {
+      const totalByTemp = source.filter((lead) => normalizeOptionValue(lead.temperature) === item.value);
+      const gains = totalByTemp.filter((lead) => normalizeOptionValue(lead.status) === 'ganho').length;
+      return {
+        label: item.label,
+        value: totalByTemp.length ? Math.round((gains / totalByTemp.length) * 100) : 0,
+      };
+    });
 
     return {
       source,
@@ -1485,10 +1579,16 @@ const App = () => {
         ...item,
         label: SEGMENT_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
       })),
+      byTemperature: LEAD_TEMPERATURE_OPTIONS.map((item) => ({
+        label: item.label,
+        value: temperatureMap.get(item.value) || 0,
+      })),
       byStatus: sortEntries(statusMap).map((item) => ({
         ...item,
         label: STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
       })),
+      overdueByOwner: sortEntries(overdueByOwnerMap),
+      conversionByTemperature,
       monthlyEvolution,
       convertedEvolution,
       pipelineEvolution,
@@ -2084,6 +2184,11 @@ const App = () => {
       highlighted_categories: parseMultiSelect(lead.highlighted_categories),
       customer_type: lead.customer_type || '',
       cooling_reason: parseMultiSelect(lead.cooling_reason),
+      temperature: lead.temperature || '',
+      sla_status: lead.sla_status || '',
+      sla_due_at: lead.sla_due_at || '',
+      sla_minutes: Number(lead.sla_minutes || 0),
+      last_activity_at: lead.last_activity_at || '',
     };
   };
 
@@ -2783,6 +2888,8 @@ const App = () => {
     setOwnerFilter('all');
     setStatusFilter('todos');
     setUrgencyFilter('all');
+    setTemperatureFilter('all');
+    setSlaFilter('all');
     setSegmentFilter('all');
     setCustomerFilter('all');
     setChannelFilter('all');
@@ -3383,6 +3490,13 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Leads quentes" value={dashboardData.byTemperature.find((item) => item.label === 'Quente')?.value || 0} helper="Prioridade máxima" tone="rose" />
+              <StatCard label="Leads mornos" value={dashboardData.byTemperature.find((item) => item.label === 'Morno')?.value || 0} helper="Em evolução" tone="amber" />
+              <StatCard label="Leads frios" value={dashboardData.byTemperature.find((item) => item.label === 'Frio')?.value || 0} helper="Base de prospecção" tone="slate" />
+              <StatCard label="SLA estourado" value={dashboardData.overdueByOwner.reduce((sum, item) => sum + Number(item.value || 0), 0)} helper="Leads fora do prazo" tone="blue" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">CPL</p>
                 <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.cpl || 0)}</p>
@@ -3456,6 +3570,24 @@ const App = () => {
                     formatValue={formatRatio}
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Prioridade</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Temperatura da base</h3>
+                <MiniBarChart data={dashboardData.byTemperature} color="#e11d48" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">SLA</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Estourados por responsável</h3>
+                <MiniBarChart data={dashboardData.overdueByOwner} color="#dc2626" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Conversão</p>
+                <h3 className="text-lg font-bold text-slate-900 mb-4">Taxa por temperatura</h3>
+                <MiniBarChart data={dashboardData.conversionByTemperature} color="#2563eb" formatValue={(value) => `${value}%`} />
               </div>
             </div>
 
@@ -4172,6 +4304,32 @@ const App = () => {
                     ))}
                   </select>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={temperatureFilter}
+                    onChange={(e) => setTemperatureFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  >
+                    <option value="all">Toda temperatura</option>
+                    {LEAD_TEMPERATURE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={slaFilter}
+                    onChange={(e) => setSlaFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  >
+                    <option value="all">Todo SLA</option>
+                    {SLA_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <input
@@ -4318,6 +4476,7 @@ const App = () => {
                       <th className="py-2 px-2">Canal</th>
                       <th className="py-2 px-2">Região</th>
                       <th className="py-2 px-2">Status</th>
+                      <th className="py-2 px-2">Termômetro</th>
                       <th className="py-2 px-2">Responsável</th>
                       <th className="py-2 px-2">Próximo contato</th>
                       <th className="py-2 px-2 text-right">Ações</th>
@@ -4378,6 +4537,12 @@ const App = () => {
                               {lead.status}
                             </span>
                           </td>
+                          <td className="py-2 px-2">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <LeadTemperatureBadge value={lead.temperature} />
+                              <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
+                            </div>
+                          </td>
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-xs text-slate-500">
                             {lead.next_contact
@@ -4410,7 +4575,7 @@ const App = () => {
                     {filteredLeads.length === 0 && (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={10}
                           className="py-4 text-center text-slate-500 text-xs"
                         >
                           Nenhum lead cadastrado
@@ -4490,6 +4655,8 @@ const App = () => {
                                 {lead.region}
                               </span>
                             )}
+                            <LeadTemperatureBadge value={lead.temperature} />
+                            <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
                           </div>
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
@@ -4551,6 +4718,17 @@ const App = () => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold mb-2">Termômetro comercial</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <LeadTemperatureBadge value={leadForm.temperature} />
+                    <LeadSlaBadge value={leadForm.sla_status} remainingMinutes={editingLead?.sla_remaining_minutes} />
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    <p>Última atividade: {leadForm.last_activity_at ? formatDateTimeBR(leadForm.last_activity_at) : '-'}</p>
+                    <p>Prazo alvo: {leadForm.sla_due_at ? formatDateTimeBR(leadForm.sla_due_at) : '-'}</p>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Nome *
