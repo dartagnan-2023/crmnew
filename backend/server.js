@@ -155,6 +155,7 @@ const SLA_MINUTES_BY_TEMPERATURE = {
 
 const HOT_SOURCES = ['meta ads', 'google ads', 'landing page', 'manychat', 'indicacao', 'site'];
 const WARM_SOURCES = ['organico', 'whatsapp'];
+const COLD_SOURCES = ['scraper', 'captura'];
 const HOT_LEAD_STATUSES = ['negociacao', 'proposta'];
 const WARM_LEAD_STATUSES = ['contato'];
 const HOT_BUDGET_STATUSES = ['enviado', 'aprovado'];
@@ -188,7 +189,7 @@ const getInitialTemperatureBySource = (source) => {
   if (!normalized) return 'morno';
   if (HOT_SOURCES.some((item) => normalized.includes(item))) return 'quente';
   if (WARM_SOURCES.some((item) => normalized.includes(item))) return 'morno';
-  if (normalized.includes('scraper')) return 'frio';
+  if (COLD_SOURCES.some((item) => normalized.includes(item))) return 'frio';
   return 'morno';
 };
 
