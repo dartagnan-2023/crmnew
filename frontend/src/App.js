@@ -3256,7 +3256,7 @@ const App = () => {
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {toast && (
           <div
-            className={`fixed top-4 right-4 px-4 py-2 rounded text-sm shadow-lg ${toast.type === 'error'
+            className={`fixed top-4 right-4 z-[70] max-w-sm px-4 py-3 rounded-xl text-sm font-medium shadow-[0_20px_45px_-18px_rgba(15,23,42,0.55)] ${toast.type === 'error'
               ? 'bg-red-600 text-white'
               : 'bg-emerald-600 text-white'
               }`}
