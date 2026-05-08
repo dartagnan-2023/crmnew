@@ -417,9 +417,20 @@ const DDD_REGION_MAP = {
 };
 
 const getRegionByPhone = (phone) => {
-  const digits = (phone || '').replace(/\D/g, '');
+  let digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+
+  // Remove country code when the number comes as +55XXXXXXXXXXX.
+  if (digits.startsWith('55') && digits.length >= 12) {
+    digits = digits.substring(2);
+  }
+
+  if (digits.startsWith('0') && digits.length >= 3) {
+    digits = digits.substring(1);
+  }
+
   if (digits.length < 2) return '';
-  const ddd = digits.startsWith('0') ? digits.substring(1, 3) : digits.substring(0, 2);
+  const ddd = digits.substring(0, 2);
   return DDD_REGION_MAP[ddd] || '';
 };
 
