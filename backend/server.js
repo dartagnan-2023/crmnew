@@ -1370,6 +1370,42 @@ const hydrateLeads = (leads, channels) => {
   });
 };
 
+const recalculateStoredLeadAutomation = (lead, channels, now = new Date()) => {
+  const resolvedChannelName = lead.channel_name || resolveChannelName(lead, channels);
+  const hydrated = hydrateLeadAutomationState(
+    {
+      ...lead,
+      ownerId: lead.ownerId || lead.user_id || lead.owner_id || '',
+      value: parseMoneyValue(lead.value),
+      channel_name: resolvedChannelName,
+      source: deriveLeadSource({ ...lead, channel_name: resolvedChannelName }, channels),
+      created_at: toIsoStringOrEmpty(lead.created_at),
+      updated_at: toIsoStringOrEmpty(lead.updated_at || lead.created_at),
+      is_private: normalizeBool(lead.is_private),
+      is_customer: normalizeBool(lead.is_customer),
+      is_out_of_scope: normalizeBool(lead.is_out_of_scope),
+    },
+    now
+  );
+
+  return {
+    ...lead,
+    ownerId: hydrated.ownerId || '',
+    value: parseMoneyValue(hydrated.value),
+    channel_name: hydrated.channel_name || '',
+    source: hydrated.source || '',
+    temperature: hydrated.temperature || '',
+    sla_minutes: String(hydrated.sla_minutes || ''),
+    sla_due_at: hydrated.sla_due_at || '',
+    last_activity_at: hydrated.last_activity_at || '',
+    created_at: hydrated.created_at || '',
+    updated_at: hydrated.updated_at || '',
+    is_private: normalizeBool(hydrated.is_private),
+    is_customer: normalizeBool(hydrated.is_customer),
+    is_out_of_scope: normalizeBool(hydrated.is_out_of_scope),
+  };
+};
+
 const applyLeadFilters = (leads, query) => {
   const createdFrom = toIsoStringOrEmpty(query.created_from || query.createdAtFrom || query.date_from);
   const createdToBase = toIsoStringOrEmpty(query.created_to || query.createdAtTo || query.date_to);
@@ -1457,6 +1493,49 @@ app.get('/api/leads/:id', apiKeyLeadsMiddleware, async (req, res) => {
     return res.status(404).json({ error: 'Lead nao encontrado' });
   }
   return res.json(lead);
+});
+
+app.post('/api/leads/recalculate-automation', authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+
+  return withTableLock('leads', async () => {
+    const [{ items: leads }, { items: channels }] = await Promise.all([
+      loadTable('leads', true),
+      loadTable('channels'),
+    ]);
+
+    const now = new Date();
+    let changed = 0;
+
+    const recalculated = leads.map((lead) => {
+      const nextLead = recalculateStoredLeadAutomation(lead, channels, now);
+      const before = JSON.stringify({
+        channel_name: lead.channel_name || '',
+        source: lead.source || '',
+        temperature: lead.temperature || '',
+        sla_minutes: String(lead.sla_minutes || ''),
+        sla_due_at: lead.sla_due_at || '',
+        last_activity_at: lead.last_activity_at || '',
+      });
+      const after = JSON.stringify({
+        channel_name: nextLead.channel_name || '',
+        source: nextLead.source || '',
+        temperature: nextLead.temperature || '',
+        sla_minutes: String(nextLead.sla_minutes || ''),
+        sla_due_at: nextLead.sla_due_at || '',
+        last_activity_at: nextLead.last_activity_at || '',
+      });
+      if (before !== after) changed += 1;
+      return nextLead;
+    });
+
+    await saveTable('leads', recalculated);
+    return res.json({
+      success: true,
+      total: leads.length,
+      changed,
+    });
+  });
 });
 
 app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
