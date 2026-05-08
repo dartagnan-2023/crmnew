@@ -711,6 +711,14 @@ const App = () => {
     password: '',
     role: 'vendedor',
   });
+  const [mailrelaySettings, setMailrelaySettings] = useState({
+    api_base: '',
+    api_key: '',
+    configured: false,
+    source: 'none',
+    has_api_key: false,
+  });
+  const [savingMailrelaySettings, setSavingMailrelaySettings] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const pendingLeadsRef = useRef(null);
   const [bulkStatus, setBulkStatus] = useState('');
@@ -986,6 +994,26 @@ const App = () => {
     }
   };
 
+  const loadMailrelaySettings = async () => {
+    if (!token || !isAdmin) return;
+    try {
+      const res = await fetch(`${API_URL}/settings/mailrelay`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setMailrelaySettings({
+        api_base: data.api_base || '',
+        api_key: '',
+        configured: Boolean(data.configured),
+        source: data.source || 'none',
+        has_api_key: Boolean(data.has_api_key),
+      });
+    } catch (err) {
+      console.error('Erro ao carregar Mailrelay:', err);
+    }
+  };
+
   const loadStats = async () => {
     if (!token) return;
     try {
@@ -1010,7 +1038,7 @@ const App = () => {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadChannels(), loadUsers(), loadStats()]);
+      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadChannels(), loadUsers(), loadStats(), loadMailrelaySettings()]);
     } finally {
       setLoadingData(false);
     }
@@ -3096,6 +3124,48 @@ const App = () => {
     } catch (err) {
       console.error('Erro ao salvar usuario:', err);
       showToast('Erro ao salvar usuario', 'error');
+    }
+  };
+
+  const saveMailrelaySettings = async () => {
+    if (!isAdmin) return;
+    if (!mailrelaySettings.api_base || !mailrelaySettings.api_key) {
+      showToast('Preencha URL e chave da API do Mailrelay', 'error');
+      return;
+    }
+
+    setSavingMailrelaySettings(true);
+    try {
+      const res = await fetch(`${API_URL}/settings/mailrelay`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          api_base: mailrelaySettings.api_base,
+          api_key: mailrelaySettings.api_key,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao salvar Mailrelay', 'error');
+        return;
+      }
+      setMailrelaySettings((prev) => ({
+        ...prev,
+        api_key: '',
+        configured: Boolean(data.configured),
+        source: data.source || 'crm',
+        has_api_key: Boolean(data.has_api_key),
+        api_base: data.api_base || prev.api_base,
+      }));
+      showToast('Configurações do Mailrelay salvas com sucesso');
+    } catch (err) {
+      console.error('Erro ao salvar Mailrelay:', err);
+      showToast('Erro ao salvar Mailrelay', 'error');
+    } finally {
+      setSavingMailrelaySettings(false);
     }
   };
 
@@ -5516,6 +5586,20 @@ const App = () => {
                       Usuários
                     </button>
                   )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setProfileTab('mailrelay');
+                        loadMailrelaySettings();
+                      }}
+                      className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'mailrelay'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                        }`}
+                    >
+                      Mailrelay
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowProfileModal(false)}
@@ -5726,6 +5810,66 @@ const App = () => {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {profileTab === 'mailrelay' && isAdmin && (
+                <div className="p-4 space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-800">Integração Mailrelay</h3>
+                    <p className="text-xs text-slate-600">
+                      Configure a URL base da API e a chave de acesso. O CRM usa essa conexão para sincronizar aberturas, cliques e descadastros.
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className={`px-2 py-1 rounded-full ${mailrelaySettings.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {mailrelaySettings.configured ? 'Configurado' : 'Não configurado'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                        Origem: {mailrelaySettings.source === 'crm' ? 'CRM' : mailrelaySettings.source === 'env' ? '.env' : 'Nenhuma'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                        Chave salva: {mailrelaySettings.has_api_key ? 'Sim' : 'Não'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">URL da API</label>
+                    <input
+                      type="text"
+                      value={mailrelaySettings.api_base}
+                      onChange={(e) => setMailrelaySettings({ ...mailrelaySettings, api_base: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      placeholder="https://SEU_ACCOUNT/api/v1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Chave da API</label>
+                    <input
+                      type="password"
+                      value={mailrelaySettings.api_key}
+                      onChange={(e) => setMailrelaySettings({ ...mailrelaySettings, api_key: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      placeholder={mailrelaySettings.has_api_key ? 'Informe uma nova chave para substituir a atual' : 'Cole a chave aqui'}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setShowProfileModal(false)}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      onClick={saveMailrelaySettings}
+                      disabled={savingMailrelaySettings}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    >
+                      {savingMailrelaySettings ? 'Salvando...' : 'Salvar Mailrelay'}
+                    </button>
                   </div>
                 </div>
               )}

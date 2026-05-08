@@ -445,6 +445,7 @@ const SHEET_AD_SPEND = process.env.SHEET_AD_SPEND || 'ad_spend';
 const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 const SHEET_EMAIL_EVENTS = process.env.SHEET_EMAIL_EVENTS || 'email_events';
+const SHEET_SETTINGS = process.env.SHEET_SETTINGS || 'settings';
 
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -489,6 +490,7 @@ app.use(monitoring);
 const SHEETS_CONFIG = {
   users: ['id', 'name', 'username', 'email', 'phone', 'password', 'role'],
   channels: ['id', 'name'],
+  settings: ['key', 'value', 'updated_at'],
   negative_terms: ['id', 'term', 'active', 'notes', 'created_at'],
   budgets: [
     'id',
@@ -726,6 +728,7 @@ const ensureHeaders = async () => {
   const configs = {
     [SHEET_USERS]: SHEETS_CONFIG.users,
     [SHEET_CHANNELS]: SHEETS_CONFIG.channels,
+    [SHEET_SETTINGS]: SHEETS_CONFIG.settings,
     [SHEET_NEGATIVE_TERMS]: SHEETS_CONFIG.negative_terms,
     [SHEET_BUDGETS]: SHEETS_CONFIG.budgets,
     [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
@@ -906,14 +909,39 @@ const saveTable = async (name, items) => {
   await writeSheet(name, headers, items);
 };
 
-const isMailrelayConfigured = () => Boolean(MAILRELAY_API_BASE && MAILRELAY_API_KEY);
+const getSettingValue = (items, key) =>
+  String(items.find((item) => String(item.key || '').trim() === key)?.value || '').trim();
+
+const getMailrelayConfig = async () => {
+  let storedBase = '';
+  let storedKey = '';
+  try {
+    const { items } = await loadTable('settings');
+    storedBase = getSettingValue(items, 'mailrelay_api_base');
+    storedKey = getSettingValue(items, 'mailrelay_api_key');
+  } catch {
+    // fallback silencioso para env se a aba ainda não existir por algum motivo
+  }
+
+  return {
+    apiBase: (storedBase || MAILRELAY_API_BASE || '').replace(/\/+$/, ''),
+    apiKey: storedKey || MAILRELAY_API_KEY || '',
+    source: storedBase || storedKey ? 'crm' : MAILRELAY_API_BASE || MAILRELAY_API_KEY ? 'env' : 'none',
+  };
+};
+
+const isMailrelayConfigured = async () => {
+  const config = await getMailrelayConfig();
+  return Boolean(config.apiBase && config.apiKey);
+};
 
 const mailrelayRequest = async (path, query = {}) => {
-  if (!isMailrelayConfigured()) {
+  const config = await getMailrelayConfig();
+  if (!config.apiBase || !config.apiKey) {
     throw new Error('mailrelay_not_configured');
   }
 
-  const url = new URL(`${MAILRELAY_API_BASE}${path.startsWith('/') ? path : `/${path}`}`);
+  const url = new URL(`${config.apiBase}${path.startsWith('/') ? path : `/${path}`}`);
   Object.entries(query || {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
     url.searchParams.set(key, String(value));
@@ -922,7 +950,7 @@ const mailrelayRequest = async (path, query = {}) => {
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      'X-AUTH-TOKEN': MAILRELAY_API_KEY,
+      'X-AUTH-TOKEN': config.apiKey,
       Accept: 'application/json',
     },
   });
@@ -1277,6 +1305,7 @@ app.get('/api/debug/config', (req, res) => {
 });
 
 app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_req, res) => {
+  const config = await getMailrelayConfig();
   const [{ items: leads }, { items: emailEvents }] = await Promise.all([
     loadTable('leads'),
     loadTable('email_events'),
@@ -1295,8 +1324,9 @@ app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_
   ).length;
 
   return res.json({
-    configured: isMailrelayConfigured(),
-    api_base: MAILRELAY_API_BASE || '',
+    configured: Boolean(config.apiBase && config.apiKey),
+    api_base: config.apiBase || '',
+    source: config.source,
     leads_with_engagement: leadsWithMailrelayData,
     email_events: emailEvents.length,
   });
@@ -1304,7 +1334,7 @@ app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_
 
 app.post('/api/mailrelay/sync-engagement', ensureReadyMiddleware, authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  if (!isMailrelayConfigured()) {
+  if (!(await isMailrelayConfigured())) {
     return res.status(400).json({ error: 'Mailrelay nao configurado' });
   }
 
@@ -1315,6 +1345,52 @@ app.post('/api/mailrelay/sync-engagement', ensureReadyMiddleware, authMiddleware
       return res.json({ success: true, ...summary });
     })
   );
+});
+
+app.get('/api/settings/mailrelay', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const config = await getMailrelayConfig();
+  return res.json({
+    api_base: config.apiBase || '',
+    api_key: '',
+    configured: Boolean(config.apiBase && config.apiKey),
+    source: config.source,
+    has_api_key: Boolean(config.apiKey),
+  });
+});
+
+app.put('/api/settings/mailrelay', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const { api_base = '', api_key = '' } = req.body || {};
+  const normalizedBase = String(api_base || '').trim().replace(/\/+$/, '');
+  const normalizedKey = String(api_key || '').trim();
+
+  if (!normalizedBase) return res.status(400).json({ error: 'URL da API obrigatoria' });
+  if (!normalizedKey) return res.status(400).json({ error: 'Chave da API obrigatoria' });
+
+  return withTableLock('settings', async () => {
+    const { items } = await loadTable('settings', true);
+    const nowIso = new Date().toISOString();
+
+    const upsertSetting = (key, value) => {
+      const idx = items.findIndex((item) => String(item.key || '').trim() === key);
+      const row = { key, value, updated_at: nowIso };
+      if (idx === -1) items.push(row);
+      else items[idx] = row;
+    };
+
+    upsertSetting('mailrelay_api_base', normalizedBase);
+    upsertSetting('mailrelay_api_key', normalizedKey);
+    await saveTable('settings', items);
+
+    return res.json({
+      success: true,
+      configured: true,
+      api_base: normalizedBase,
+      source: 'crm',
+      has_api_key: true,
+    });
+  });
 });
 
 // Middleware global (exceto health/ping) para garantir inicializacao
