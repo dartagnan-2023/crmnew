@@ -155,7 +155,7 @@ const SLA_MINUTES_BY_TEMPERATURE = {
 
 const HOT_SOURCES = ['meta ads', 'google ads', 'landing page', 'manychat', 'indicacao', 'site'];
 const WARM_SOURCES = ['organico', 'whatsapp'];
-const COLD_SOURCES = ['scraper', 'captura'];
+const COLD_SOURCES = ['scraper', 'captura', 'ferramenta de captura'];
 const HOT_LEAD_STATUSES = ['negociacao', 'proposta'];
 const WARM_LEAD_STATUSES = ['contato'];
 const HOT_BUDGET_STATUSES = ['enviado', 'aprovado'];
