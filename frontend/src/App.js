@@ -24,6 +24,12 @@ const SLA_STATUS_OPTIONS = [
   { value: 'overdue', label: 'Estourado' },
 ];
 
+const SLA_TARGET_LABELS = {
+  frio: '24h',
+  morno: '4h',
+  quente: '30 min',
+};
+
 const BUDGET_STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'em_orcamento', label: 'Em orçamento' },
@@ -426,10 +432,11 @@ const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico s
 const LeadTemperatureBadge = ({ value }) => {
   const normalized = normalizeOptionValue(value);
   const label = LEAD_TEMPERATURE_OPTIONS.find((item) => item.value === normalized)?.label || 'Sem temperatura';
+  const targetLabel = SLA_TARGET_LABELS[normalized] || '-';
   const toneClasses = {
-    frio: 'border-sky-200 bg-gradient-to-r from-sky-50 to-white text-sky-800 shadow-[0_8px_18px_-14px_rgba(14,165,233,0.9)]',
-    morno: 'border-amber-200 bg-gradient-to-r from-amber-50 to-white text-amber-800 shadow-[0_8px_18px_-14px_rgba(245,158,11,0.9)]',
-    quente: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white text-rose-800 shadow-[0_8px_18px_-14px_rgba(244,63,94,0.95)]',
+    frio: 'border-sky-200 bg-sky-50/80 text-sky-900',
+    morno: 'border-amber-200 bg-amber-50/80 text-amber-900',
+    quente: 'border-rose-200 bg-rose-50/80 text-rose-900',
   };
   const dotClasses = {
     frio: 'bg-sky-500',
@@ -439,10 +446,11 @@ const LeadTemperatureBadge = ({ value }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[11px] font-semibold leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.frio}`}
+      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.frio}`}
     >
       <span className={`h-2 w-2 rounded-full ${dotClasses[normalized] || dotClasses.frio}`} />
-      {label}
+      <span className="font-semibold">{label}</span>
+      <span className="text-[10px] font-medium opacity-70">SLA {targetLabel}</span>
     </span>
   );
 };
@@ -451,9 +459,9 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
   const normalized = normalizeOptionValue(value);
   const label = SLA_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'No prazo';
   const toneClasses = {
-    normal: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-white text-emerald-800 shadow-[0_8px_18px_-14px_rgba(16,185,129,0.95)]',
-    warning: 'border-amber-200 bg-gradient-to-r from-amber-50 to-white text-amber-800 shadow-[0_8px_18px_-14px_rgba(245,158,11,0.9)]',
-    overdue: 'border-rose-200 bg-gradient-to-r from-rose-50 to-white text-rose-800 shadow-[0_8px_18px_-14px_rgba(244,63,94,0.95)]',
+    normal: 'border-emerald-200 bg-emerald-50/80 text-emerald-900',
+    warning: 'border-amber-200 bg-amber-50/80 text-amber-900',
+    overdue: 'border-rose-200 bg-rose-50/80 text-rose-900',
   };
   const dotClasses = {
     normal: 'bg-emerald-500',
@@ -469,11 +477,11 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border text-[11px] font-semibold leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.normal}`}
+      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.normal}`}
     >
       <span className={`h-2 w-2 rounded-full ${dotClasses[normalized] || dotClasses.normal}`} />
-      <span>{label}</span>
-      {helper ? <span className="font-medium opacity-80">{helper}</span> : null}
+      <span className="font-semibold">{label}</span>
+      {helper ? <span className="text-[10px] font-medium opacity-70">{helper}</span> : null}
     </span>
   );
 };
@@ -4735,13 +4743,14 @@ const App = () => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold mb-2">Termômetro comercial</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <LeadTemperatureBadge value={leadForm.temperature} />
                     <LeadSlaBadge value={leadForm.sla_status} remainingMinutes={editingLead?.sla_remaining_minutes} />
                   </div>
-                  <div className="mt-2 text-xs text-slate-500">
+                  <div className="mt-2 text-xs text-slate-500 space-y-1">
+                    <p>SLA esperado para este lead: {SLA_TARGET_LABELS[normalizeOptionValue(leadForm.temperature)] || '-'}</p>
                     <p>Última atividade: {leadForm.last_activity_at ? formatDateTimeBR(leadForm.last_activity_at) : '-'}</p>
                     <p>Prazo alvo: {leadForm.sla_due_at ? formatDateTimeBR(leadForm.sla_due_at) : '-'}</p>
                   </div>
