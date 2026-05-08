@@ -46,6 +46,8 @@ const ALERT_SMTP_PASS = process.env.ALERT_SMTP_PASS || '';
 const ALERT_FROM = process.env.ALERT_FROM || '';
 const ALERT_TO_DEFAULT = process.env.ALERT_TO_DEFAULT || '';
 const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
+const MAILRELAY_API_BASE = (process.env.MAILRELAY_API_BASE || '').replace(/\/+$/, '');
+const MAILRELAY_API_KEY = process.env.MAILRELAY_API_KEY || '';
 
 const normalizeName = (val) =>
   (val || '')
@@ -55,6 +57,7 @@ const normalizeName = (val) =>
     .trim();
 
 const normalizePhone = (val) => (val || '').replace(/\D/g, '');
+const normalizeEmail = (val) => String(val || '').trim().toLowerCase();
 const normalizeBool = (val) => {
   if (typeof val === 'boolean') return val;
   const normalized = String(val || '').toLowerCase().trim();
@@ -441,6 +444,7 @@ const SHEET_BUDGETS = process.env.SHEET_BUDGETS || 'budgets';
 const SHEET_AD_SPEND = process.env.SHEET_AD_SPEND || 'ad_spend';
 const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
+const SHEET_EMAIL_EVENTS = process.env.SHEET_EMAIL_EVENTS || 'email_events';
 
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const SERVICE_ACCOUNT_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
@@ -528,6 +532,19 @@ const SHEETS_CONFIG = {
     'created_at',
     'updated_at',
   ],
+  email_events: [
+    'id',
+    'event_key',
+    'lead_id',
+    'subscriber_id',
+    'campaign_id',
+    'campaign_name',
+    'event_type',
+    'event_at',
+    'email',
+    'metadata',
+    'created_at',
+  ],
   leads: [
     'id',
     'name',
@@ -551,6 +568,15 @@ const SHEETS_CONFIG = {
     'sla_minutes',
     'sla_due_at',
     'last_activity_at',
+    'mailrelay_subscriber_id',
+    'last_email_open_at',
+    'last_email_click_at',
+    'email_open_count',
+    'email_click_count',
+    'email_unsubscribed',
+    'last_email_campaign',
+    'last_email_campaign_id',
+    'last_email_event_at',
     'created_at',
     'updated_at',
     'is_private',
@@ -703,6 +729,7 @@ const ensureHeaders = async () => {
     [SHEET_NEGATIVE_TERMS]: SHEETS_CONFIG.negative_terms,
     [SHEET_BUDGETS]: SHEETS_CONFIG.budgets,
     [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
+    [SHEET_EMAIL_EVENTS]: SHEETS_CONFIG.email_events,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
 
@@ -879,6 +906,237 @@ const saveTable = async (name, items) => {
   await writeSheet(name, headers, items);
 };
 
+const isMailrelayConfigured = () => Boolean(MAILRELAY_API_BASE && MAILRELAY_API_KEY);
+
+const mailrelayRequest = async (path, query = {}) => {
+  if (!isMailrelayConfigured()) {
+    throw new Error('mailrelay_not_configured');
+  }
+
+  const url = new URL(`${MAILRELAY_API_BASE}${path.startsWith('/') ? path : `/${path}`}`);
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-AUTH-TOKEN': MAILRELAY_API_KEY,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`mailrelay_http_${response.status}:${text.slice(0, 240)}`);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`mailrelay_invalid_content_type:${contentType}:${text.slice(0, 240)}`);
+  }
+
+  return response.json();
+};
+
+const extractMailrelayArray = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+
+  const candidates = [
+    payload.data,
+    payload.items,
+    payload.results,
+    payload.rows,
+    payload.records,
+    payload.collection,
+    payload.sent_campaigns,
+    payload.campaigns,
+    payload.impressions,
+    payload.clicks,
+    payload.unsubscribe_events,
+    payload.events,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  const nestedArray = Object.values(payload).find((value) => Array.isArray(value));
+  return Array.isArray(nestedArray) ? nestedArray : [];
+};
+
+const pickFirstNonEmpty = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
+
+const extractMailrelayCampaign = (item) => {
+  const id = String(
+    pickFirstNonEmpty(item?.id, item?.campaign_id, item?.campaignId, item?.mailing_id, item?.mailingId) || ''
+  ).trim();
+  const name = String(
+    pickFirstNonEmpty(item?.name, item?.title, item?.subject, item?.campaign_name, item?.campaignName) || ''
+  ).trim();
+  const sentAt = toIsoStringOrEmpty(
+    pickFirstNonEmpty(item?.sent_at, item?.sentAt, item?.created_at, item?.createdAt, item?.date, item?.timestamp)
+  );
+  return { id, name, sent_at: sentAt, raw: item };
+};
+
+const extractMailrelayEvent = (item, eventType, campaign) => {
+  const email = normalizeEmail(
+    pickFirstNonEmpty(
+      item?.email,
+      item?.subscriber_email,
+      item?.recipient_email,
+      item?.to_email,
+      item?.to,
+      item?.subscriber?.email,
+      item?.recipient?.email,
+      item?.contact?.email
+    )
+  );
+  const subscriberId = String(
+    pickFirstNonEmpty(item?.subscriber_id, item?.subscriberId, item?.subscriber?.id, item?.contact_id, item?.contact?.id) || ''
+  ).trim();
+  const eventAt = toIsoStringOrEmpty(
+    pickFirstNonEmpty(
+      item?.event_at,
+      item?.occurred_at,
+      item?.timestamp,
+      item?.created_at,
+      item?.date,
+      item?.opened_at,
+      item?.clicked_at,
+      item?.unsubscribed_at
+    )
+  ) || new Date().toISOString();
+
+  const campaignId = String(campaign?.id || '').trim();
+  const campaignName = String(campaign?.name || '').trim();
+  const eventKey = [eventType, campaignId, email, subscriberId, eventAt].join('|');
+
+  return {
+    event_key: eventKey,
+    subscriber_id: subscriberId,
+    campaign_id: campaignId,
+    campaign_name: campaignName,
+    event_type: eventType,
+    event_at: eventAt,
+    email,
+    metadata: JSON.stringify(item || {}),
+  };
+};
+
+const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 10 } = {}) => {
+  const [
+    { items: leads },
+    { items: emailEvents },
+  ] = await Promise.all([
+    loadTable('leads', true),
+    loadTable('email_events', true),
+  ]);
+
+  const campaignsPayload = await mailrelayRequest('/sent_campaigns', { limit: campaignLimit });
+  const campaigns = extractMailrelayArray(campaignsPayload)
+    .map(extractMailrelayCampaign)
+    .filter((campaign) => campaign.id)
+    .slice(0, campaignLimit);
+
+  const leadByEmail = new Map();
+  leads.forEach((lead) => {
+    const email = normalizeEmail(lead.email);
+    if (email && !leadByEmail.has(email)) {
+      leadByEmail.set(email, lead);
+    }
+  });
+
+  const existingEventKeys = new Set(emailEvents.map((item) => String(item.event_key || '').trim()).filter(Boolean));
+  let eventsProcessed = 0;
+  let leadsUpdated = 0;
+  const touchedLeadIds = new Set();
+  const createdEvents = [];
+  const nowIso = new Date().toISOString();
+
+  for (const campaign of campaigns) {
+    const [impressionsPayload, clicksPayload, unsubscribesPayload] = await Promise.all([
+      mailrelayRequest(`/sent_campaigns/${campaign.id}/impressions`).catch(() => []),
+      mailrelayRequest(`/sent_campaigns/${campaign.id}/clicks`).catch(() => []),
+      mailrelayRequest(`/sent_campaigns/${campaign.id}/unsubscribe_events`).catch(() => []),
+    ]);
+
+    const normalizedEvents = [
+      ...extractMailrelayArray(impressionsPayload).map((item) => extractMailrelayEvent(item, 'open', campaign)),
+      ...extractMailrelayArray(clicksPayload).map((item) => extractMailrelayEvent(item, 'click', campaign)),
+      ...extractMailrelayArray(unsubscribesPayload).map((item) => extractMailrelayEvent(item, 'unsubscribe', campaign)),
+    ];
+
+    for (const event of normalizedEvents) {
+      if (!event.email || existingEventKeys.has(event.event_key)) continue;
+      existingEventKeys.add(event.event_key);
+      eventsProcessed += 1;
+
+      const lead = leadByEmail.get(event.email);
+      if (!lead) continue;
+
+      event.id = nextId([...emailEvents, ...createdEvents]);
+      event.lead_id = lead.id;
+      event.created_at = nowIso;
+      createdEvents.push(event);
+
+      if (event.subscriber_id && !lead.mailrelay_subscriber_id) {
+        lead.mailrelay_subscriber_id = event.subscriber_id;
+      }
+
+      const previousEventAt = new Date(lead.last_email_event_at || 0).getTime();
+      const currentEventAt = new Date(event.event_at || 0).getTime();
+      if (!previousEventAt || currentEventAt >= previousEventAt) {
+        lead.last_email_event_at = event.event_at;
+        lead.last_email_campaign = event.campaign_name || lead.last_email_campaign || '';
+        lead.last_email_campaign_id = event.campaign_id || lead.last_email_campaign_id || '';
+      }
+
+      if (event.event_type === 'open') {
+        lead.email_open_count = String((Number(lead.email_open_count) || 0) + 1);
+        if (!lead.last_email_open_at || currentEventAt >= new Date(lead.last_email_open_at || 0).getTime()) {
+          lead.last_email_open_at = event.event_at;
+        }
+      }
+
+      if (event.event_type === 'click') {
+        lead.email_click_count = String((Number(lead.email_click_count) || 0) + 1);
+        if (!lead.last_email_click_at || currentEventAt >= new Date(lead.last_email_click_at || 0).getTime()) {
+          lead.last_email_click_at = event.event_at;
+        }
+      }
+
+      if (event.event_type === 'unsubscribe') {
+        lead.email_unsubscribed = true;
+      }
+
+      lead.updated_at = nowIso;
+      if (!touchedLeadIds.has(String(lead.id))) {
+        touchedLeadIds.add(String(lead.id));
+        leadsUpdated += 1;
+      }
+    }
+  }
+
+  if (createdEvents.length) {
+    await saveTable('email_events', [...emailEvents, ...createdEvents]);
+  }
+  if (touchedLeadIds.size) {
+    await saveTable('leads', leads);
+  }
+
+  return {
+    campaigns_processed: campaigns.length,
+    events_processed: eventsProcessed,
+    leads_updated: leadsUpdated,
+    email_events_created: createdEvents.length,
+  };
+};
+
 const ensureDefaultAdmin = async () => {
   const { items: users } = await loadTable('users');
   const exists = users.find((u) => (u.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase());
@@ -1016,6 +1274,47 @@ app.get('/api/debug/config', (req, res) => {
     leadsColumns: SHEETS_CONFIG.leads,
     envPort: PORT,
   });
+});
+
+app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_req, res) => {
+  const [{ items: leads }, { items: emailEvents }] = await Promise.all([
+    loadTable('leads'),
+    loadTable('email_events'),
+  ]);
+
+  const leadsWithMailrelayData = leads.filter((lead) =>
+    normalizeEmail(lead.email) &&
+    (
+      lead.mailrelay_subscriber_id ||
+      lead.last_email_open_at ||
+      lead.last_email_click_at ||
+      Number(lead.email_open_count) > 0 ||
+      Number(lead.email_click_count) > 0 ||
+      normalizeBool(lead.email_unsubscribed)
+    )
+  ).length;
+
+  return res.json({
+    configured: isMailrelayConfigured(),
+    api_base: MAILRELAY_API_BASE || '',
+    leads_with_engagement: leadsWithMailrelayData,
+    email_events: emailEvents.length,
+  });
+});
+
+app.post('/api/mailrelay/sync-engagement', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  if (!isMailrelayConfigured()) {
+    return res.status(400).json({ error: 'Mailrelay nao configurado' });
+  }
+
+  return withTableLock('email_events', async () =>
+    withTableLock('leads', async () => {
+      const campaignLimit = Math.max(1, Math.min(100, Number(req.body?.campaignLimit || req.query?.campaignLimit || 10)));
+      const summary = await syncMailrelayEngagementIntoLeads({ campaignLimit });
+      return res.json({ success: true, ...summary });
+    })
+  );
 });
 
 // Middleware global (exceto health/ping) para garantir inicializacao
