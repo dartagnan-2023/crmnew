@@ -583,6 +583,15 @@ const emptyLead = {
   sla_due_at: '',
   sla_minutes: 0,
   last_activity_at: '',
+  mailrelay_subscriber_id: '',
+  last_email_open_at: '',
+  last_email_click_at: '',
+  email_open_count: 0,
+  email_click_count: 0,
+  email_unsubscribed: false,
+  last_email_campaign: '',
+  last_email_campaign_id: '',
+  last_email_event_at: '',
 };
 
 const emptyBudget = {
@@ -717,8 +726,11 @@ const App = () => {
     configured: false,
     source: 'none',
     has_api_key: false,
+    leads_with_engagement: 0,
+    email_events: 0,
   });
   const [savingMailrelaySettings, setSavingMailrelaySettings] = useState(false);
+  const [syncingMailrelay, setSyncingMailrelay] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const pendingLeadsRef = useRef(null);
   const [bulkStatus, setBulkStatus] = useState('');
@@ -997,17 +1009,25 @@ const App = () => {
   const loadMailrelaySettings = async () => {
     if (!token || !isAdmin) return;
     try {
-      const res = await fetch(`${API_URL}/settings/mailrelay`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
+      const [settingsRes, statusRes] = await Promise.all([
+        fetch(`${API_URL}/settings/mailrelay`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_URL}/mailrelay/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      if (!settingsRes.ok) return;
+      const data = await settingsRes.json();
+      const statusData = statusRes.ok ? await statusRes.json() : {};
       setMailrelaySettings({
         api_base: data.api_base || '',
         api_key: '',
         configured: Boolean(data.configured),
         source: data.source || 'none',
         has_api_key: Boolean(data.has_api_key),
+        leads_with_engagement: Number(statusData.leads_with_engagement || 0),
+        email_events: Number(statusData.email_events || 0),
       });
     } catch (err) {
       console.error('Erro ao carregar Mailrelay:', err);
@@ -2242,6 +2262,15 @@ const App = () => {
       sla_due_at: lead.sla_due_at || '',
       sla_minutes: Number(lead.sla_minutes || 0),
       last_activity_at: lead.last_activity_at || '',
+      mailrelay_subscriber_id: lead.mailrelay_subscriber_id || '',
+      last_email_open_at: lead.last_email_open_at || '',
+      last_email_click_at: lead.last_email_click_at || '',
+      email_open_count: Number(lead.email_open_count || 0),
+      email_click_count: Number(lead.email_click_count || 0),
+      email_unsubscribed: !!lead.email_unsubscribed,
+      last_email_campaign: lead.last_email_campaign || '',
+      last_email_campaign_id: lead.last_email_campaign_id || '',
+      last_email_event_at: lead.last_email_event_at || '',
     };
   };
 
@@ -3160,12 +3189,39 @@ const App = () => {
         has_api_key: Boolean(data.has_api_key),
         api_base: data.api_base || prev.api_base,
       }));
+      await loadMailrelaySettings();
       showToast('Configurações do Mailrelay salvas com sucesso');
     } catch (err) {
       console.error('Erro ao salvar Mailrelay:', err);
       showToast('Erro ao salvar Mailrelay', 'error');
     } finally {
       setSavingMailrelaySettings(false);
+    }
+  };
+
+  const syncMailrelayEngagement = async () => {
+    if (!isAdmin) return;
+    setSyncingMailrelay(true);
+    try {
+      const res = await fetch(`${API_URL}/mailrelay/sync-engagement?campaignLimit=10`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao sincronizar Mailrelay', 'error');
+        return;
+      }
+      await Promise.all([loadMailrelaySettings(), loadLeads()]);
+      showToast(`Mailrelay sincronizado: ${data.events_processed || 0} evento(s), ${data.leads_updated || 0} lead(s) atualizado(s)`);
+    } catch (err) {
+      console.error('Erro ao sincronizar Mailrelay:', err);
+      showToast('Erro ao sincronizar Mailrelay', 'error');
+    } finally {
+      setSyncingMailrelay(false);
     }
   };
 
@@ -4825,6 +4881,26 @@ const App = () => {
                     <p>Prazo alvo: {leadForm.sla_due_at ? formatDateTimeBR(leadForm.sla_due_at) : '-'}</p>
                   </div>
                 </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold mb-2">Engajamento por email</p>
+                  <div className="flex flex-wrap gap-2 mb-2 text-[11px]">
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                      Aberturas: {leadForm.email_open_count || 0}
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                      Cliques: {leadForm.email_click_count || 0}
+                    </span>
+                    <span className={`px-2 py-1 rounded-full ${leadForm.email_unsubscribed ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {leadForm.email_unsubscribed ? 'Descadastrado' : 'Ativo'}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-xs text-slate-500">
+                    <p>Última abertura: {leadForm.last_email_open_at ? formatDateTimeBR(leadForm.last_email_open_at) : '-'}</p>
+                    <p>Último clique: {leadForm.last_email_click_at ? formatDateTimeBR(leadForm.last_email_click_at) : '-'}</p>
+                    <p>Última campanha: {leadForm.last_email_campaign || '-'}</p>
+                    <p>Último evento: {leadForm.last_email_event_at ? formatDateTimeBR(leadForm.last_email_event_at) : '-'}</p>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Nome *
@@ -5832,6 +5908,14 @@ const App = () => {
                         Chave salva: {mailrelaySettings.has_api_key ? 'Sim' : 'Não'}
                       </span>
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                        Leads com engajamento: <span className="font-semibold text-slate-800">{mailrelaySettings.leads_with_engagement || 0}</span>
+                      </div>
+                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                        Eventos gravados: <span className="font-semibold text-slate-800">{mailrelaySettings.email_events || 0}</span>
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -5857,6 +5941,13 @@ const App = () => {
                   </div>
 
                   <div className="flex justify-end gap-2">
+                    <button
+                      onClick={syncMailrelayEngagement}
+                      disabled={syncingMailrelay || !mailrelaySettings.configured}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg disabled:opacity-50"
+                    >
+                      {syncingMailrelay ? 'Sincronizando...' : 'Sincronizar agora'}
+                    </button>
                     <button
                       onClick={() => setShowProfileModal(false)}
                       className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
