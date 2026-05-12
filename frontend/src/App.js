@@ -486,6 +486,41 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
   );
 };
 
+const getLeadEmailEngagement = (lead) => {
+  const openCount = Number(lead?.email_open_count || 0);
+  const clickCount = Number(lead?.email_click_count || 0);
+  const unsubscribed = Boolean(lead?.email_unsubscribed);
+  const hasOpen = openCount > 0 || Boolean(lead?.last_email_open_at);
+  const hasClick = clickCount > 0 || Boolean(lead?.last_email_click_at);
+  const hasAny = hasOpen || hasClick || unsubscribed || Boolean(lead?.last_email_event_at);
+  return { hasAny, hasOpen, hasClick, unsubscribed };
+};
+
+const LeadEmailEngagementBadges = ({ lead }) => {
+  const engagement = getLeadEmailEngagement(lead);
+  if (!engagement.hasAny) return null;
+
+  return (
+    <>
+      {engagement.hasClick ? (
+        <span className="px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-semibold">
+          Clicou email
+        </span>
+      ) : null}
+      {!engagement.hasClick && engagement.hasOpen ? (
+        <span className="px-2 py-[2px] rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-semibold">
+          Abriu email
+        </span>
+      ) : null}
+      {engagement.unsubscribed ? (
+        <span className="px-2 py-[2px] rounded-full bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-semibold">
+          Descadastrado
+        </span>
+      ) : null}
+    </>
+  );
+};
+
 
 const SEGMENT_OPTIONS = [
   { value: '', label: 'Sem perfil' },
@@ -642,6 +677,7 @@ const App = () => {
   const [urgencyFilter, setUrgencyFilter] = useState('all'); // 'all', 'overdue', 'next3', 'today'
   const [temperatureFilter, setTemperatureFilter] = useState('all');
   const [slaFilter, setSlaFilter] = useState('all');
+  const [emailEngagementFilter, setEmailEngagementFilter] = useState('all');
   const [segmentFilter, setSegmentFilter] = useState('all');
   const [customerFilter, setCustomerFilter] = useState('all');
   const [searchInput, setSearchInput] = useState('');
@@ -1094,6 +1130,7 @@ const App = () => {
         if (parsed.urgencyFilter) setUrgencyFilter(parsed.urgencyFilter);
         if (parsed.temperatureFilter) setTemperatureFilter(parsed.temperatureFilter);
         if (parsed.slaFilter) setSlaFilter(parsed.slaFilter);
+        if (parsed.emailEngagementFilter) setEmailEngagementFilter(parsed.emailEngagementFilter);
         if (parsed.searchTerm) {
           setSearchTerm(parsed.searchTerm);
           setSearchInput(parsed.searchTerm);
@@ -1137,6 +1174,7 @@ const App = () => {
       urgencyFilter,
       temperatureFilter,
       slaFilter,
+      emailEngagementFilter,
       searchTerm: searchInput,
       channelFilter,
       campaignFilter,
@@ -1148,7 +1186,7 @@ const App = () => {
       activeTab,
     };
     localStorage.setItem('leadFilters', JSON.stringify(payload));
-  }, [ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
+  }, [ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, emailEngagementFilter, searchInput, channelFilter, campaignFilter, segmentFilter, customerFilter, sortKey, sortDir, viewMode, activeTab]);
 
   useEffect(() => {
     const payload = {
@@ -1278,6 +1316,17 @@ const App = () => {
       base = base.filter((l) => normalizeOptionValue(l.sla_status) === slaFilter);
     }
 
+    if (emailEngagementFilter !== 'all') {
+      base = base.filter((l) => {
+        const engagement = getLeadEmailEngagement(l);
+        if (emailEngagementFilter === 'engaged') return engagement.hasAny;
+        if (emailEngagementFilter === 'opened') return engagement.hasOpen;
+        if (emailEngagementFilter === 'clicked') return engagement.hasClick;
+        if (emailEngagementFilter === 'unsubscribed') return engagement.unsubscribed;
+        return true;
+      });
+    }
+
     if (segmentFilter !== 'all') {
       base = base.filter((l) => {
         const norm = normalizeOptionValue(l.segment);
@@ -1334,7 +1383,7 @@ const App = () => {
       });
     }
     return base;
-  }, [leads, ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
+  }, [leads, ownerFilter, statusFilter, urgencyFilter, temperatureFilter, slaFilter, emailEngagementFilter, user?.id, searchTerm, channelFilter, campaignFilter, segmentFilter, customerFilter]);
 
 
   const sorter = useCallback(
@@ -1386,6 +1435,7 @@ const App = () => {
     urgencyFilter,
     temperatureFilter,
     slaFilter,
+    emailEngagementFilter,
     segmentFilter,
     customerFilter,
     channelFilter,
@@ -4492,6 +4542,17 @@ const App = () => {
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={emailEngagementFilter}
+                    onChange={(e) => setEmailEngagementFilter(e.target.value)}
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  >
+                    <option value="all">Todo engajamento email</option>
+                    <option value="engaged">Com engajamento</option>
+                    <option value="opened">Abriu email</option>
+                    <option value="clicked">Clicou email</option>
+                    <option value="unsubscribed">Descadastrado</option>
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
@@ -4704,6 +4765,7 @@ const App = () => {
                             <div className="flex flex-wrap items-center gap-1">
                               <LeadTemperatureBadge value={lead.temperature} />
                               <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
+                              <LeadEmailEngagementBadges lead={lead} />
                             </div>
                           </td>
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
@@ -4820,6 +4882,7 @@ const App = () => {
                             )}
                             <LeadTemperatureBadge value={lead.temperature} />
                             <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
+                            <LeadEmailEngagementBadges lead={lead} />
                           </div>
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
