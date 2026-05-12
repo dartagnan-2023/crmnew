@@ -912,6 +912,13 @@ const saveTable = async (name, items) => {
 const getSettingValue = (items, key) =>
   String(items.find((item) => String(item.key || '').trim() === key)?.value || '').trim();
 
+const upsertSettingRow = (items, key, value, updatedAt = new Date().toISOString()) => {
+  const idx = items.findIndex((item) => String(item.key || '').trim() === key);
+  const row = { key, value, updated_at: updatedAt };
+  if (idx === -1) items.push(row);
+  else items[idx] = row;
+};
+
 const getMailrelayConfig = async () => {
   let storedBase = '';
   let storedKey = '';
@@ -1082,9 +1089,11 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 50 } = {}) => 
   const [
     { items: leads },
     { items: emailEvents },
+    { items: settingsItems },
   ] = await Promise.all([
     loadTable('leads', true),
     loadTable('email_events', true),
+    loadTable('settings', true),
   ]);
 
   const campaignsPayload = await mailrelayRequest('/sent_campaigns', { limit: campaignLimit });
@@ -1109,10 +1118,14 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 50 } = {}) => 
   const existingEventKeys = new Set(emailEvents.map((item) => String(item.event_key || '').trim()).filter(Boolean));
   let eventsProcessed = 0;
   let leadsUpdated = 0;
+  let duplicateEventsSkipped = 0;
+  let missingIdentitySkipped = 0;
   const touchedLeadIds = new Set();
   const createdEvents = [];
   const nowIso = new Date().toISOString();
   const subscriberCache = new Map();
+  const unmatchedEmails = new Set();
+  const unmatchedSubscriberIds = new Set();
 
   const resolveSubscriberEmail = async (subscriberId) => {
     const normalizedId = String(subscriberId || '').trim();
@@ -1158,14 +1171,25 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 50 } = {}) => 
           if (resolvedEmail) event.email = resolvedEmail;
         }
 
-        if ((!resolvedEmail && !event.subscriber_id) || existingEventKeys.has(event.event_key)) continue;
+        if (!resolvedEmail && !event.subscriber_id) {
+          missingIdentitySkipped += 1;
+          continue;
+        }
+        if (existingEventKeys.has(event.event_key)) {
+          duplicateEventsSkipped += 1;
+          continue;
+        }
         existingEventKeys.add(event.event_key);
         eventsProcessed += 1;
 
         const lead =
           leadByEmail.get(resolvedEmail) ||
           leadBySubscriberId.get(String(event.subscriber_id || '').trim());
-        if (!lead) continue;
+        if (!lead) {
+          if (resolvedEmail) unmatchedEmails.add(resolvedEmail);
+          else if (event.subscriber_id) unmatchedSubscriberIds.add(String(event.subscriber_id));
+          continue;
+        }
 
       event.id = nextId([...emailEvents, ...createdEvents]);
       event.lead_id = lead.id;
@@ -1218,11 +1242,24 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 50 } = {}) => 
     await saveTable('leads', leads);
   }
 
-  return {
+  const auditSummary = {
+    synced_at: nowIso,
+    campaign_limit: campaignLimit,
     campaigns_processed: campaigns.length,
     events_processed: eventsProcessed,
-    leads_updated: leadsUpdated,
     email_events_created: createdEvents.length,
+    leads_updated: leadsUpdated,
+    duplicate_events_skipped: duplicateEventsSkipped,
+    missing_identity_skipped: missingIdentitySkipped,
+    unmatched_leads_count: unmatchedEmails.size + unmatchedSubscriberIds.size,
+    unmatched_emails_sample: Array.from(unmatchedEmails).slice(0, 10),
+    unmatched_subscriber_ids_sample: Array.from(unmatchedSubscriberIds).slice(0, 10),
+  };
+  upsertSettingRow(settingsItems, 'mailrelay_last_sync_summary', JSON.stringify(auditSummary), nowIso);
+  await saveTable('settings', settingsItems);
+
+  return {
+    ...auditSummary,
   };
 };
 
@@ -1367,9 +1404,10 @@ app.get('/api/debug/config', (req, res) => {
 
 app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_req, res) => {
   const config = await getMailrelayConfig();
-  const [{ items: leads }, { items: emailEvents }] = await Promise.all([
+  const [{ items: leads }, { items: emailEvents }, { items: settingsItems }] = await Promise.all([
     loadTable('leads'),
     loadTable('email_events'),
+    loadTable('settings'),
   ]);
 
   const leadsWithMailrelayData = leads.filter((lead) =>
@@ -1384,12 +1422,23 @@ app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_
     )
   ).length;
 
+  let lastSync = null;
+  const lastSyncRaw = getSettingValue(settingsItems, 'mailrelay_last_sync_summary');
+  if (lastSyncRaw) {
+    try {
+      lastSync = JSON.parse(lastSyncRaw);
+    } catch {
+      lastSync = null;
+    }
+  }
+
   return res.json({
     configured: Boolean(config.apiBase && config.apiKey),
     api_base: config.apiBase || '',
     source: config.source,
     leads_with_engagement: leadsWithMailrelayData,
     email_events: emailEvents.length,
+    last_sync: lastSync,
   });
 });
 
@@ -1399,12 +1448,14 @@ app.post('/api/mailrelay/sync-engagement', ensureReadyMiddleware, authMiddleware
     return res.status(400).json({ error: 'Mailrelay nao configurado' });
   }
 
-  return withTableLock('email_events', async () =>
-    withTableLock('leads', async () => {
-      const campaignLimit = Math.max(1, Math.min(100, Number(req.body?.campaignLimit || req.query?.campaignLimit || 10)));
+  return withTableLock('settings', async () =>
+    withTableLock('email_events', async () =>
+      withTableLock('leads', async () => {
+      const campaignLimit = Math.max(1, Math.min(100, Number(req.body?.campaignLimit || req.query?.campaignLimit || 50)));
       const summary = await syncMailrelayEngagementIntoLeads({ campaignLimit });
       return res.json({ success: true, ...summary });
-    })
+      })
+    )
   );
 });
 
@@ -1433,15 +1484,8 @@ app.put('/api/settings/mailrelay', ensureReadyMiddleware, authMiddleware, async 
     const { items } = await loadTable('settings', true);
     const nowIso = new Date().toISOString();
 
-    const upsertSetting = (key, value) => {
-      const idx = items.findIndex((item) => String(item.key || '').trim() === key);
-      const row = { key, value, updated_at: nowIso };
-      if (idx === -1) items.push(row);
-      else items[idx] = row;
-    };
-
-    upsertSetting('mailrelay_api_base', normalizedBase);
-    upsertSetting('mailrelay_api_key', normalizedKey);
+    upsertSettingRow(items, 'mailrelay_api_base', normalizedBase, nowIso);
+    upsertSettingRow(items, 'mailrelay_api_key', normalizedKey, nowIso);
     await saveTable('settings', items);
 
     return res.json({

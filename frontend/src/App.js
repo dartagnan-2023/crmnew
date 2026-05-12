@@ -764,6 +764,7 @@ const App = () => {
     has_api_key: false,
     leads_with_engagement: 0,
     email_events: 0,
+    last_sync: null,
   });
   const [savingMailrelaySettings, setSavingMailrelaySettings] = useState(false);
   const [syncingMailrelay, setSyncingMailrelay] = useState(false);
@@ -1064,6 +1065,7 @@ const App = () => {
         has_api_key: Boolean(data.has_api_key),
         leads_with_engagement: Number(statusData.leads_with_engagement || 0),
         email_events: Number(statusData.email_events || 0),
+        last_sync: statusData.last_sync || null,
       });
     } catch (err) {
       console.error('Erro ao carregar Mailrelay:', err);
@@ -3270,8 +3272,24 @@ const App = () => {
         showToast(data.error || 'Erro ao sincronizar Mailrelay', 'error');
         return;
       }
+      setMailrelaySettings((prev) => ({
+        ...prev,
+        last_sync: {
+          synced_at: data.synced_at,
+          campaign_limit: data.campaign_limit,
+          campaigns_processed: data.campaigns_processed,
+          events_processed: data.events_processed,
+          email_events_created: data.email_events_created,
+          leads_updated: data.leads_updated,
+          duplicate_events_skipped: data.duplicate_events_skipped,
+          missing_identity_skipped: data.missing_identity_skipped,
+          unmatched_leads_count: data.unmatched_leads_count,
+          unmatched_emails_sample: data.unmatched_emails_sample || [],
+          unmatched_subscriber_ids_sample: data.unmatched_subscriber_ids_sample || [],
+        },
+      }));
       await Promise.all([loadMailrelaySettings(), loadLeads()]);
-      showToast(`Mailrelay sincronizado: ${data.events_processed || 0} evento(s), ${data.leads_updated || 0} lead(s) atualizado(s)`);
+      showToast(`Mailrelay sincronizado: ${data.events_processed || 0} evento(s), ${data.leads_updated || 0} lead(s), ${data.unmatched_leads_count || 0} sem match`);
     } catch (err) {
       console.error('Erro ao sincronizar Mailrelay:', err);
       showToast('Erro ao sincronizar Mailrelay', 'error');
@@ -5983,15 +6001,49 @@ const App = () => {
                         Chave salva: {mailrelaySettings.has_api_key ? 'Sim' : 'Não'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
-                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                        Leads com engajamento: <span className="font-semibold text-slate-800">{mailrelaySettings.leads_with_engagement || 0}</span>
-                      </div>
-                      <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                        Eventos gravados: <span className="font-semibold text-slate-800">{mailrelaySettings.email_events || 0}</span>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                      Leads com engajamento: <span className="font-semibold text-slate-800">{mailrelaySettings.leads_with_engagement || 0}</span>
+                    </div>
+                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                      Eventos gravados: <span className="font-semibold text-slate-800">{mailrelaySettings.email_events || 0}</span>
                     </div>
                   </div>
+                  {mailrelaySettings.last_sync && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 text-xs text-slate-600">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-800">Última sincronização:</span>
+                        <span>{mailrelaySettings.last_sync.synced_at ? formatDateTimeBR(mailrelaySettings.last_sync.synced_at) : '-'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Campanhas: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.campaigns_processed || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Eventos: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.events_processed || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Casados: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.leads_updated || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Sem match: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.unmatched_leads_count || 0}</span></div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">
+                          Duplicados ignorados: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.duplicate_events_skipped || 0}</span>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">
+                          Sem identidade: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.missing_identity_skipped || 0}</span>
+                        </div>
+                      </div>
+                      {Array.isArray(mailrelaySettings.last_sync.unmatched_emails_sample) && mailrelaySettings.last_sync.unmatched_emails_sample.length > 0 && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                          <p className="font-semibold text-amber-800 mb-1">Exemplos sem match no CRM</p>
+                          <div className="flex flex-wrap gap-1">
+                            {mailrelaySettings.last_sync.unmatched_emails_sample.map((email) => (
+                              <span key={email} className="px-2 py-1 rounded-full bg-white border border-amber-200 text-amber-800">
+                                {email}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">URL da API</label>
