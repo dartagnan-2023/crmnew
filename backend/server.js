@@ -1015,17 +1015,38 @@ const extractMailrelayEvent = (item, eventType, campaign) => {
   const email = normalizeEmail(
     pickFirstNonEmpty(
       item?.email,
+      item?.email_address,
       item?.subscriber_email,
+      item?.subscriberEmail,
       item?.recipient_email,
+      item?.recipientEmail,
       item?.to_email,
       item?.to,
+      item?.address,
+      item?.sent_email,
+      item?.sentEmail,
       item?.subscriber?.email,
+      item?.subscriber?.email_address,
       item?.recipient?.email,
-      item?.contact?.email
+      item?.contact?.email,
+      item?.contact?.email_address,
+      item?.subscriber_data?.email,
+      item?.data?.email
     )
   );
   const subscriberId = String(
-    pickFirstNonEmpty(item?.subscriber_id, item?.subscriberId, item?.subscriber?.id, item?.contact_id, item?.contact?.id) || ''
+    pickFirstNonEmpty(
+      item?.subscriber_id,
+      item?.subscriberId,
+      item?.subscriber?.id,
+      item?.contact_id,
+      item?.contact?.id,
+      item?.subscriber_data?.id,
+      item?.data?.subscriber_id
+    ) || ''
+  ).trim();
+  const sentEmailId = String(
+    pickFirstNonEmpty(item?.sent_email_id, item?.sentEmailId, item?.message_id, item?.messageId, item?.email_id, item?.emailId) || ''
   ).trim();
   const eventAt = toIsoStringOrEmpty(
     pickFirstNonEmpty(
@@ -1047,6 +1068,7 @@ const extractMailrelayEvent = (item, eventType, campaign) => {
   return {
     event_key: eventKey,
     subscriber_id: subscriberId,
+    sent_email_id: sentEmailId,
     campaign_id: campaignId,
     campaign_name: campaignName,
     event_type: eventType,
@@ -1056,7 +1078,7 @@ const extractMailrelayEvent = (item, eventType, campaign) => {
   };
 };
 
-const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 10 } = {}) => {
+const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 50 } = {}) => {
   const [
     { items: leads },
     { items: emailEvents },
@@ -1072,10 +1094,15 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 10 } = {}) => 
     .slice(0, campaignLimit);
 
   const leadByEmail = new Map();
+  const leadBySubscriberId = new Map();
   leads.forEach((lead) => {
     const email = normalizeEmail(lead.email);
     if (email && !leadByEmail.has(email)) {
       leadByEmail.set(email, lead);
+    }
+    const subscriberId = String(lead.mailrelay_subscriber_id || '').trim();
+    if (subscriberId && !leadBySubscriberId.has(subscriberId)) {
+      leadBySubscriberId.set(subscriberId, lead);
     }
   });
 
@@ -1085,6 +1112,31 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 10 } = {}) => 
   const touchedLeadIds = new Set();
   const createdEvents = [];
   const nowIso = new Date().toISOString();
+  const subscriberCache = new Map();
+
+  const resolveSubscriberEmail = async (subscriberId) => {
+    const normalizedId = String(subscriberId || '').trim();
+    if (!normalizedId) return '';
+    if (subscriberCache.has(normalizedId)) return subscriberCache.get(normalizedId);
+
+    try {
+      const payload = await mailrelayRequest(`/subscribers/${normalizedId}`);
+      const email = normalizeEmail(
+        pickFirstNonEmpty(
+          payload?.email,
+          payload?.email_address,
+          payload?.subscriber?.email,
+          payload?.subscriber?.email_address,
+          payload?.data?.email
+        )
+      );
+      subscriberCache.set(normalizedId, email);
+      return email;
+    } catch {
+      subscriberCache.set(normalizedId, '');
+      return '';
+    }
+  };
 
   for (const campaign of campaigns) {
     const [impressionsPayload, clicksPayload, unsubscribesPayload] = await Promise.all([
@@ -1099,22 +1151,31 @@ const syncMailrelayEngagementIntoLeads = async ({ campaignLimit = 10 } = {}) => 
       ...extractMailrelayArray(unsubscribesPayload).map((item) => extractMailrelayEvent(item, 'unsubscribe', campaign)),
     ];
 
-    for (const event of normalizedEvents) {
-      if (!event.email || existingEventKeys.has(event.event_key)) continue;
-      existingEventKeys.add(event.event_key);
-      eventsProcessed += 1;
+      for (const event of normalizedEvents) {
+        let resolvedEmail = event.email;
+        if (!resolvedEmail && event.subscriber_id) {
+          resolvedEmail = await resolveSubscriberEmail(event.subscriber_id);
+          if (resolvedEmail) event.email = resolvedEmail;
+        }
 
-      const lead = leadByEmail.get(event.email);
-      if (!lead) continue;
+        if ((!resolvedEmail && !event.subscriber_id) || existingEventKeys.has(event.event_key)) continue;
+        existingEventKeys.add(event.event_key);
+        eventsProcessed += 1;
+
+        const lead =
+          leadByEmail.get(resolvedEmail) ||
+          leadBySubscriberId.get(String(event.subscriber_id || '').trim());
+        if (!lead) continue;
 
       event.id = nextId([...emailEvents, ...createdEvents]);
       event.lead_id = lead.id;
       event.created_at = nowIso;
       createdEvents.push(event);
 
-      if (event.subscriber_id && !lead.mailrelay_subscriber_id) {
-        lead.mailrelay_subscriber_id = event.subscriber_id;
-      }
+        if (event.subscriber_id && !lead.mailrelay_subscriber_id) {
+          lead.mailrelay_subscriber_id = event.subscriber_id;
+          leadBySubscriberId.set(String(event.subscriber_id), lead);
+        }
 
       const previousEventAt = new Date(lead.last_email_event_at || 0).getTime();
       const currentEventAt = new Date(event.event_at || 0).getTime();

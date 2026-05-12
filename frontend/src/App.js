@@ -3258,7 +3258,7 @@ const App = () => {
     if (!isAdmin) return;
     setSyncingMailrelay(true);
     try {
-      const res = await fetch(`${API_URL}/mailrelay/sync-engagement?campaignLimit=10`, {
+      const res = await fetch(`${API_URL}/mailrelay/sync-engagement?campaignLimit=50`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -4517,7 +4517,7 @@ const App = () => {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <select
                     value={temperatureFilter}
                     onChange={(e) => setTemperatureFilter(e.target.value)}
@@ -4547,7 +4547,7 @@ const App = () => {
                     onChange={(e) => setEmailEngagementFilter(e.target.value)}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
                   >
-                    <option value="all">Todo engajamento email</option>
+                    <option value="all">Mailrelay: todos</option>
                     <option value="engaged">Com engajamento</option>
                     <option value="opened">Abriu email</option>
                     <option value="clicked">Clicou email</option>
