@@ -528,6 +528,7 @@ const SEGMENT_OPTIONS = [
   { value: 'instalador', label: 'Instalador' },
   { value: 'montador', label: 'Montador de Painel' },
   { value: 'fabricante_maquinas', label: 'Fabricante de Máquinas' },
+  { value: 'grupos_geradores', label: 'Grupos Geradores' },
   { value: 'concorrente', label: 'Concorrente' },
   { value: 'representante', label: 'Representante' },
   { value: 'usuario_final', label: 'Usuario Final' },
