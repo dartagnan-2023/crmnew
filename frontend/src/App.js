@@ -1722,6 +1722,11 @@ const App = () => {
     dashboardChannelFilter,
   ]);
 
+  const dashboardBudgetStats = useMemo(
+    () => buildBudgetStatsSummary(dashboardMediaBudgets),
+    [dashboardMediaBudgets]
+  );
+
   const dashboardAdSpendFiltered = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -3611,6 +3616,13 @@ const App = () => {
               <StatCard label="Taxa de Conversão" value={`${dashboardLocalStats.taxaConversao || 0}%`} helper={`${dashboardLocalStats.ganhos || 0} ganhos`} tone="blue" />
               <StatCard label="Valor Convertido" value={formatCurrencyBR(dashboardLocalStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
               <StatCard label="Pipeline Ativo" value={formatCurrencyBR(dashboardLocalStats.valorNegociacao || 0)} helper={`${dashboardLocalStats.qtdNegociacao || 0} em negociação`} tone="amber" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Orçamentos" value={dashboardBudgetStats.total || 0} helper={`${dashboardBudgetStats.enviados || 0} enviados`} tone="slate" />
+              <StatCard label="Taxa de Aprovação" value={`${dashboardBudgetStats.taxaAprovacao || 0}%`} helper={`${dashboardBudgetStats.aprovados || 0} aprovados`} tone="blue" />
+              <StatCard label="Valor Orçado" value={formatCurrencyBR(dashboardBudgetStats.valorOrcado || 0)} helper={`${dashboardBudgetStats.reprovados || 0} reprovados`} tone="emerald" />
+              <StatCard label="Valor Fechado" value={formatCurrencyBR(dashboardBudgetStats.valorFechado || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardBudgetStats.ticketMedio || 0)}`} tone="amber" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
