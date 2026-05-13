@@ -51,6 +51,13 @@ const BUDGET_LOSS_REASON_OPTIONS = [
   { value: 'outros', label: 'Outros' },
 ];
 
+const EMAIL_EVENT_OPTIONS = [
+  { value: 'all', label: 'Todos os eventos' },
+  { value: 'open', label: 'Aberturas' },
+  { value: 'click', label: 'Cliques' },
+  { value: 'unsubscribe', label: 'Descadastros' },
+];
+
 
 // Formata telefone para (DD) 99999-9999 ou (DD) 9999-9999
 const formatPhone = (value) => {
@@ -671,6 +678,7 @@ const App = () => {
   const [leads, setLeads] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [adSpendItems, setAdSpendItems] = useState([]);
+  const [emailEvents, setEmailEvents] = useState([]);
   const [channels, setChannels] = useState([]);
   const [stats, setStats] = useState({});
   const [ownerFilter, setOwnerFilter] = useState('all'); // 'all', 'me', or userId
@@ -688,7 +696,7 @@ const App = () => {
   const [sortKey, setSortKey] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
-  const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard' | 'orcamentos'
+  const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard' | 'orcamentos' | 'emkt'
   const [dashboardPeriod, setDashboardPeriod] = useState('90d');
   const [dashboardStartDate, setDashboardStartDate] = useState('');
   const [dashboardEndDate, setDashboardEndDate] = useState('');
@@ -697,6 +705,12 @@ const App = () => {
   const [dashboardChannelFilter, setDashboardChannelFilter] = useState('all');
   const [dashboardCampaignFilter, setDashboardCampaignFilter] = useState('');
   const [dashboardFollowUpFilter, setDashboardFollowUpFilter] = useState('all');
+  const [emktPeriod, setEmktPeriod] = useState('90d');
+  const [emktStartDate, setEmktStartDate] = useState('');
+  const [emktEndDate, setEmktEndDate] = useState('');
+  const [emktEventFilter, setEmktEventFilter] = useState('all');
+  const [emktCampaignFilter, setEmktCampaignFilter] = useState('');
+  const [emktSearch, setEmktSearch] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
 
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -816,6 +830,7 @@ const App = () => {
     setUser(null);
     setLeads([]);
     setBudgets([]);
+    setEmailEvents([]);
     setChannels([]);
     setStats({});
     setUsers([]);
@@ -1028,6 +1043,21 @@ const App = () => {
     }
   };
 
+  const loadEmailEvents = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/email-events`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEmailEvents(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Erro ao carregar eventos de email:', err);
+    }
+  };
+
   const loadUsers = async () => {
     if (!token) return;
     try {
@@ -1097,7 +1127,7 @@ const App = () => {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadChannels(), loadUsers(), loadStats(), loadMailrelaySettings()]);
+      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadEmailEvents(), loadChannels(), loadUsers(), loadStats(), loadMailrelaySettings()]);
     } finally {
       setLoadingData(false);
     }
@@ -1969,6 +1999,174 @@ const App = () => {
       }),
     };
   }, [dashboardAdSpendFiltered, dashboardFilteredLeads, dashboardMediaBudgets]);
+
+  const emktFilteredEvents = useMemo(() => {
+    const now = new Date();
+    const daysByPeriod = {
+      '30d': 30,
+      '90d': 90,
+      '6m': 183,
+      '12m': 365,
+    };
+
+    return emailEvents.filter((event) => {
+      const baseDate = parseLeadDate(event.event_at || event.created_at);
+      if (emktPeriod === 'custom') {
+        if (!baseDate) return false;
+        const eventTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()).getTime();
+        const startTime = emktStartDate ? new Date(`${emktStartDate}T00:00:00`).getTime() : null;
+        const endTime = emktEndDate ? new Date(`${emktEndDate}T23:59:59`).getTime() : null;
+        if (startTime && eventTime < startTime) return false;
+        if (endTime && eventTime > endTime) return false;
+      } else if (emktPeriod !== 'all') {
+        const periodDays = daysByPeriod[emktPeriod];
+        if (periodDays && baseDate) {
+          const diff = now.getTime() - baseDate.getTime();
+          if (diff > periodDays * 24 * 60 * 60 * 1000) return false;
+        }
+      }
+
+      if (emktEventFilter !== 'all' && normalizeOptionValue(event.event_type) !== emktEventFilter) {
+        return false;
+      }
+
+      if (emktCampaignFilter.trim()) {
+        const term = emktCampaignFilter.toLowerCase();
+        if (!(event.campaign_name || '').toLowerCase().includes(term)) return false;
+      }
+
+      if (emktSearch.trim()) {
+        const term = emktSearch.toLowerCase();
+        const lead = leads.find((item) => String(item.id) === String(event.lead_id));
+        const haystack = [
+          event.email,
+          event.campaign_name,
+          lead?.name,
+          lead?.company,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+
+      return true;
+    });
+  }, [emailEvents, emktPeriod, emktStartDate, emktEndDate, emktEventFilter, emktCampaignFilter, emktSearch, leads]);
+
+  const emktSummary = useMemo(() => {
+    const campaigns = new Set();
+    const impactedLeads = new Set();
+    let opens = 0;
+    let clicks = 0;
+    let unsubscribes = 0;
+
+    emktFilteredEvents.forEach((event) => {
+      if (event.campaign_name) campaigns.add(event.campaign_name);
+      if (event.lead_id) impactedLeads.add(String(event.lead_id));
+      const type = normalizeOptionValue(event.event_type);
+      if (type === 'open') opens += 1;
+      if (type === 'click') clicks += 1;
+      if (type === 'unsubscribe') unsubscribes += 1;
+    });
+
+    return {
+      campaigns: campaigns.size,
+      impactedLeads: impactedLeads.size,
+      totalEvents: emktFilteredEvents.length,
+      opens,
+      clicks,
+      unsubscribes,
+      clickRate: opens ? Number(((clicks / opens) * 100).toFixed(1)) : 0,
+      unsubscribeRate: opens ? Number(((unsubscribes / opens) * 100).toFixed(1)) : 0,
+    };
+  }, [emktFilteredEvents]);
+
+  const emktEventEvolution = useMemo(() => {
+    const bucket = new Map();
+    emktFilteredEvents.forEach((event) => {
+      const date = parseLeadDate(event.event_at || event.created_at);
+      if (!date) return;
+      const label = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      if (!bucket.has(label)) bucket.set(label, { label, opens: 0, clicks: 0, unsubscribes: 0 });
+      const row = bucket.get(label);
+      const type = normalizeOptionValue(event.event_type);
+      if (type === 'open') row.opens += 1;
+      if (type === 'click') row.clicks += 1;
+      if (type === 'unsubscribe') row.unsubscribes += 1;
+    });
+    return Array.from(bucket.values());
+  }, [emktFilteredEvents]);
+
+  const emktCampaignRows = useMemo(() => {
+    const bucket = new Map();
+    emktFilteredEvents.forEach((event) => {
+      const key = event.campaign_name || '(Sem campanha)';
+      if (!bucket.has(key)) {
+        bucket.set(key, {
+          campaign: key,
+          opens: 0,
+          clicks: 0,
+          unsubscribes: 0,
+          leads: new Set(),
+          lastEventAt: '',
+        });
+      }
+      const row = bucket.get(key);
+      const type = normalizeOptionValue(event.event_type);
+      if (type === 'open') row.opens += 1;
+      if (type === 'click') row.clicks += 1;
+      if (type === 'unsubscribe') row.unsubscribes += 1;
+      if (event.lead_id) row.leads.add(String(event.lead_id));
+      const currentTime = new Date(event.event_at || event.created_at || 0).getTime();
+      const previousTime = new Date(row.lastEventAt || 0).getTime();
+      if (!row.lastEventAt || currentTime >= previousTime) row.lastEventAt = event.event_at || event.created_at || '';
+    });
+
+    return Array.from(bucket.values())
+      .map((row) => ({
+        campaign: row.campaign,
+        opens: row.opens,
+        clicks: row.clicks,
+        unsubscribes: row.unsubscribes,
+        impactedLeads: row.leads.size,
+        clickRate: row.opens ? Number(((row.clicks / row.opens) * 100).toFixed(1)) : 0,
+        lastEventAt: row.lastEventAt,
+      }))
+      .sort((a, b) => (b.opens + b.clicks) - (a.opens + a.clicks));
+  }, [emktFilteredEvents]);
+
+  const emktLeadRows = useMemo(() => {
+    const bucket = new Map();
+    emktFilteredEvents.forEach((event) => {
+      const key = String(event.lead_id || event.email || '');
+      if (!key) return;
+      const lead = leads.find((item) => String(item.id) === String(event.lead_id));
+      if (!bucket.has(key)) {
+        bucket.set(key, {
+          leadId: event.lead_id || '',
+          name: lead?.name || '-',
+          company: lead?.company || '-',
+          email: event.email || lead?.email || '-',
+          campaign: event.campaign_name || '-',
+          opens: 0,
+          clicks: 0,
+          unsubscribes: 0,
+          lastEventAt: '',
+        });
+      }
+      const row = bucket.get(key);
+      const type = normalizeOptionValue(event.event_type);
+      if (type === 'open') row.opens += 1;
+      if (type === 'click') row.clicks += 1;
+      if (type === 'unsubscribe') row.unsubscribes += 1;
+      if (event.campaign_name && row.campaign === '-') row.campaign = event.campaign_name;
+      const currentTime = new Date(event.event_at || event.created_at || 0).getTime();
+      const previousTime = new Date(row.lastEventAt || 0).getTime();
+      if (!row.lastEventAt || currentTime >= previousTime) row.lastEventAt = event.event_at || event.created_at || '';
+    });
+    return Array.from(bucket.values()).sort((a, b) => new Date(b.lastEventAt || 0).getTime() - new Date(a.lastEventAt || 0).getTime());
+  }, [emktFilteredEvents, leads]);
 
   const budgetFilteredItems = useMemo(() => {
     const now = new Date();
@@ -3289,7 +3487,7 @@ const App = () => {
           unmatched_subscriber_ids_sample: data.unmatched_subscriber_ids_sample || [],
         },
       }));
-      await Promise.all([loadMailrelaySettings(), loadLeads()]);
+      await Promise.all([loadMailrelaySettings(), loadLeads(), loadEmailEvents()]);
       showToast(`Mailrelay sincronizado: ${data.events_processed || 0} evento(s), ${data.leads_updated || 0} lead(s), ${data.unmatched_leads_count || 0} sem match`);
     } catch (err) {
       console.error('Erro ao sincronizar Mailrelay:', err);
@@ -3509,6 +3707,15 @@ const App = () => {
                   }`}
               >
                 Orçamentos
+              </button>
+              <button
+                onClick={() => setActiveTab('emkt')}
+                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'emkt'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-200 hover:text-white'
+                  }`}
+              >
+                Emkt
               </button>
             </div>
           </div>
@@ -3950,6 +4157,240 @@ const App = () => {
                       <tr>
                         <td colSpan={6} className="py-4 text-center text-slate-500 text-sm">
                           Nenhum gasto lançado ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'emkt' && (
+          <section className="space-y-6">
+            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Email Marketing</p>
+                  <h2 className="mt-2 text-3xl font-black text-slate-900">Emkt | Mailrelay</h2>
+                  <p className="mt-2 text-sm text-slate-500">
+                    KPIs de engajamento, campanhas e leads impactados pela Mailrelay.
+                  </p>
+                </div>
+                <div className="flex gap-3 flex-wrap">
+                  {isAdmin && (
+                    <button
+                      onClick={syncMailrelayEngagement}
+                      disabled={syncingMailrelay || !mailrelaySettings.configured}
+                      className="px-4 py-3 rounded-2xl bg-slate-900 text-white font-semibold shadow hover:bg-slate-800 transition disabled:opacity-60"
+                    >
+                      {syncingMailrelay ? 'Sincronizando...' : 'Sincronizar Mailrelay'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros do Emkt</p>
+                    <p className="text-sm text-slate-500">Leitura separada da dashboard principal.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEmktPeriod('90d');
+                      setEmktStartDate('');
+                      setEmktEndDate('');
+                      setEmktEventFilter('all');
+                      setEmktCampaignFilter('');
+                      setEmktSearch('');
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <select value={emktPeriod} onChange={(e) => setEmktPeriod(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    <option value="30d">Últimos 30 dias</option>
+                    <option value="90d">Últimos 90 dias</option>
+                    <option value="6m">Últimos 6 meses</option>
+                    <option value="12m">Últimos 12 meses</option>
+                    <option value="custom">Período personalizado</option>
+                    <option value="all">Todo o período</option>
+                  </select>
+                  <select value={emktEventFilter} onChange={(e) => setEmktEventFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                    {EMAIL_EVENT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={emktCampaignFilter}
+                    onChange={(e) => setEmktCampaignFilter(e.target.value)}
+                    placeholder="Filtrar campanha"
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={emktSearch}
+                    onChange={(e) => setEmktSearch(e.target.value)}
+                    placeholder="Buscar lead ou email"
+                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                  />
+                </div>
+
+                {emktPeriod === 'custom' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    <input type="date" value={emktStartDate} onChange={(e) => setEmktStartDate(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
+                    <input type="date" value={emktEndDate} onChange={(e) => setEmktEndDate(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard label="Campanhas" value={emktSummary.campaigns || 0} helper={`${mailrelaySettings.last_sync?.campaigns_processed || 0} processadas na última sync`} tone="slate" />
+                <StatCard label="Leads impactados" value={emktSummary.impactedLeads || 0} helper={`${emktSummary.totalEvents || 0} evento(s)`} tone="blue" />
+                <StatCard label="Aberturas" value={emktSummary.opens || 0} helper={`${emktSummary.clicks || 0} clique(s)`} tone="emerald" />
+                <StatCard label="Descadastros" value={emktSummary.unsubscribes || 0} helper={`${emktSummary.unsubscribeRate || 0}% sobre aberturas`} tone="amber" />
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Taxa de clique</p>
+                  <p className="mt-3 text-3xl font-bold text-slate-900">{emktSummary.clickRate || 0}%</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Eventos gravados</p>
+                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.email_events || 0}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Sem match</p>
+                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.last_sync?.unmatched_leads_count || 0}</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Duplicados ignorados</p>
+                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.last_sync?.duplicate_events_skipped || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Tendência</p>
+                    <h3 className="text-lg font-bold text-slate-900">Aberturas por mês</h3>
+                  </div>
+                </div>
+                <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.opens }))} color="#0f766e" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Conversão</p>
+                    <h3 className="text-lg font-bold text-slate-900">Cliques por mês</h3>
+                  </div>
+                </div>
+                <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.clicks }))} color="#2563eb" />
+              </div>
+              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Campanhas</p>
+                    <h3 className="text-lg font-bold text-slate-900">Top campanhas</h3>
+                  </div>
+                </div>
+                <MiniBarChart data={emktCampaignRows.slice(0, 6).map((row) => ({ label: row.campaign, value: row.opens + row.clicks }))} color="#7c3aed" />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Campanhas</p>
+                  <h3 className="text-lg font-bold text-slate-900">Resumo por campanha</h3>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-slate-500">
+                      <th className="py-2 px-2">Campanha</th>
+                      <th className="py-2 px-2">Aberturas</th>
+                      <th className="py-2 px-2">Cliques</th>
+                      <th className="py-2 px-2">CTR</th>
+                      <th className="py-2 px-2">Descadastros</th>
+                      <th className="py-2 px-2">Leads impactados</th>
+                      <th className="py-2 px-2">Último evento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emktCampaignRows.map((row) => (
+                      <tr key={row.campaign} className="border-b last:border-none">
+                        <td className="py-2 px-2 font-medium text-slate-800">{row.campaign}</td>
+                        <td className="py-2 px-2">{row.opens}</td>
+                        <td className="py-2 px-2">{row.clicks}</td>
+                        <td className="py-2 px-2">{row.clickRate}%</td>
+                        <td className="py-2 px-2">{row.unsubscribes}</td>
+                        <td className="py-2 px-2">{row.impactedLeads}</td>
+                        <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
+                      </tr>
+                    ))}
+                    {emktCampaignRows.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-4 text-center text-slate-500 text-sm">
+                          Nenhuma campanha encontrada para os filtros atuais.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Leads</p>
+                  <h3 className="text-lg font-bold text-slate-900">Leads impactados</h3>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-slate-500">
+                      <th className="py-2 px-2">Lead</th>
+                      <th className="py-2 px-2">Empresa</th>
+                      <th className="py-2 px-2">Email</th>
+                      <th className="py-2 px-2">Campanha</th>
+                      <th className="py-2 px-2">Aberturas</th>
+                      <th className="py-2 px-2">Cliques</th>
+                      <th className="py-2 px-2">Descadastros</th>
+                      <th className="py-2 px-2">Último evento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emktLeadRows.map((row) => (
+                      <tr key={`${row.leadId || row.email}-${row.lastEventAt}`} className="border-b last:border-none">
+                        <td className="py-2 px-2 font-medium text-slate-800">{row.name}</td>
+                        <td className="py-2 px-2">{row.company}</td>
+                        <td className="py-2 px-2">{row.email}</td>
+                        <td className="py-2 px-2">{row.campaign}</td>
+                        <td className="py-2 px-2">{row.opens}</td>
+                        <td className="py-2 px-2">{row.clicks}</td>
+                        <td className="py-2 px-2">{row.unsubscribes}</td>
+                        <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
+                      </tr>
+                    ))}
+                    {emktLeadRows.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-4 text-center text-slate-500 text-sm">
+                          Nenhum lead impactado encontrado para os filtros atuais.
                         </td>
                       </tr>
                     )}

@@ -1442,6 +1442,26 @@ app.get('/api/mailrelay/status', ensureReadyMiddleware, authMiddleware, async (_
   });
 });
 
+app.get('/api/email-events', ensureReadyMiddleware, authMiddleware, async (_req, res) => {
+  const { items } = await loadTable('email_events');
+  const events = items
+    .map((item) => ({
+      ...item,
+      id: item.id || '',
+      lead_id: item.lead_id || '',
+      subscriber_id: item.subscriber_id || '',
+      campaign_id: item.campaign_id || '',
+      campaign_name: item.campaign_name || '',
+      event_type: item.event_type || '',
+      event_at: item.event_at || '',
+      email: item.email || '',
+      metadata: item.metadata || '',
+      created_at: item.created_at || '',
+    }))
+    .sort((a, b) => new Date(b.event_at || b.created_at || 0).getTime() - new Date(a.event_at || a.created_at || 0).getTime());
+  return res.json(events);
+});
+
 app.post('/api/mailrelay/sync-engagement', ensureReadyMiddleware, authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   if (!(await isMailrelayConfigured())) {
