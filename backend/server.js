@@ -1982,6 +1982,540 @@ const paginateLeads = (leads, query) => {
   };
 };
 
+const MCP_PROTOCOL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'];
+const MCP_SERVER_NAME = process.env.MCP_SERVER_NAME || 'bhs-crm';
+const MCP_BEARER_TOKEN = (process.env.MCP_BEARER_TOKEN || API_KEY_LEADS || '').trim();
+const MCP_TIMEZONE = 'America/Sao_Paulo';
+const MCP_SCHEMA_VERSION = '1.0.0';
+
+const mcpAuthMiddleware = (req, res, next) => {
+  const authHeader = String(req.headers.authorization || '');
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const apiKey = String(req.headers['x-api-key'] || '').trim();
+  const acceptedTokens = [MCP_BEARER_TOKEN, API_KEY_LEADS].filter(Boolean);
+
+  if (bearer && acceptedTokens.includes(bearer)) {
+    req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
+    return next();
+  }
+
+  if (apiKey && acceptedTokens.includes(apiKey)) {
+    req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Unauthorized' });
+};
+
+const mcpParseCursor = (cursor) => {
+  if (!cursor) return 1;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    const page = Number(parsed?.page || 1);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+  } catch {
+    const page = Number(cursor);
+    return Number.isFinite(page) && page > 0 ? page : 1;
+  }
+};
+
+const mcpMakeCursor = (page) => Buffer.from(JSON.stringify({ page }), 'utf8').toString('base64url');
+
+const mcpToListResponse = (items, { page, limit, total, filtersApplied, aggregates = null, dateField = 'updated_at' }) => {
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasNext = page < totalPages;
+  return {
+    data: items,
+    meta: {
+      total,
+      returned: items.length,
+      has_more: hasNext,
+      next_cursor: hasNext ? mcpMakeCursor(page + 1) : null,
+      truncated: total > items.length,
+      filters_applied: filtersApplied,
+      generated_at: new Date().toISOString(),
+      timezone: MCP_TIMEZONE,
+      source: 'crm-bhs',
+      schema_version: MCP_SCHEMA_VERSION,
+      date_field: dateField,
+      ...(aggregates ? { aggregates } : {}),
+    },
+  };
+};
+
+const mcpNormalizeLead = (lead) => ({
+  id: String(lead.id || ''),
+  cnpj: null,
+  cpf: null,
+  documento_raw: null,
+  created_at: toIsoStringOrEmpty(lead.created_at),
+  updated_at: toIsoStringOrEmpty(lead.updated_at || lead.created_at),
+  name: lead.name || '',
+  company: lead.company || '',
+  razao_social: lead.company || '',
+  nome_fantasia: lead.company || '',
+  cidade: null,
+  uf: null,
+  email: lead.email || '',
+  phone: lead.phone || '',
+  source: lead.source || '',
+  campaign: lead.campaign || '',
+  channel: lead.channel_name || '',
+  status: lead.status || '',
+  temperature: lead.temperature || '',
+  sla_status: lead.sla_status || '',
+  sla_due_at: lead.sla_due_at || '',
+  last_activity_at: lead.last_activity_at || '',
+  owner_id: String(lead.ownerId || ''),
+  owner: lead.owner || '',
+  value: parseMoneyValue(lead.value),
+  segment: lead.segment || '',
+  region: lead.region || '',
+  is_customer: normalizeBool(lead.is_customer),
+  is_private: normalizeBool(lead.is_private),
+  is_out_of_scope: normalizeBool(lead.is_out_of_scope),
+  deleted_at: lead.deleted_at || '',
+});
+
+const mcpNormalizeBudget = (budget) => ({
+  id: String(budget.id || ''),
+  numero: String(budget.external_id || budget.id || ''),
+  numero_erp: String(budget.customer_order || budget.external_id || ''),
+  cnpj_cliente: null,
+  cpf: null,
+  documento_raw: null,
+  razao_social: budget.company || budget.client_name || '',
+  client_name: budget.client_name || '',
+  company: budget.company || '',
+  data_emissao: toIsoStringOrEmpty(budget.requested_at || budget.created_at),
+  data_validade: '',
+  data_ultima_interacao: toIsoStringOrEmpty(budget.updated_at || budget.sent_at || budget.created_at),
+  updated_at: toIsoStringOrEmpty(budget.updated_at || budget.created_at),
+  valor_total: parseMoneyValue(budget.budget_value),
+  status: budget.status || '',
+  status_raw: budget.raw_status || budget.status || '',
+  motivo_perda: budget.loss_reason || budget.raw_loss_reason || '',
+  responsavel: budget.owner_name || budget.estimator_name || '',
+  owner_id: String(budget.owner_id || budget.estimator_id || ''),
+  canal: budget.channel_name || '',
+  qtd_itens: 0,
+  itens: [],
+  deleted_at: '',
+  notes: budget.notes || '',
+});
+
+const mcpNormalizeEmailEvent = (event) => ({
+  id: String(event.id || ''),
+  lead_id: String(event.lead_id || ''),
+  campaign_name: event.campaign_name || '',
+  event_type: event.event_type || '',
+  event_at: event.event_at || event.created_at || '',
+  email: event.email || '',
+  metadata: event.metadata || '',
+});
+
+const mcpFilterBudgets = (budgets, query) => {
+  const dateField = String(query.date_field || 'ultima_interacao');
+  const dateFrom = query.date_from ? new Date(query.date_from) : null;
+  const dateTo = query.date_to ? new Date(query.date_to) : null;
+  if (dateTo) dateTo.setUTCHours(23, 59, 59, 999);
+  const updatedSince = query.updated_since ? new Date(query.updated_since) : null;
+  const withoutInteractionSince = query.sem_interacao_desde ? new Date(query.sem_interacao_desde) : null;
+  const statusFilter = normalizeListParam(query.status);
+  const q = String(query.q || '').trim().toLowerCase();
+  const ownerId = String(query.ownerId || '').trim();
+  const responsavel = String(query.responsavel || '').trim().toLowerCase();
+  const channel = String(query.channel || '').trim().toLowerCase();
+
+  const filtered = budgets.filter((budget) => {
+    const refMap = {
+      emissao: budget.data_emissao,
+      validade: budget.data_validade,
+      ultima_interacao: budget.data_ultima_interacao,
+      atualizacao: budget.updated_at,
+    };
+    const refDate = new Date(refMap[dateField] || budget.data_ultima_interacao || budget.updated_at || budget.data_emissao || '');
+    if (dateFrom && refDate < dateFrom) return false;
+    if (dateTo && refDate > dateTo) return false;
+    if (statusFilter.length && !statusFilter.includes(normalizeName(budget.status))) return false;
+    if (ownerId && String(budget.owner_id || '') !== ownerId) return false;
+    if (responsavel && !normalizeName(budget.responsavel).includes(normalizeName(responsavel))) return false;
+    if (channel && !normalizeName(budget.canal).includes(normalizeName(channel))) return false;
+    if (updatedSince && new Date(budget.updated_at || '') < updatedSince) return false;
+    if (withoutInteractionSince) {
+      const lastInteraction = new Date(budget.data_ultima_interacao || budget.updated_at || budget.data_emissao || '');
+      if (Number.isNaN(lastInteraction.getTime()) || lastInteraction > withoutInteractionSince) return false;
+    }
+    if (q) {
+      const hay = [
+        budget.numero,
+        budget.numero_erp,
+        budget.razao_social,
+        budget.client_name,
+        budget.company,
+        budget.responsavel,
+        budget.canal,
+        budget.status_raw,
+        budget.motivo_perda,
+        budget.notes,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const sorted = filtered.sort((a, b) => {
+    const dateDiff = new Date(b[dateField] || b.data_ultima_interacao || b.updated_at || b.data_emissao || 0).getTime() -
+      new Date(a[dateField] || a.data_ultima_interacao || a.updated_at || a.data_emissao || 0).getTime();
+    if (dateDiff !== 0) return dateDiff;
+    return String(b.id || '').localeCompare(String(a.id || ''));
+  });
+
+  return {
+    items: sorted,
+    filtersApplied: {
+      date_from: query.date_from || null,
+      date_to: query.date_to || null,
+      date_field: dateField,
+      status: statusFilter,
+      ownerId: ownerId || null,
+      responsavel: responsavel || null,
+      channel: channel || null,
+      sem_interacao_desde: query.sem_interacao_desde || null,
+      updated_since: query.updated_since || null,
+      q: q || null,
+    },
+  };
+};
+
+const mcpFilterEmailEvents = (events, query) => {
+  const period = String(query.period || '30d');
+  const eventType = String(query.eventType || 'all');
+  const campaign = String(query.campaign || '').trim().toLowerCase();
+  const leadId = String(query.leadId || '').trim();
+  const q = String(query.q || '').trim().toLowerCase();
+  const limitMap = { '7d': 7, '30d': 30, '90d': 90, '6m': 183, '12m': 365, all: null };
+  const days = limitMap[period] ?? 30;
+  const threshold = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
+
+  const filtered = events.filter((event) => {
+    const eventAt = new Date(event.event_at || event.created_at || 0).getTime();
+    if (threshold && eventAt < threshold) return false;
+    if (eventType !== 'all' && normalizeName(event.event_type) !== normalizeName(eventType)) return false;
+    if (campaign && !normalizeName(event.campaign_name).includes(normalizeName(campaign))) return false;
+    if (leadId && String(event.lead_id || '') !== leadId) return false;
+    if (q) {
+      const hay = [event.email, event.campaign_name, event.event_type, event.metadata].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const sorted = filtered.sort((a, b) => new Date(b.event_at || b.created_at || 0).getTime() - new Date(a.event_at || a.created_at || 0).getTime());
+  return {
+    items: sorted,
+    filtersApplied: {
+      period,
+      eventType,
+      campaign: campaign || null,
+      leadId: leadId || null,
+      q: q || null,
+    },
+  };
+};
+
+const MCP_TOOLS = [
+  {
+    name: 'search_leads',
+    description: 'Busca leads com paginação e filtros.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        q: { type: 'string' },
+        ownerId: { type: 'string' },
+        status: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+        campaign: { type: 'string' },
+        channel: { type: 'string' },
+        created_from: { type: 'string' },
+        created_to: { type: 'string' },
+        updated_from: { type: 'string' },
+        updated_to: { type: 'string' },
+        limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+        cursor: { type: 'string' },
+      },
+    },
+  },
+  { name: 'get_lead', inputSchema: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' } }, required: ['id'] } },
+  {
+    name: 'list_budgets',
+    description: 'Lista orçamentos com filtros e agregações.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        date_field: { type: 'string', enum: ['emissao', 'validade', 'ultima_interacao', 'atualizacao'], default: 'ultima_interacao' },
+        status: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+        ownerId: { type: 'string' },
+        responsavel: { type: 'string' },
+        channel: { type: 'string' },
+        sem_interacao_desde: { type: 'string' },
+        updated_since: { type: 'string' },
+        q: { type: 'string' },
+        limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+        cursor: { type: 'string' },
+      },
+    },
+  },
+  { name: 'get_budget', inputSchema: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' } }, required: ['id'] } },
+  {
+    name: 'list_email_events',
+    description: 'Lista eventos de e-mail do Mailrelay que o CRM já armazena.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        period: { type: 'string', enum: ['7d', '30d', '90d', '6m', '12m', 'all'], default: '30d' },
+        eventType: { type: 'string', enum: ['open', 'click', 'unsubscribe', 'all'], default: 'all' },
+        campaign: { type: 'string' },
+        leadId: { type: 'string' },
+        q: { type: 'string' },
+        limit: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+        cursor: { type: 'string' },
+      },
+    },
+  },
+  { name: 'get_crm_summary', inputSchema: { type: 'object', additionalProperties: false, properties: { scope: { type: 'string', enum: ['all', 'mine'], default: 'all' } } } },
+];
+
+const mcpReadJson = async (req) => {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  const body = Buffer.concat(chunks).toString('utf8');
+  return body ? JSON.parse(body) : null;
+};
+
+const mcpHandleTool = async (name, args = {}, user = { id: 'mcp', role: 'admin', name: 'MCP' }) => {
+  if (name === 'search_leads') {
+    const [{ items: leads }, { items: channels }] = await Promise.all([
+      loadTable(SHEET_LEADS, true),
+      loadTable(SHEET_CHANNELS, true),
+    ]);
+    const visible = filterLeadsByUser(hydrateLeads(leads, channels), user, args);
+    const filtered = applyLeadFilters(visible, args);
+    const page = mcpParseCursor(args.cursor);
+    const limit = Math.max(1, Math.min(500, Number.parseInt(args.limit, 10) || 100));
+    const paginated = paginateLeads(filtered, { page, limit });
+    const items = (paginated?.items || filtered).slice(0, limit).map(mcpNormalizeLead);
+    return mcpToListResponse(items, {
+      page,
+      limit,
+      total: filtered.length,
+      filtersApplied: {
+        q: args.q || null,
+        ownerId: args.ownerId || null,
+        status: normalizeListParam(args.status),
+        campaign: args.campaign || null,
+        channel: args.channel || null,
+        created_from: args.created_from || null,
+        created_to: args.created_to || null,
+        updated_from: args.updated_from || null,
+        updated_to: args.updated_to || null,
+      },
+    });
+  }
+
+  if (name === 'get_lead') {
+    const [{ items: leads }, { items: channels }] = await Promise.all([
+      loadTable(SHEET_LEADS, true),
+      loadTable(SHEET_CHANNELS, true),
+    ]);
+    const visible = filterLeadsByUser(hydrateLeads(leads, channels), user, {});
+    const lead = visible.find((item) => String(item.id) === String(args.id));
+    if (!lead) throw Object.assign(new Error('Lead nao encontrado'), { status: 404 });
+    return mcpNormalizeLead(lead);
+  }
+
+  if (name === 'list_budgets') {
+    const { items: budgets } = await loadTable(SHEET_BUDGETS, true);
+    const normalized = hydrateBudgets(budgets).map(mcpNormalizeBudget);
+    const { items, filtersApplied } = mcpFilterBudgets(normalized, args);
+    const page = mcpParseCursor(args.cursor);
+    const limit = Math.max(1, Math.min(500, Number.parseInt(args.limit, 10) || 100));
+    const start = (page - 1) * limit;
+    const pageItems = items.slice(start, start + limit);
+    const aggregates = {
+      count: items.length,
+      valor_total_soma: items.reduce((acc, item) => acc + Number(item.valor_total || 0), 0),
+      valor_medio: items.length ? items.reduce((acc, item) => acc + Number(item.valor_total || 0), 0) / items.length : 0,
+      valor_maior: items.length ? Math.max(...items.map((item) => Number(item.valor_total || 0))) : 0,
+    };
+    return mcpToListResponse(pageItems, {
+      page,
+      limit,
+      total: items.length,
+      filtersApplied,
+      aggregates,
+      dateField: args.date_field || 'ultima_interacao',
+    });
+  }
+
+  if (name === 'get_budget') {
+    const { items: budgets } = await loadTable(SHEET_BUDGETS, true);
+    const budget = hydrateBudgets(budgets).map(mcpNormalizeBudget).find((item) => String(item.id) === String(args.id));
+    if (!budget) throw Object.assign(new Error('Orcamento nao encontrado'), { status: 404 });
+    return budget;
+  }
+
+  if (name === 'list_email_events') {
+    const { items: events } = await loadTable(SHEET_EMAIL_EVENTS, true);
+    const normalized = events
+      .map(mcpNormalizeEmailEvent)
+      .sort((a, b) => new Date(b.event_at || b.created_at || 0).getTime() - new Date(a.event_at || a.created_at || 0).getTime());
+    const { items, filtersApplied } = mcpFilterEmailEvents(normalized, args);
+    const page = mcpParseCursor(args.cursor);
+    const limit = Math.max(1, Math.min(500, Number.parseInt(args.limit, 10) || 100));
+    const start = (page - 1) * limit;
+    const pageItems = items.slice(start, start + limit);
+    return mcpToListResponse(pageItems, {
+      page,
+      limit,
+      total: items.length,
+      filtersApplied,
+      dateField: 'event_at',
+    });
+  }
+
+  if (name === 'get_crm_summary') {
+    const [{ items: leads }, { items: channels }, { items: budgets }, { items: events }] = await Promise.all([
+      loadTable(SHEET_LEADS, true),
+      loadTable(SHEET_CHANNELS, true),
+      loadTable(SHEET_BUDGETS, true),
+      loadTable(SHEET_EMAIL_EVENTS, true),
+    ]);
+    const visibleLeads = filterLeadsByUser(hydrateLeads(leads, channels), user, {});
+    const visibleBudgets = hydrateBudgets(budgets);
+    const normalizedEvents = events.map(mcpNormalizeEmailEvent);
+    const stats = visibleLeads.reduce(
+      (acc, lead) => {
+        const status = normalizeName(lead.status);
+        if (status === 'ganho') acc.ganhos += 1;
+        if (status === 'perdido') acc.perdidos += 1;
+        if (status === 'novo') acc.novos += 1;
+        acc.total += 1;
+        acc.valor_total += Number(lead.value || 0);
+        return acc;
+      },
+      { total: 0, ganhos: 0, perdidos: 0, novos: 0, valor_total: 0 }
+    );
+    return {
+      scope: args.scope === 'mine' ? 'mine' : 'all',
+      totals: {
+        leads: visibleLeads.length,
+        budgets: visibleBudgets.length,
+        email_events: normalizedEvents.length,
+      },
+      stats,
+      budgets_aggregates: {
+        count: visibleBudgets.length,
+        valor_total_soma: visibleBudgets.reduce((acc, item) => acc + parseMoneyValue(item.budget_value), 0),
+        valor_medio: visibleBudgets.length ? visibleBudgets.reduce((acc, item) => acc + parseMoneyValue(item.budget_value), 0) / visibleBudgets.length : 0,
+        valor_maior: visibleBudgets.length ? Math.max(...visibleBudgets.map((item) => parseMoneyValue(item.budget_value))) : 0,
+      },
+      integrations: {
+        mailrelay_available: Boolean(normalizedEvents.length),
+      },
+    };
+  }
+
+  throw Object.assign(new Error(`Unknown tool: ${name}`), { status: 404 });
+};
+
+app.get('/api/mcp', (_req, res) => {
+  return res.json({
+    ok: true,
+    name: MCP_SERVER_NAME,
+    transport: 'streamable-http',
+    endpoint: '/api/mcp',
+    schema_version: MCP_SCHEMA_VERSION,
+    health: '/api/mcp/healthz',
+  });
+});
+
+app.get('/api/mcp/healthz', (_req, res) => {
+  return res.json({
+    ok: true,
+    name: MCP_SERVER_NAME,
+    uptime: process.uptime(),
+    at: new Date().toISOString(),
+  });
+});
+
+app.post('/api/mcp', mcpAuthMiddleware, async (req, res) => {
+  const message = req.body && typeof req.body === 'object' ? req.body : await mcpReadJson(req).catch(() => null);
+  if (!message || typeof message !== 'object') {
+    return res.status(400).json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid JSON body' } });
+  }
+
+  const { id, method, params } = message;
+  try {
+    if (method === 'initialize') {
+      return res.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: MCP_PROTOCOL_VERSIONS[0],
+          serverInfo: { name: MCP_SERVER_NAME, version: '1.0.0' },
+          capabilities: { tools: { listChanged: false } },
+        },
+      });
+    }
+
+    if (method === 'initialized') {
+      return res.status(204).end();
+    }
+
+    if (method === 'ping') {
+      return res.json({ jsonrpc: '2.0', id, result: {} });
+    }
+
+    if (method === 'tools/list') {
+      return res.json({ jsonrpc: '2.0', id, result: { tools: MCP_TOOLS } });
+    }
+
+    if (method === 'tools/call') {
+      const toolName = params?.name;
+      const toolArgs = params?.arguments || {};
+      const result = await mcpHandleTool(toolName, toolArgs, req.user);
+      return res.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          isError: false,
+        },
+      });
+    }
+
+    return res.status(400).json({
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32601, message: `Unsupported method: ${method}` },
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      jsonrpc: '2.0',
+      id,
+      error: {
+        code: error.status === 404 ? -32601 : -32000,
+        message: error.message || 'Internal error',
+      },
+    });
+  }
+});
+
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
     loadTable(SHEET_LEADS),
