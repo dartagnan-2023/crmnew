@@ -13,6 +13,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { google } = require('googleapis');
 const nodemailer = require('nodemailer');
+const { timingSafeEqual } = require('node:crypto');
 require('dotenv').config();
 
 // Importar middleware de monitoramento
@@ -48,6 +49,13 @@ const ALERT_TO_DEFAULT = process.env.ALERT_TO_DEFAULT || '';
 const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
 const MAILRELAY_API_BASE = (process.env.MAILRELAY_API_BASE || '').replace(/\/+$/, '');
 const MAILRELAY_API_KEY = process.env.MAILRELAY_API_KEY || '';
+const MCP_ACCESS_TOKEN = (process.env.MCP_ACCESS_TOKEN || process.env.MCP_BEARER_TOKEN || '').trim();
+const MCP_SERVER_NAME = process.env.MCP_SERVER_NAME || 'bhs-crm';
+const MCP_TIMEZONE = 'America/Sao_Paulo';
+const MCP_SCHEMA_VERSION = '1.0.0';
+const MCP_RATE_LIMIT_WINDOW_MS = Number(process.env.MCP_RATE_LIMIT_WINDOW_MS || 60000);
+const MCP_RATE_LIMIT_MAX = Number(process.env.MCP_RATE_LIMIT_MAX || 120);
+const mcpRateState = new Map();
 
 const normalizeName = (val) =>
   (val || '')
@@ -1983,28 +1991,80 @@ const paginateLeads = (leads, query) => {
 };
 
 const MCP_PROTOCOL_VERSIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26'];
-const MCP_SERVER_NAME = process.env.MCP_SERVER_NAME || 'bhs-crm';
-const MCP_BEARER_TOKEN = (process.env.MCP_BEARER_TOKEN || API_KEY_LEADS || '').trim();
-const MCP_TIMEZONE = 'America/Sao_Paulo';
-const MCP_SCHEMA_VERSION = '1.0.0';
 
-const mcpAuthMiddleware = (req, res, next) => {
+const mcpConstantTimeEqual = (provided, expected) => {
+  const left = Buffer.from(String(provided || ''), 'utf8');
+  const right = Buffer.from(String(expected || ''), 'utf8');
+  const length = Math.max(left.length, right.length);
+  if (length === 0) return false;
+  const leftPadded = Buffer.alloc(length);
+  const rightPadded = Buffer.alloc(length);
+  left.copy(leftPadded);
+  right.copy(rightPadded);
+  return left.length === right.length && timingSafeEqual(leftPadded, rightPadded);
+};
+
+const mcpIsValidToken = (candidate, allowedTokens = [MCP_ACCESS_TOKEN, API_KEY_LEADS]) =>
+  allowedTokens.some((token) => token && mcpConstantTimeEqual(candidate, token));
+
+const mcpUnauthorized = (res) =>
+  res
+    .status(401)
+    .set('WWW-Authenticate', 'Bearer realm="crm-mcp", error="invalid_token"')
+    .json({ error: 'Unauthorized' });
+
+const mcpResolveAccessToken = (req, { allowPathToken = false } = {}) => {
   const authHeader = String(req.headers.authorization || '');
   const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (bearer && mcpIsValidToken(bearer)) return bearer;
+
   const apiKey = String(req.headers['x-api-key'] || '').trim();
-  const acceptedTokens = [MCP_BEARER_TOKEN, API_KEY_LEADS].filter(Boolean);
+  if (apiKey && mcpIsValidToken(apiKey)) return apiKey;
 
-  if (bearer && acceptedTokens.includes(bearer)) {
-    req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
-    return next();
+  if (!allowPathToken) return '';
+  const pathToken = String(req.params.token || '').trim();
+  if (pathToken && mcpConstantTimeEqual(pathToken, MCP_ACCESS_TOKEN)) return pathToken;
+  return '';
+};
+
+const mcpAuthMiddleware = (req, res, next) => {
+  const token = mcpResolveAccessToken(req, { allowPathToken: false });
+  if (!token) return mcpUnauthorized(res);
+  req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
+  req.mcpAccessToken = token;
+  return next();
+};
+
+const mcpPathTokenMiddleware = (req, res, next) => {
+  const token = mcpResolveAccessToken(req, { allowPathToken: true });
+  if (!token) return mcpUnauthorized(res);
+  req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
+  req.mcpAccessToken = token;
+  return next();
+};
+
+const mcpRateLimitMiddleware = (req, res, next) => {
+  const key = String(req.mcpAccessToken || '').trim();
+  if (!key) return next();
+
+  const now = Date.now();
+  const current = mcpRateState.get(key);
+  const bucket = !current || current.resetAt <= now
+    ? { count: 0, resetAt: now + MCP_RATE_LIMIT_WINDOW_MS }
+    : current;
+
+  bucket.count += 1;
+  mcpRateState.set(key, bucket);
+
+  if (bucket.count > MCP_RATE_LIMIT_MAX) {
+    const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+    return res
+      .status(429)
+      .set('Retry-After', String(retryAfter))
+      .json({ error: 'Too Many Requests' });
   }
 
-  if (apiKey && acceptedTokens.includes(apiKey)) {
-    req.user = { id: 'mcp', name: 'MCP', username: 'mcp', role: 'admin' };
-    return next();
-  }
-
-  return res.status(401).json({ error: 'Unauthorized' });
+  return next();
 };
 
 const mcpParseCursor = (cursor) => {
@@ -2433,27 +2493,7 @@ const mcpHandleTool = async (name, args = {}, user = { id: 'mcp', role: 'admin',
   throw Object.assign(new Error(`Unknown tool: ${name}`), { status: 404 });
 };
 
-app.get('/api/mcp', (_req, res) => {
-  return res.json({
-    ok: true,
-    name: MCP_SERVER_NAME,
-    transport: 'streamable-http',
-    endpoint: '/api/mcp',
-    schema_version: MCP_SCHEMA_VERSION,
-    health: '/api/mcp/healthz',
-  });
-});
-
-app.get('/api/mcp/healthz', (_req, res) => {
-  return res.json({
-    ok: true,
-    name: MCP_SERVER_NAME,
-    uptime: process.uptime(),
-    at: new Date().toISOString(),
-  });
-});
-
-app.post('/api/mcp', mcpAuthMiddleware, async (req, res) => {
+const mcpHandleRpcRequest = async (req, res) => {
   const message = req.body && typeof req.body === 'object' ? req.body : await mcpReadJson(req).catch(() => null);
   if (!message || typeof message !== 'object') {
     return res.status(400).json({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid JSON body' } });
@@ -2514,7 +2554,37 @@ app.post('/api/mcp', mcpAuthMiddleware, async (req, res) => {
       },
     });
   }
+};
+
+const mcpHandleInfoRequest = (_req, res) =>
+  res.json({
+    ok: true,
+    name: MCP_SERVER_NAME,
+    transport: 'streamable-http',
+    endpoint: '/api/mcp',
+    schema_version: MCP_SCHEMA_VERSION,
+    health: '/api/mcp/healthz',
+  });
+
+const mcpHandleTokenEndpoint = async (req, res) => {
+  if (req.method === 'GET') return mcpHandleInfoRequest(req, res);
+  if (req.method === 'POST') return mcpHandleRpcRequest(req, res);
+  return res.status(405).set('Allow', 'GET, POST').json({ error: 'Method Not Allowed' });
+};
+
+app.get('/api/mcp', mcpHandleInfoRequest);
+app.get('/api/mcp/healthz', (_req, res) => {
+  return res.json({
+    ok: true,
+    name: MCP_SERVER_NAME,
+    uptime: process.uptime(),
+    at: new Date().toISOString(),
+  });
 });
+
+app.get('/api/mcp/k/:token?', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleTokenEndpoint);
+app.post('/api/mcp', mcpAuthMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
+app.post('/api/mcp/k/:token?', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
 
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
