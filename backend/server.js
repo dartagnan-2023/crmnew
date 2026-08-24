@@ -2582,9 +2582,10 @@ app.get('/api/mcp/healthz', (_req, res) => {
   });
 });
 
-app.get('/api/mcp/k/:token?', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleTokenEndpoint);
+app.all(['/api/mcp/k', '/api/mcp/k/'], mcpAuthMiddleware, mcpRateLimitMiddleware, mcpHandleTokenEndpoint);
+app.all('/api/mcp/k/:token', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleTokenEndpoint);
 app.post('/api/mcp', mcpAuthMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
-app.post('/api/mcp/k/:token?', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
+app.post('/api/mcp/k/:token', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
 
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
   const [{ items: leads }, { items: channels }] = await Promise.all([
