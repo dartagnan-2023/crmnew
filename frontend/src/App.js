@@ -734,10 +734,12 @@ const App = () => {
   const [leadInteractionsLoading, setLeadInteractionsLoading] = useState(false);
   const [savingLeadInteraction, setSavingLeadInteraction] = useState(false);
   const [leadInteractionForm, setLeadInteractionForm] = useState({
+    id: null,
     interaction_at: '',
     channel: '',
     notes: '',
   });
+  const [leadInteractionsExpanded, setLeadInteractionsExpanded] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [budgetForm, setBudgetForm] = useState(emptyBudget);
@@ -2497,7 +2499,9 @@ const App = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
     setLeadInteractions([]);
+    setLeadInteractionsExpanded(false);
     setLeadInteractionForm({
+      id: null,
       interaction_at: toDateTimeLocalInput(new Date().toISOString()),
       channel: '',
       notes: '',
@@ -2564,7 +2568,8 @@ const App = () => {
     setShowLeadModal(false);
     setEditingLead(null);
     setLeadInteractions([]);
-    setLeadInteractionForm({ interaction_at: '', channel: '', notes: '' });
+    setLeadInteractionsExpanded(false);
+    setLeadInteractionForm({ id: null, interaction_at: '', channel: '', notes: '' });
   };
 
   const openEditLeadModal = async (lead) => {
@@ -2597,7 +2602,9 @@ const App = () => {
       setEditingLead(data);
       setLeadForm(form);
       setLeadInteractions(interactions);
+      setLeadInteractionsExpanded(false);
       setLeadInteractionForm({
+        id: null,
         interaction_at: toDateTimeLocalInput(new Date().toISOString()),
         channel: data.last_interaction_channel || data.channel_name || '',
         notes: '',
@@ -2682,6 +2689,7 @@ const App = () => {
 
   const saveLeadInteraction = async () => {
     if (savingLeadInteraction || !editingLead?.id) return;
+    const interactionId = leadInteractionForm.id ? String(leadInteractionForm.id) : '';
     const interactionAt = leadInteractionForm.interaction_at || toDateTimeLocalInput(new Date().toISOString());
     const channel = (leadInteractionForm.channel || '').trim();
     const notes = (leadInteractionForm.notes || '').trim();
@@ -2692,21 +2700,24 @@ const App = () => {
 
     try {
       setSavingLeadInteraction(true);
-      const res = await fetch(`${API_URL}/leads/${editingLead.id}/interactions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          interaction_at: interactionAt,
-          channel,
-          notes,
-        }),
-      });
+      const res = await fetch(
+        `${API_URL}/leads/${editingLead.id}/interactions${interactionId ? `/${interactionId}` : ''}`,
+        {
+          method: interactionId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            interaction_at: interactionAt,
+            channel,
+            notes,
+          }),
+        }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showToast(data.error || 'Erro ao registrar interação', 'error');
+        showToast(data.error || 'Erro ao salvar interação', 'error');
         return;
       }
 
@@ -2723,15 +2734,70 @@ const App = () => {
         );
       }
       setLeadInteractionForm({
+        id: null,
         interaction_at: toDateTimeLocalInput(new Date().toISOString()),
-        channel,
+        channel: '',
         notes: '',
       });
       await loadStats();
-      showToast('Interação registrada', 'success');
+      showToast(interactionId ? 'Interação atualizada' : 'Interação registrada', 'success');
     } catch (err) {
-      console.error('Erro ao registrar interação:', err);
-      showToast('Erro ao registrar interação', 'error');
+      console.error('Erro ao salvar interação:', err);
+      showToast('Erro ao salvar interação', 'error');
+    } finally {
+      setSavingLeadInteraction(false);
+    }
+  };
+
+  const editLeadInteraction = (interaction) => {
+    if (!interaction) return;
+    setLeadInteractionsExpanded(true);
+    setLeadInteractionForm({
+      id: interaction.id || null,
+      interaction_at: toDateTimeLocalInput(interaction.interaction_at || interaction.created_at || new Date().toISOString()),
+      channel: interaction.channel || '',
+      notes: interaction.notes || '',
+    });
+  };
+
+  const deleteLeadInteraction = async (interaction) => {
+    if (!editingLead?.id || !interaction?.id) return;
+    if (!window.confirm('Deseja excluir esta interação?')) return;
+
+    try {
+      setSavingLeadInteraction(true);
+      const res = await fetch(`${API_URL}/leads/${editingLead.id}/interactions/${interaction.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao excluir interação', 'error');
+        return;
+      }
+
+      const nextLead = data?.lead || null;
+      setLeadInteractions((prev) => prev.filter((item) => String(item.id) !== String(interaction.id)));
+      if (nextLead) {
+        setEditingLead(nextLead);
+        setLeadForm(buildLeadFormFromLead(nextLead));
+        setLeads((prev) =>
+          prev.map((item) => (String(item.id) === String(nextLead.id) ? { ...item, ...nextLead } : item))
+        );
+      }
+      setLeadInteractionForm({
+        id: null,
+        interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+        channel: '',
+        notes: '',
+      });
+      await loadStats();
+      showToast('Interação excluída', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir interação:', err);
+      showToast('Erro ao excluir interação', 'error');
     } finally {
       setSavingLeadInteraction(false);
     }
@@ -5558,17 +5624,44 @@ const App = () => {
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Interações manuais</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        Registre cada contato manualmente para manter o histórico do card.
+                        Registre cada contato manualmente. O histórico fica oculto por padrão.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={saveLeadInteraction}
-                      disabled={savingLeadInteraction || !editingLead?.id}
-                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
-                    >
-                      {savingLeadInteraction ? 'Salvando...' : 'Registrar interação'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLeadInteractionForm({
+                            id: null,
+                            interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+                            channel: '',
+                            notes: '',
+                          });
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-700 bg-white"
+                      >
+                        Limpar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeadInteractionsExpanded((value) => !value)}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-700 bg-slate-50"
+                      >
+                        {leadInteractionsExpanded ? '▴ Histórico' : '▾ Histórico'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveLeadInteraction}
+                        disabled={savingLeadInteraction || !editingLead?.id}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
+                      >
+                        {savingLeadInteraction
+                          ? 'Salvando...'
+                          : leadInteractionForm.id
+                            ? 'Atualizar interação'
+                            : 'Registrar interação'}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     <div>
@@ -5641,40 +5734,60 @@ const App = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 border-t border-slate-100 pt-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Histórico recente</p>
-                      {leadInteractionsLoading ? (
-                        <span className="text-[11px] text-slate-500">Carregando...</span>
-                      ) : null}
-                    </div>
-                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                      {leadInteractions.length === 0 ? (
-                        <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
-                      ) : (
-                        leadInteractions.slice(0, 8).map((item) => (
-                          <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-xs font-semibold text-slate-800">
-                                  {item.channel || 'Canal não informado'}
-                                </p>
-                                <p className="text-[11px] text-slate-500">
-                                  {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
-                                  {item.operator ? ` • ${item.operator}` : ''}
-                                </p>
+                  {leadInteractionsExpanded && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">
+                          Histórico recente
+                        </p>
+                        {leadInteractionsLoading ? (
+                          <span className="text-[11px] text-slate-500">Carregando...</span>
+                        ) : null}
+                      </div>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {leadInteractions.length === 0 ? (
+                          <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
+                        ) : (
+                          leadInteractions.slice(0, 12).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-xs font-semibold text-slate-800">
+                                    {item.channel || 'Canal não informado'}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500">
+                                    {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
+                                    {item.operator ? ` • ${item.operator}` : ''}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => editLeadInteraction(item)}
+                                    className="text-[11px] text-blue-600 hover:underline"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteLeadInteraction(item)}
+                                    className="text-[11px] text-red-600 hover:underline"
+                                  >
+                                    Excluir
+                                  </button>
+                                </div>
                               </div>
+                              {item.notes ? (
+                                <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
+                                  {item.notes}
+                                </p>
+                              ) : null}
                             </div>
-                            {item.notes ? (
-                              <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
-                                {item.notes}
-                              </p>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">

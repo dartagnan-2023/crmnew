@@ -1964,6 +1964,29 @@ const attachLeadInteractionSummary = (lead, summary = {}) => ({
   last_activity_at: summary.last_interaction_at || lead.last_activity_at || lead.updated_at || lead.created_at || '',
 });
 
+const buildLeadInteractionSummaryForLead = (interactions = [], leadId = '') => {
+  const normalizedLeadId = String(leadId || '').trim();
+  if (!normalizedLeadId) {
+    return {
+      interactions_count: 0,
+      last_interaction_at: '',
+      last_interaction_channel: '',
+      last_interaction_notes: '',
+      last_interaction_operator: '',
+    };
+  }
+
+  return buildLeadInteractionSummaryMap(
+    interactions.filter((item) => String(item?.lead_id || '').trim() === normalizedLeadId)
+  ).get(normalizedLeadId) || {
+    interactions_count: 0,
+    last_interaction_at: '',
+    last_interaction_channel: '',
+    last_interaction_notes: '',
+    last_interaction_operator: '',
+  };
+};
+
 const recalculateStoredLeadAutomation = (lead, channels, now = new Date()) => {
   const resolvedChannelName = lead.channel_name || resolveChannelName(lead, channels);
   const hydrated = hydrateLeadAutomationState(
@@ -2755,6 +2778,123 @@ app.post('/api/leads/:id/interactions', authMiddleware, async (req, res) => {
     return res.json({
       success: true,
       interaction: normalizeLeadInteraction(interaction),
+      lead: hydratedLead,
+    });
+  });
+});
+
+app.put('/api/leads/:id/interactions/:interactionId', authMiddleware, async (req, res) => {
+  const leadId = String(req.params.id || '').trim();
+  const interactionId = String(req.params.interactionId || '').trim();
+  const channel = String(req.body?.channel || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+  const interactionAt = toIsoStringOrEmpty(req.body?.interaction_at) || new Date().toISOString();
+
+  if (!leadId) return res.status(400).json({ error: 'Lead obrigatorio' });
+  if (!interactionId) return res.status(400).json({ error: 'Interacao obrigatoria' });
+  if (!channel) return res.status(400).json({ error: 'Canal obrigatorio' });
+
+  return withTableLock('lead_interactions', async () => {
+    const [
+      { items: interactions },
+      { items: leads },
+      { items: channels },
+    ] = await Promise.all([
+      loadTable(SHEET_LEAD_INTERACTIONS, true),
+      loadTable('leads', true),
+      loadTable('channels'),
+    ]);
+
+    const interactionIdx = interactions.findIndex(
+      (item) => String(item.id) === interactionId && String(item.lead_id) === leadId
+    );
+    if (interactionIdx === -1) {
+      return res.status(404).json({ error: 'Interacao nao encontrada' });
+    }
+
+    const nowIso = new Date().toISOString();
+    interactions[interactionIdx] = {
+      ...interactions[interactionIdx],
+      interaction_at: interactionAt,
+      channel,
+      notes,
+      updated_at: nowIso,
+    };
+
+    const leadIdx = leads.findIndex((lead) => String(lead.id) === leadId);
+    if (leadIdx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
+
+    const summary = buildLeadInteractionSummaryForLead(interactions, leadId);
+    leads[leadIdx] = {
+      ...leads[leadIdx],
+      interactions_count: String(summary.interactions_count || 0),
+      last_interaction_at: summary.last_interaction_at || '',
+      last_interaction_channel: summary.last_interaction_channel || '',
+      last_interaction_notes: summary.last_interaction_notes || '',
+      last_activity_at: summary.last_interaction_at || leads[leadIdx].last_activity_at || leads[leadIdx].updated_at || leads[leadIdx].created_at || '',
+      updated_at: nowIso,
+    };
+
+    await saveTable(SHEET_LEAD_INTERACTIONS, interactions);
+    await saveTable('leads', leads);
+
+    const [hydratedLead] = hydrateLeads([leads[leadIdx]], channels, interactions);
+    return res.json({
+      success: true,
+      interaction: normalizeLeadInteraction(interactions[interactionIdx]),
+      lead: hydratedLead,
+    });
+  });
+});
+
+app.delete('/api/leads/:id/interactions/:interactionId', authMiddleware, async (req, res) => {
+  const leadId = String(req.params.id || '').trim();
+  const interactionId = String(req.params.interactionId || '').trim();
+
+  if (!leadId) return res.status(400).json({ error: 'Lead obrigatorio' });
+  if (!interactionId) return res.status(400).json({ error: 'Interacao obrigatoria' });
+
+  return withTableLock('lead_interactions', async () => {
+    const [
+      { items: interactions },
+      { items: leads },
+      { items: channels },
+    ] = await Promise.all([
+      loadTable(SHEET_LEAD_INTERACTIONS, true),
+      loadTable('leads', true),
+      loadTable('channels'),
+    ]);
+
+    const interactionIdx = interactions.findIndex(
+      (item) => String(item.id) === interactionId && String(item.lead_id) === leadId
+    );
+    if (interactionIdx === -1) {
+      return res.status(404).json({ error: 'Interacao nao encontrada' });
+    }
+
+    interactions.splice(interactionIdx, 1);
+
+    const leadIdx = leads.findIndex((lead) => String(lead.id) === leadId);
+    if (leadIdx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
+
+    const summary = buildLeadInteractionSummaryForLead(interactions, leadId);
+    const nowIso = new Date().toISOString();
+    leads[leadIdx] = {
+      ...leads[leadIdx],
+      interactions_count: String(summary.interactions_count || 0),
+      last_interaction_at: summary.last_interaction_at || '',
+      last_interaction_channel: summary.last_interaction_channel || '',
+      last_interaction_notes: summary.last_interaction_notes || '',
+      last_activity_at: summary.last_interaction_at || leads[leadIdx].last_activity_at || leads[leadIdx].updated_at || leads[leadIdx].created_at || '',
+      updated_at: nowIso,
+    };
+
+    await saveTable(SHEET_LEAD_INTERACTIONS, interactions);
+    await saveTable('leads', leads);
+
+    const [hydratedLead] = hydrateLeads([leads[leadIdx]], channels, interactions);
+    return res.json({
+      success: true,
       lead: hydratedLead,
     });
   });
