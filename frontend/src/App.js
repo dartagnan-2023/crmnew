@@ -5644,13 +5644,6 @@ const App = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLeadInteractionsExpanded((value) => !value)}
-                        className="px-3 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-700 bg-slate-50"
-                      >
-                        {leadInteractionsExpanded ? '▴ Histórico' : '▾ Histórico'}
-                      </button>
-                      <button
-                        type="button"
                         onClick={saveLeadInteraction}
                         disabled={savingLeadInteraction || !editingLead?.id}
                         className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
@@ -5720,6 +5713,16 @@ const App = () => {
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
                       />
                     </div>
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setLeadInteractionsExpanded((value) => !value)}
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-slate-900"
+                    >
+                      <span aria-hidden="true">{leadInteractionsExpanded ? '▴' : '▾'}</span>
+                      <span>{leadInteractionsExpanded ? 'Ocultar Histórico' : 'Ver Histórico'}</span>
+                    </button>
                   </div>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                     <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
@@ -6175,7 +6178,14 @@ const App = () => {
                   disabled={savingLead}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
                 >
-                  {savingLead ? 'Salvando...' : 'Salvar'}
+                  {savingLead ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    'Salvar'
+                  )}
                 </button>
               </div>
             </div>
