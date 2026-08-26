@@ -453,6 +453,7 @@ const SHEET_AD_SPEND = process.env.SHEET_AD_SPEND || 'ad_spend';
 const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 const SHEET_EMAIL_EVENTS = process.env.SHEET_EMAIL_EVENTS || 'email_events';
+const SHEET_LEAD_INTERACTIONS = process.env.SHEET_LEAD_INTERACTIONS || 'lead_interactions';
 const SHEET_SETTINGS = process.env.SHEET_SETTINGS || 'settings';
 
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -542,6 +543,16 @@ const SHEETS_CONFIG = {
     'created_at',
     'updated_at',
   ],
+  lead_interactions: [
+    'id',
+    'lead_id',
+    'interaction_at',
+    'channel',
+    'operator',
+    'notes',
+    'created_at',
+    'updated_at',
+  ],
   email_events: [
     'id',
     'event_key',
@@ -587,6 +598,10 @@ const SHEETS_CONFIG = {
     'last_email_campaign',
     'last_email_campaign_id',
     'last_email_event_at',
+    'interactions_count',
+    'last_interaction_at',
+    'last_interaction_channel',
+    'last_interaction_notes',
     'created_at',
     'updated_at',
     'is_private',
@@ -741,6 +756,7 @@ const ensureHeaders = async () => {
     [SHEET_BUDGETS]: SHEETS_CONFIG.budgets,
     [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
     [SHEET_EMAIL_EVENTS]: SHEETS_CONFIG.email_events,
+    [SHEET_LEAD_INTERACTIONS]: SHEETS_CONFIG.lead_interactions,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
 
@@ -1868,12 +1884,13 @@ const filterLeadsByUser = (leads, user, query) => {
   });
 };
 
-const hydrateLeads = (leads, channels) => {
+const hydrateLeads = (leads, channels, interactions = []) => {
+  const interactionSummary = buildLeadInteractionSummaryMap(interactions);
   return leads.map((l) => {
     const channel = channels.find((c) => String(c.id) === String(l.channel_id));
     const createdAt = toIsoStringOrEmpty(l.created_at);
     const updatedAt = toIsoStringOrEmpty(l.updated_at || l.created_at);
-    return hydrateLeadAutomationState({
+    const lead = hydrateLeadAutomationState({
       ...l,
       ownerId: l.ownerId || l.user_id || l.owner_id || '',
       value: parseMoneyValue(l.value),
@@ -1886,8 +1903,66 @@ const hydrateLeads = (leads, channels) => {
       is_out_of_scope: normalizeBool(l.is_out_of_scope),
       region: getRegionByPhone(l.phone || l.phone2),
     });
+    return attachLeadInteractionSummary(lead, interactionSummary.get(String(l.id)) || {});
   });
 };
+
+const normalizeLeadInteraction = (item) => ({
+  id: String(item?.id || ''),
+  lead_id: String(item?.lead_id || '').trim(),
+  interaction_at: toIsoStringOrEmpty(item?.interaction_at || item?.created_at),
+  channel: String(item?.channel || '').trim(),
+  operator: String(item?.operator || '').trim(),
+  notes: String(item?.notes || '').trim(),
+  created_at: toIsoStringOrEmpty(item?.created_at || item?.interaction_at),
+  updated_at: toIsoStringOrEmpty(item?.updated_at || item?.created_at || item?.interaction_at),
+});
+
+const buildLeadInteractionSummaryMap = (interactions = []) => {
+  const summary = new Map();
+
+  interactions.forEach((item) => {
+    const interaction = normalizeLeadInteraction(item);
+    if (!interaction.lead_id) return;
+
+    const current = summary.get(interaction.lead_id) || {
+      interactions_count: 0,
+      last_interaction_at: '',
+      last_interaction_channel: '',
+      last_interaction_notes: '',
+      last_interaction_operator: '',
+      _lastTs: Number.NEGATIVE_INFINITY,
+    };
+
+    current.interactions_count += 1;
+    const interactionTs = new Date(interaction.interaction_at || interaction.created_at || '').getTime();
+    if (Number.isFinite(interactionTs) && interactionTs >= current._lastTs) {
+      current._lastTs = interactionTs;
+      current.last_interaction_at = interaction.interaction_at || interaction.created_at || '';
+      current.last_interaction_channel = interaction.channel || '';
+      current.last_interaction_notes = interaction.notes || '';
+      current.last_interaction_operator = interaction.operator || '';
+    }
+
+    summary.set(interaction.lead_id, current);
+  });
+
+  for (const [leadId, item] of summary.entries()) {
+    delete item._lastTs;
+    summary.set(leadId, item);
+  }
+
+  return summary;
+};
+
+const attachLeadInteractionSummary = (lead, summary = {}) => ({
+  ...lead,
+  interactions_count: String(summary.interactions_count || lead.interactions_count || 0),
+  last_interaction_at: summary.last_interaction_at || lead.last_interaction_at || '',
+  last_interaction_channel: summary.last_interaction_channel || lead.last_interaction_channel || '',
+  last_interaction_notes: summary.last_interaction_notes || lead.last_interaction_notes || '',
+  last_activity_at: summary.last_interaction_at || lead.last_activity_at || lead.updated_at || lead.created_at || '',
+});
 
 const recalculateStoredLeadAutomation = (lead, channels, now = new Date()) => {
   const resolvedChannelName = lead.channel_name || resolveChannelName(lead, channels);
@@ -2588,27 +2663,101 @@ app.post('/api/mcp', mcpAuthMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequ
 app.post('/api/mcp/k/:token', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
 
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
-  const [{ items: leads }, { items: channels }] = await Promise.all([
+  const [{ items: leads }, { items: channels }, { items: interactions }] = await Promise.all([
     loadTable(SHEET_LEADS),
     loadTable(SHEET_CHANNELS),
+    loadTable(SHEET_LEAD_INTERACTIONS),
   ]);
-  const visible = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
+  const visible = filterLeadsByUser(hydrateLeads(leads, channels, interactions), req.user, req.query);
   const filtered = applyLeadFilters(visible, req.query);
   const paginated = paginateLeads(filtered, req.query);
   return res.json(paginated || filtered);
 });
 
 app.get('/api/leads/:id', apiKeyLeadsMiddleware, async (req, res) => {
-  const [{ items: leads }, { items: channels }] = await Promise.all([
+  const [{ items: leads }, { items: channels }, { items: interactions }] = await Promise.all([
     loadTable('leads'),
     loadTable('channels'),
+    loadTable(SHEET_LEAD_INTERACTIONS),
   ]);
-  const filtered = filterLeadsByUser(hydrateLeads(leads, channels), req.user, req.query);
+  const filtered = filterLeadsByUser(hydrateLeads(leads, channels, interactions), req.user, req.query);
   const lead = filtered.find((l) => String(l.id) === String(req.params.id));
   if (!lead) {
     return res.status(404).json({ error: 'Lead nao encontrado' });
   }
   return res.json(lead);
+});
+
+app.get('/api/leads/:id/interactions', apiKeyLeadsMiddleware, async (req, res) => {
+  const leadId = String(req.params.id || '').trim();
+  const { items } = await loadTable(SHEET_LEAD_INTERACTIONS, true);
+  const interactions = items
+    .map(normalizeLeadInteraction)
+    .filter((item) => item.lead_id === leadId)
+    .sort((a, b) => new Date(b.interaction_at || b.created_at || 0).getTime() - new Date(a.interaction_at || a.created_at || 0).getTime());
+  return res.json({
+    lead_id: leadId,
+    total: interactions.length,
+    items: interactions,
+  });
+});
+
+app.post('/api/leads/:id/interactions', authMiddleware, async (req, res) => {
+  const leadId = String(req.params.id || '').trim();
+  const channel = String(req.body?.channel || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+  const interactionAt = toIsoStringOrEmpty(req.body?.interaction_at) || new Date().toISOString();
+
+  if (!leadId) return res.status(400).json({ error: 'Lead obrigatorio' });
+  if (!channel) return res.status(400).json({ error: 'Canal obrigatorio' });
+
+  return withTableLock('lead_interactions', async () => {
+    const [
+      { items: interactions },
+      { items: leads },
+      { items: channels },
+    ] = await Promise.all([
+      loadTable(SHEET_LEAD_INTERACTIONS, true),
+      loadTable('leads', true),
+      loadTable('channels'),
+    ]);
+
+    const idx = leads.findIndex((lead) => String(lead.id) === leadId);
+    if (idx === -1) return res.status(404).json({ error: 'Lead nao encontrado' });
+
+    const nowIso = new Date().toISOString();
+    const interaction = {
+      id: nextId(interactions),
+      lead_id: leadId,
+      interaction_at: interactionAt,
+      channel,
+      operator: req.user?.name || req.user?.username || '',
+      notes,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    interactions.push(interaction);
+    await saveTable(SHEET_LEAD_INTERACTIONS, interactions);
+
+    const currentLead = { ...leads[idx] };
+    const nextCount = (Number(currentLead.interactions_count) || 0) + 1;
+    currentLead.interactions_count = String(nextCount);
+    currentLead.last_interaction_at = interactionAt;
+    currentLead.last_interaction_channel = channel;
+    currentLead.last_interaction_notes = notes;
+    currentLead.last_activity_at = interactionAt;
+    currentLead.updated_at = nowIso;
+    leads[idx] = currentLead;
+    await saveTable('leads', leads);
+
+    const [hydratedLead] = hydrateLeads([currentLead], channels, interactions);
+    return res.json({
+      success: true,
+      interaction: normalizeLeadInteraction(interaction),
+      lead: hydratedLead,
+    });
+  });
 });
 
 app.post('/api/leads/recalculate-automation', authMiddleware, async (req, res) => {
@@ -2743,6 +2892,10 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       next_contact: next_contact || '',
       notes: notes || '',
       source: req.body.source || deriveLeadSource({ channel_id, channel_name: channelName, campaign }, channels),
+      interactions_count: '0',
+      last_interaction_at: '',
+      last_interaction_channel: '',
+      last_interaction_notes: '',
       created_at: now,
       updated_at: now,
       is_private: normalizeBool(is_private),
@@ -3485,6 +3638,10 @@ app.post('/api/webhook/manychat', async (req, res) => {
       next_contact: '',
       notes: 'Capturado via Manychat',
       source: 'Manychat',
+      interactions_count: '0',
+      last_interaction_at: '',
+      last_interaction_channel: '',
+      last_interaction_notes: '',
       created_at: now,
       updated_at: now,
       is_private: false,

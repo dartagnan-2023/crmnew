@@ -75,6 +75,14 @@ const toDateInput = (value) => {
   return d.toISOString().slice(0, 10);
 };
 
+const toDateTimeLocalInput = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const offsetMs = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
 const formatDateBR = (value) => {
   if (!value) return '-';
   const dateStr = String(value).split('T')[0];
@@ -618,6 +626,10 @@ const emptyLead = {
   is_customer: false,
   is_out_of_scope: false,
   first_contact: '',
+  interactions_count: 0,
+  last_interaction_at: '',
+  last_interaction_channel: '',
+  last_interaction_notes: '',
   highlighted_categories: [],
   customer_type: '',
   cooling_reason: [],
@@ -718,6 +730,14 @@ const App = () => {
   const [editingLead, setEditingLead] = useState(null);
   const [leadForm, setLeadForm] = useState(emptyLead);
   const [savingLead, setSavingLead] = useState(false);
+  const [leadInteractions, setLeadInteractions] = useState([]);
+  const [leadInteractionsLoading, setLeadInteractionsLoading] = useState(false);
+  const [savingLeadInteraction, setSavingLeadInteraction] = useState(false);
+  const [leadInteractionForm, setLeadInteractionForm] = useState({
+    interaction_at: '',
+    channel: '',
+    notes: '',
+  });
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [budgetForm, setBudgetForm] = useState(emptyBudget);
@@ -2476,6 +2496,12 @@ const App = () => {
   const openNewLeadModal = () => {
     setEditingLead(null);
     setLeadForm({ ...emptyLead, owner: user?.name || '', ownerId: user?.id || null });
+    setLeadInteractions([]);
+    setLeadInteractionForm({
+      interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+      channel: '',
+      notes: '',
+    });
     setShowLeadModal(true);
   };
 
@@ -2527,31 +2553,62 @@ const App = () => {
       last_email_campaign: lead.last_email_campaign || '',
       last_email_campaign_id: lead.last_email_campaign_id || '',
       last_email_event_at: lead.last_email_event_at || '',
+      interactions_count: Number(lead.interactions_count || 0),
+      last_interaction_at: lead.last_interaction_at || '',
+      last_interaction_channel: lead.last_interaction_channel || '',
+      last_interaction_notes: lead.last_interaction_notes || '',
     };
+  };
+
+  const closeLeadModal = () => {
+    setShowLeadModal(false);
+    setEditingLead(null);
+    setLeadInteractions([]);
+    setLeadInteractionForm({ interaction_at: '', channel: '', notes: '' });
   };
 
   const openEditLeadModal = async (lead) => {
     if (!lead || !token || leadLoading) return;
     setLeadLoading(true);
+    setLeadInteractionsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/leads/${lead.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const [leadRes, interactionsRes] = await Promise.all([
+        fetch(`${API_URL}/leads/${lead.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+        fetch(`${API_URL}/leads/${lead.id}/interactions`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        }),
+      ]);
+      const data = await leadRes.json().catch(() => ({}));
+      if (!leadRes.ok) {
         showToast(data.error || 'Erro ao carregar lead', 'error');
         return;
       }
+      const interactionsData = interactionsRes.ok ? await interactionsRes.json().catch(() => ({})) : {};
+      const interactions = Array.isArray(interactionsData)
+        ? interactionsData
+        : Array.isArray(interactionsData?.items)
+          ? interactionsData.items
+          : [];
       const form = buildLeadFormFromLead(data);
       setEditingLead(data);
       setLeadForm(form);
+      setLeadInteractions(interactions);
+      setLeadInteractionForm({
+        interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+        channel: data.last_interaction_channel || data.channel_name || '',
+        notes: '',
+      });
       setShowLeadModal(true);
     } catch (err) {
       console.error('Erro ao carregar lead:', err);
       showToast('Erro ao carregar lead', 'error');
     } finally {
       setLeadLoading(false);
+      setLeadInteractionsLoading(false);
     }
   };
 
@@ -2620,6 +2677,63 @@ const App = () => {
       showToast('Erro ao salvar lead', 'error');
     } finally {
       setSavingLead(false);
+    }
+  };
+
+  const saveLeadInteraction = async () => {
+    if (savingLeadInteraction || !editingLead?.id) return;
+    const interactionAt = leadInteractionForm.interaction_at || toDateTimeLocalInput(new Date().toISOString());
+    const channel = (leadInteractionForm.channel || '').trim();
+    const notes = (leadInteractionForm.notes || '').trim();
+    if (!channel) {
+      showToast('Informe o canal da interação', 'error');
+      return;
+    }
+
+    try {
+      setSavingLeadInteraction(true);
+      const res = await fetch(`${API_URL}/leads/${editingLead.id}/interactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          interaction_at: interactionAt,
+          channel,
+          notes,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao registrar interação', 'error');
+        return;
+      }
+
+      const nextLead = data?.lead || null;
+      const nextInteraction = data?.interaction || null;
+      if (nextInteraction) {
+        setLeadInteractions((prev) => [nextInteraction, ...prev.filter((item) => String(item.id) !== String(nextInteraction.id))]);
+      }
+      if (nextLead) {
+        setEditingLead(nextLead);
+        setLeadForm(buildLeadFormFromLead(nextLead));
+        setLeads((prev) =>
+          prev.map((item) => (String(item.id) === String(nextLead.id) ? { ...item, ...nextLead } : item))
+        );
+      }
+      setLeadInteractionForm({
+        interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+        channel,
+        notes: '',
+      });
+      await loadStats();
+      showToast('Interação registrada', 'success');
+    } catch (err) {
+      console.error('Erro ao registrar interação:', err);
+      showToast('Erro ao registrar interação', 'error');
+    } finally {
+      setSavingLeadInteraction(false);
     }
   };
 
@@ -5226,6 +5340,9 @@ const App = () => {
                               <LeadTemperatureBadge value={lead.temperature} />
                               <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
                               <LeadEmailEngagementBadges lead={lead} />
+                              <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-semibold">
+                                Interações: {Number(lead.interactions_count || 0)}
+                              </span>
                             </div>
                           </td>
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
@@ -5343,6 +5460,9 @@ const App = () => {
                             <LeadTemperatureBadge value={lead.temperature} />
                             <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
                             <LeadEmailEngagementBadges lead={lead} />
+                            <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-semibold">
+                              Interações: {Number(lead.interactions_count || 0)}
+                            </span>
                           </div>
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
@@ -5393,10 +5513,7 @@ const App = () => {
                   {editingLead ? 'Editar Lead' : 'Novo Lead'}
                 </h2>
                 <button
-                  onClick={() => {
-                    setShowLeadModal(false);
-                    setEditingLead(null);
-                  }}
+                  onClick={closeLeadModal}
                   className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
                   aria-label="Fechar"
                 >
@@ -5434,6 +5551,129 @@ const App = () => {
                     <p>Último clique: {leadForm.last_email_click_at ? formatDateTimeBR(leadForm.last_email_click_at) : '-'}</p>
                     <p>Última campanha: {leadForm.last_email_campaign || '-'}</p>
                     <p>Último evento: {leadForm.last_email_event_at ? formatDateTimeBR(leadForm.last_email_event_at) : '-'}</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Interações manuais</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Registre cada contato manualmente para manter o histórico do card.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveLeadInteraction}
+                      disabled={savingLeadInteraction || !editingLead?.id}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
+                    >
+                      {savingLeadInteraction ? 'Salvando...' : 'Registrar interação'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Data e hora
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={leadInteractionForm.interaction_at || ''}
+                        onChange={(e) =>
+                          setLeadInteractionForm({ ...leadInteractionForm, interaction_at: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Canal
+                      </label>
+                      <input
+                        list="lead-interaction-channel-options"
+                        type="text"
+                        value={leadInteractionForm.channel || ''}
+                        onChange={(e) =>
+                          setLeadInteractionForm({ ...leadInteractionForm, channel: e.target.value })
+                        }
+                        placeholder="Ex.: WhatsApp, telefone, email, visita"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      />
+                      <datalist id="lead-interaction-channel-options">
+                        {channels.map((channel) => (
+                          <option key={channel.id} value={channel.name} />
+                        ))}
+                        <option value="WhatsApp" />
+                        <option value="Telefone" />
+                        <option value="Email" />
+                        <option value="Visita" />
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Observação
+                      </label>
+                      <textarea
+                        value={leadInteractionForm.notes || ''}
+                        onChange={(e) =>
+                          setLeadInteractionForm({ ...leadInteractionForm, notes: e.target.value })
+                        }
+                        rows={3}
+                        placeholder="Resumo do contato, pedido, objeção, retorno..."
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Total</p>
+                      <p className="font-semibold text-slate-800">{leadForm.interactions_count || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Última interação</p>
+                      <p className="font-semibold text-slate-800">
+                        {leadForm.last_interaction_at ? formatDateTimeBR(leadForm.last_interaction_at) : '-'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Canal</p>
+                      <p className="font-semibold text-slate-800">
+                        {leadForm.last_interaction_channel || '-'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Histórico recente</p>
+                      {leadInteractionsLoading ? (
+                        <span className="text-[11px] text-slate-500">Carregando...</span>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                      {leadInteractions.length === 0 ? (
+                        <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
+                      ) : (
+                        leadInteractions.slice(0, 8).map((item) => (
+                          <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-800">
+                                  {item.channel || 'Canal não informado'}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
+                                  {item.operator ? ` • ${item.operator}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                            {item.notes ? (
+                              <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
+                                {item.notes}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -5807,10 +6047,7 @@ const App = () => {
               </div>
               <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
                 <button
-                  onClick={() => {
-                    setShowLeadModal(false);
-                    setEditingLead(null);
-                  }}
+                  onClick={closeLeadModal}
                   className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
                 >
                   Cancelar
