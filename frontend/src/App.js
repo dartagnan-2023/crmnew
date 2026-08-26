@@ -2739,7 +2739,7 @@ const App = () => {
         channel: '',
         notes: '',
       });
-      await loadStats();
+      void loadStats();
       showToast(interactionId ? 'Interação atualizada' : 'Interação registrada', 'success');
     } catch (err) {
       console.error('Erro ao salvar interação:', err);
@@ -2793,7 +2793,7 @@ const App = () => {
         channel: '',
         notes: '',
       });
-      await loadStats();
+      void loadStats();
       showToast('Interação excluída', 'success');
     } catch (err) {
       console.error('Erro ao excluir interação:', err);
@@ -5655,11 +5655,16 @@ const App = () => {
                         disabled={savingLeadInteraction || !editingLead?.id}
                         className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
                       >
-                        {savingLeadInteraction
-                          ? 'Salvando...'
-                          : leadInteractionForm.id
-                            ? 'Atualizar interação'
-                            : 'Registrar interação'}
+                        {savingLeadInteraction ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                            Salvando...
+                          </span>
+                        ) : leadInteractionForm.id ? (
+                          'Atualizar interação'
+                        ) : (
+                          'Registrar interação'
+                        )}
                       </button>
                     </div>
                   </div>
