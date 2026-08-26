@@ -6188,6 +6188,14 @@ const App = () => {
                   )}
                 </button>
               </div>
+              {(savingLead || savingLeadInteraction) && (
+                <div className="px-4 pb-4 flex justify-end">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-slate-900 animate-spin" />
+                    {savingLead ? 'Salvando lead...' : 'Salvando interação...'}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
