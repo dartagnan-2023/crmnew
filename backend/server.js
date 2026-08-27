@@ -49,6 +49,17 @@ const ALERT_TO_DEFAULT = process.env.ALERT_TO_DEFAULT || '';
 const API_KEY_LEADS = process.env.API_KEY_LEADS || '';
 const MAILRELAY_API_BASE = (process.env.MAILRELAY_API_BASE || '').replace(/\/+$/, '');
 const MAILRELAY_API_KEY = process.env.MAILRELAY_API_KEY || '';
+const OMNICHAT_API_BASE = (process.env.OMNICHAT_API_BASE || '').replace(/\/+$/, '');
+const OMNICHAT_API_KEY = process.env.OMNICHAT_API_KEY || '';
+const OMNICHAT_SEND_URL = (process.env.OMNICHAT_SEND_URL || '').trim();
+const OMNICHAT_AUTH_HEADER = String(process.env.OMNICHAT_AUTH_HEADER || 'Authorization').trim();
+const OMNICHAT_REMINDER_MINUTES = Number(process.env.OMNICHAT_REMINDER_MINUTES || 30);
+const FOLLOWUP_AUTORUN = normalizeBool(process.env.FOLLOWUP_AUTORUN || 'true');
+const FOLLOWUP_AUTORUN_INTERVAL_MINUTES = Math.max(
+  1,
+  Number(process.env.FOLLOWUP_AUTORUN_INTERVAL_MINUTES || 5) || 5
+);
+const CRM_PUBLIC_URL = (process.env.CRM_PUBLIC_URL || '').replace(/\/+$/, '');
 const MCP_ACCESS_TOKEN = (process.env.MCP_ACCESS_TOKEN || process.env.MCP_BEARER_TOKEN || '').trim();
 const MCP_SERVER_NAME = process.env.MCP_SERVER_NAME || 'bhs-crm';
 const MCP_TIMEZONE = 'America/Sao_Paulo';
@@ -65,6 +76,17 @@ const normalizeName = (val) =>
     .trim();
 
 const normalizePhone = (val) => (val || '').replace(/\D/g, '');
+const normalizePhoneForWhatsapp = (val) => {
+  let digits = normalizePhone(val);
+  if (!digits) return '';
+  if (digits.startsWith('55') && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+  if (digits.length === 10 || digits.length === 11) {
+    return `55${digits}`;
+  }
+  return digits;
+};
 const normalizeEmail = (val) => String(val || '').trim().toLowerCase();
 const normalizeBool = (val) => {
   if (typeof val === 'boolean') return val;
@@ -454,6 +476,7 @@ const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 const SHEET_EMAIL_EVENTS = process.env.SHEET_EMAIL_EVENTS || 'email_events';
 const SHEET_LEAD_INTERACTIONS = process.env.SHEET_LEAD_INTERACTIONS || 'lead_interactions';
+const SHEET_FOLLOWUP_NOTIFICATIONS = process.env.SHEET_FOLLOWUP_NOTIFICATIONS || 'followup_notifications';
 const SHEET_SETTINGS = process.env.SHEET_SETTINGS || 'settings';
 
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -552,6 +575,28 @@ const SHEETS_CONFIG = {
     'notes',
     'created_at',
     'updated_at',
+  ],
+  followup_notifications: [
+    'id',
+    'reminder_key',
+    'lead_id',
+    'lead_name',
+    'lead_company',
+    'owner_id',
+    'owner_name',
+    'owner_phone',
+    'next_contact',
+    'due_at',
+    'status',
+    'attempts',
+    'provider',
+    'provider_message_id',
+    'message',
+    'last_error',
+    'created_at',
+    'updated_at',
+    'sent_at',
+    'last_attempt_at',
   ],
   email_events: [
     'id',
@@ -757,6 +802,7 @@ const ensureHeaders = async () => {
     [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
     [SHEET_EMAIL_EVENTS]: SHEETS_CONFIG.email_events,
     [SHEET_LEAD_INTERACTIONS]: SHEETS_CONFIG.lead_interactions,
+    [SHEET_FOLLOWUP_NOTIFICATIONS]: SHEETS_CONFIG.followup_notifications,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
 
@@ -961,6 +1007,38 @@ const getMailrelayConfig = async () => {
   };
 };
 
+const getOmnichatConfig = async () => {
+  let storedSendUrl = '';
+  let storedKey = '';
+  let storedAuthHeader = '';
+  let storedEnabled = '';
+  let storedReminderMinutes = '';
+  try {
+    const { items } = await loadTable('settings');
+    storedSendUrl = getSettingValue(items, 'omnichat_send_url');
+    storedKey = getSettingValue(items, 'omnichat_api_key');
+    storedAuthHeader = getSettingValue(items, 'omnichat_auth_header');
+    storedEnabled = getSettingValue(items, 'omnichat_enabled');
+    storedReminderMinutes = getSettingValue(items, 'followup_reminder_minutes');
+  } catch {
+    // fallback silencioso para env
+  }
+
+  return {
+    sendUrl: storedSendUrl || OMNICHAT_SEND_URL || OMNICHAT_API_BASE || '',
+    apiKey: storedKey || OMNICHAT_API_KEY || '',
+    authHeader: storedAuthHeader || OMNICHAT_AUTH_HEADER || 'Authorization',
+    enabled: normalizeBool(
+      storedEnabled !== '' ? storedEnabled : process.env.OMNICHAT_ENABLED || 'false'
+    ),
+    reminderMinutes: Math.max(
+      1,
+      Number(storedReminderMinutes || OMNICHAT_REMINDER_MINUTES || 30) || 30
+    ),
+    source: storedSendUrl || storedKey ? 'crm' : OMNICHAT_SEND_URL || OMNICHAT_API_KEY || OMNICHAT_API_BASE ? 'env' : 'none',
+  };
+};
+
 const isMailrelayConfigured = async () => {
   const config = await getMailrelayConfig();
   return Boolean(config.apiBase && config.apiKey);
@@ -1028,6 +1106,371 @@ const extractMailrelayArray = (payload) => {
 };
 
 const pickFirstNonEmpty = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
+
+const buildLeadCardUrl = (lead) => {
+  if (!CRM_PUBLIC_URL || !lead?.id) return '';
+  return `${CRM_PUBLIC_URL}/?leadId=${encodeURIComponent(String(lead.id))}`;
+};
+
+const resolveLeadOwnerContact = (lead, users = []) => {
+  const ownerId = String(lead?.ownerId || lead?.user_id || lead?.owner_id || '').trim();
+  const ownerName = normalizeName(lead?.owner || lead?.responsible_name || '');
+  let user = null;
+
+  if (ownerId) {
+    user = users.find((item) => String(item.id || '').trim() === ownerId) || null;
+  }
+
+  if (!user && ownerName) {
+    user =
+      users.find((item) => normalizeName(item.name || '') === ownerName) ||
+      users.find((item) => ownerName && normalizeName(item.name || '').includes(ownerName)) ||
+      null;
+  }
+
+  if (!user) return null;
+
+  const phone = normalizePhoneForWhatsapp(user.phone || user.mobile || '');
+  if (!phone) return null;
+
+  return {
+    id: String(user.id || ''),
+    name: String(user.name || lead?.owner || lead?.responsible_name || '').trim(),
+    phone,
+  };
+};
+
+const buildFollowupMessage = (lead, ownerContact, dueAt, cardUrl) => {
+  const company = lead?.company || '-';
+  const leadName = lead?.name || 'Lead';
+  const status = lead?.status || '-';
+  const ownerName = ownerContact?.name || lead?.owner || lead?.responsible_name || '-';
+  const dueText = dueAt ? new Date(dueAt).toLocaleString('pt-BR', { timeZone: MCP_TIMEZONE }) : '-';
+  const note = lead?.notes ? String(lead.notes).slice(0, 220) : '';
+  const linkLine = cardUrl ? `Card: ${cardUrl}` : '';
+
+  return [
+    '*Lembrete de follow-up*',
+    `Lead: ${leadName}`,
+    `Empresa: ${company}`,
+    `Responsável: ${ownerName}`,
+    `Vencimento: ${dueText}`,
+    `Status: ${status}`,
+    note ? `Obs.: ${note}` : '',
+    linkLine,
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
+
+const buildFollowupReminderKey = (lead, dueAt) => `${String(lead?.id || '').trim()}::${String(dueAt || '').trim()}`;
+
+const normalizeFollowupNotification = (item) => ({
+  id: String(item?.id || ''),
+  reminder_key: String(item?.reminder_key || '').trim(),
+  lead_id: String(item?.lead_id || '').trim(),
+  lead_name: String(item?.lead_name || '').trim(),
+  lead_company: String(item?.lead_company || '').trim(),
+  owner_id: String(item?.owner_id || '').trim(),
+  owner_name: String(item?.owner_name || '').trim(),
+  owner_phone: String(item?.owner_phone || '').trim(),
+  next_contact: toIsoStringOrEmpty(item?.next_contact),
+  due_at: toIsoStringOrEmpty(item?.due_at),
+  status: String(item?.status || '').trim() || 'pending',
+  attempts: Number(item?.attempts || 0),
+  provider: String(item?.provider || '').trim(),
+  provider_message_id: String(item?.provider_message_id || '').trim(),
+  message: String(item?.message || '').trim(),
+  last_error: String(item?.last_error || '').trim(),
+  created_at: toIsoStringOrEmpty(item?.created_at),
+  updated_at: toIsoStringOrEmpty(item?.updated_at),
+  sent_at: toIsoStringOrEmpty(item?.sent_at),
+  last_attempt_at: toIsoStringOrEmpty(item?.last_attempt_at),
+});
+
+const buildFollowupNotificationSummaryMap = (items = []) => {
+  const map = new Map();
+  items.forEach((item) => {
+    const notification = normalizeFollowupNotification(item);
+    if (!notification.reminder_key) return;
+    map.set(notification.reminder_key, notification);
+  });
+  return map;
+};
+
+const shouldSendFollowupReminder = (lead, now, reminderMinutes) => {
+  const dueAt = new Date(lead?.next_contact || '');
+  if (Number.isNaN(dueAt.getTime())) return false;
+  const nowTs = now.getTime();
+  const diffMs = dueAt.getTime() - nowTs;
+  return diffMs <= reminderMinutes * 60 * 1000;
+};
+
+const sendOmnichatFollowupMessage = async ({ sendUrl, apiKey, authHeader, payload }) => {
+  if (!sendUrl) return { sent: false, reason: 'send_url_not_configured' };
+  if (!apiKey) return { sent: false, reason: 'api_key_not_configured' };
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  const headerName = String(authHeader || 'Authorization').trim();
+  if (normalizeName(headerName) === 'authorization') {
+    headers.Authorization = `Bearer ${apiKey}`;
+  } else {
+    headers[headerName] = apiKey;
+  }
+
+  const res = await fetch(sendUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text().catch(() => '');
+  if (!res.ok) {
+    return {
+      sent: false,
+      reason: `omnichat_http_${res.status}`,
+      error: text.slice(0, 240),
+    };
+  }
+
+  let parsed = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = null;
+  }
+
+  return {
+    sent: true,
+    response: parsed,
+    raw: text.slice(0, 240),
+  };
+};
+
+const buildFollowupNotificationPayload = ({ lead, ownerContact, dueAt, message, reminderKey, cardUrl }) => ({
+  to: ownerContact.phone,
+  phone: ownerContact.phone,
+  recipient: ownerContact.phone,
+  message,
+  text: message,
+  body: message,
+  content: message,
+  lead_id: String(lead?.id || ''),
+  lead_name: String(lead?.name || ''),
+  lead_company: String(lead?.company || ''),
+  owner_id: String(ownerContact?.id || ''),
+  owner_name: String(ownerContact?.name || ''),
+  due_at: dueAt,
+  reminder_key: reminderKey,
+  card_url: cardUrl || '',
+});
+
+const upsertFollowupNotificationRow = (rows, item) => {
+  const key = String(item?.reminder_key || '').trim();
+  if (!key) return;
+  const idx = rows.findIndex((row) => String(row.reminder_key || '').trim() === key);
+  if (idx === -1) rows.push(item);
+  else rows[idx] = item;
+};
+
+const runFollowUpReminderDispatch = async ({ source = 'manual' } = {}) => {
+  if (runFollowUpReminderDispatch._running) {
+    return { success: false, skipped: true, reason: 'already_running', source };
+  }
+
+  runFollowUpReminderDispatch._running = true;
+  const startedAt = new Date().toISOString();
+
+  try {
+    const config = await getOmnichatConfig();
+    if (!config.enabled) {
+      return { success: true, skipped: true, reason: 'omnichat_disabled', source };
+    }
+    if (!config.sendUrl || !config.apiKey) {
+      return { success: true, skipped: true, reason: 'omnichat_not_configured', source };
+    }
+
+    return await withTableLock(SHEET_FOLLOWUP_NOTIFICATIONS, async () => {
+      const [
+        { items: leadsRaw },
+        { items: users },
+        { items: notificationsRaw },
+      ] = await Promise.all([
+        loadTable('leads', true),
+        loadTable('users'),
+        loadTable(SHEET_FOLLOWUP_NOTIFICATIONS, true),
+      ]);
+
+      const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
+      const notifications = Array.isArray(notificationsRaw) ? notificationsRaw : [];
+      const notificationMap = buildFollowupNotificationSummaryMap(notifications);
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const summary = {
+        success: true,
+        source,
+        started_at: startedAt,
+        finished_at: nowIso,
+        configured: true,
+        enabled: true,
+        reminder_minutes: config.reminderMinutes,
+        candidates: 0,
+        sent: 0,
+        skipped: 0,
+        errors: 0,
+        processed: 0,
+      };
+
+      for (const lead of leads) {
+        if (!shouldSendFollowupReminder(lead, now, config.reminderMinutes)) continue;
+
+        const dueAt = toIsoStringOrEmpty(lead?.next_contact || '');
+        if (!dueAt) continue;
+
+        const reminderKey = buildFollowupReminderKey(lead, dueAt);
+        if (!reminderKey) continue;
+        summary.candidates += 1;
+        summary.processed += 1;
+
+        const existing = notificationMap.get(reminderKey) || null;
+        const existingStatus = String(existing?.status || '').toLowerCase();
+        if (existingStatus === 'sent') {
+          summary.skipped += 1;
+          continue;
+        }
+        if (existingStatus === 'processing') {
+          const lastAttempt = new Date(existing?.last_attempt_at || existing?.updated_at || '');
+          const lastAttemptAge = Number.isNaN(lastAttempt.getTime()) ? Infinity : now.getTime() - lastAttempt.getTime();
+          if (lastAttemptAge < 10 * 60 * 1000) {
+            summary.skipped += 1;
+            continue;
+          }
+        }
+
+        const ownerContact = resolveLeadOwnerContact(lead, users);
+        if (!ownerContact?.phone) {
+          const row = {
+            ...(existing || {}),
+            id: existing?.id || nextId(notifications),
+            reminder_key: reminderKey,
+            lead_id: String(lead?.id || ''),
+            lead_name: String(lead?.name || ''),
+            lead_company: String(lead?.company || ''),
+            owner_id: ownerContact?.id || '',
+            owner_name: ownerContact?.name || '',
+            owner_phone: '',
+            next_contact: toIsoStringOrEmpty(lead?.next_contact || ''),
+            due_at: dueAt,
+            status: 'error',
+            attempts: String(Number(existing?.attempts || 0) + 1),
+            provider: 'omnichat',
+            provider_message_id: '',
+            message: '',
+            last_error: 'owner_phone_not_found',
+            created_at: existing?.created_at || nowIso,
+            updated_at: nowIso,
+            sent_at: existing?.sent_at || '',
+            last_attempt_at: nowIso,
+          };
+          upsertFollowupNotificationRow(notifications, row);
+          notificationMap.set(reminderKey, row);
+          summary.errors += 1;
+          continue;
+        }
+
+        const cardUrl = buildLeadCardUrl(lead);
+        const message = buildFollowupMessage(lead, ownerContact, dueAt, cardUrl);
+        const payload = buildFollowupNotificationPayload({
+          lead,
+          ownerContact,
+          dueAt,
+          message,
+          reminderKey,
+          cardUrl,
+        });
+
+        const preRow = {
+          ...(existing || {}),
+          id: existing?.id || nextId(notifications),
+          reminder_key: reminderKey,
+          lead_id: String(lead?.id || ''),
+          lead_name: String(lead?.name || ''),
+          lead_company: String(lead?.company || ''),
+          owner_id: ownerContact.id || '',
+          owner_name: ownerContact.name || '',
+          owner_phone: ownerContact.phone || '',
+          next_contact: toIsoStringOrEmpty(lead?.next_contact || ''),
+          due_at: dueAt,
+          status: 'processing',
+          attempts: String(Number(existing?.attempts || 0) + 1),
+          provider: 'omnichat',
+          provider_message_id: existing?.provider_message_id || '',
+          message,
+          last_error: '',
+          created_at: existing?.created_at || nowIso,
+          updated_at: nowIso,
+          sent_at: existing?.sent_at || '',
+          last_attempt_at: nowIso,
+        };
+        upsertFollowupNotificationRow(notifications, preRow);
+        notificationMap.set(reminderKey, preRow);
+        await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
+
+        const sendResult = await sendOmnichatFollowupMessage({
+          sendUrl: config.sendUrl,
+          apiKey: config.apiKey,
+          authHeader: config.authHeader,
+          payload,
+        });
+
+        const nextRow = {
+          ...preRow,
+          status: sendResult.sent ? 'sent' : 'error',
+          provider_message_id: String(
+            pickFirstNonEmpty(
+              sendResult?.response?.id,
+              sendResult?.response?.message_id,
+              sendResult?.response?.data?.id,
+              sendResult?.response?.data?.message_id,
+              preRow.provider_message_id || ''
+            ) || ''
+          ),
+          last_error: sendResult.sent ? '' : String(sendResult.error || sendResult.reason || 'send_failed'),
+          sent_at: sendResult.sent ? nowIso : preRow.sent_at || '',
+          updated_at: nowIso,
+        };
+        upsertFollowupNotificationRow(notifications, nextRow);
+        notificationMap.set(reminderKey, nextRow);
+        await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
+
+        if (sendResult.sent) summary.sent += 1;
+        else summary.errors += 1;
+      }
+
+      return summary;
+    });
+  } finally {
+    runFollowUpReminderDispatch._running = false;
+  }
+};
+
+const startFollowupReminderScheduler = () => {
+  if (!FOLLOWUP_AUTORUN) return;
+  const intervalMs = FOLLOWUP_AUTORUN_INTERVAL_MINUTES * 60 * 1000;
+  setTimeout(() => {
+    void runFollowUpReminderDispatch({ source: 'startup' }).catch((err) => {
+      console.error('Erro no disparo inicial de follow-up:', err);
+    });
+  }, 30000);
+  setInterval(() => {
+    void runFollowUpReminderDispatch({ source: 'scheduler' }).catch((err) => {
+      console.error('Erro no disparo agendado de follow-up:', err);
+    });
+  }, intervalMs);
+  console.log(`📣 Follow-up automático habilitado a cada ${FOLLOWUP_AUTORUN_INTERVAL_MINUTES} minuto(s).`);
+};
 
 const extractMailrelayCampaign = (item) => {
   const id = String(
@@ -1540,6 +1983,75 @@ app.put('/api/settings/mailrelay', ensureReadyMiddleware, authMiddleware, async 
       has_api_key: true,
     });
   });
+});
+
+app.get('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const config = await getOmnichatConfig();
+  return res.json({
+    send_url: config.sendUrl || '',
+    api_key: '',
+    auth_header: config.authHeader || 'Authorization',
+    enabled: Boolean(config.enabled),
+    reminder_minutes: Number(config.reminderMinutes || 30),
+    configured: Boolean(config.sendUrl && config.apiKey),
+    source: config.source,
+    has_api_key: Boolean(config.apiKey),
+  });
+});
+
+app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const {
+    send_url = '',
+    api_key = '',
+    auth_header = 'Authorization',
+    enabled = true,
+    reminder_minutes = 30,
+  } = req.body || {};
+
+  const normalizedUrl = String(send_url || '').trim().replace(/\/+$/, '');
+  const normalizedKey = String(api_key || '').trim();
+  const normalizedAuthHeader = String(auth_header || 'Authorization').trim() || 'Authorization';
+  const normalizedReminderMinutes = Math.max(1, Number(reminder_minutes || 30) || 30);
+
+  if (!normalizedUrl) return res.status(400).json({ error: 'URL do envio obrigatoria' });
+  if (!normalizedKey) return res.status(400).json({ error: 'Chave da API obrigatoria' });
+
+  return withTableLock('settings', async () => {
+    const { items } = await loadTable('settings', true);
+    const nowIso = new Date().toISOString();
+
+    upsertSettingRow(items, 'omnichat_send_url', normalizedUrl, nowIso);
+    upsertSettingRow(items, 'omnichat_api_key', normalizedKey, nowIso);
+    upsertSettingRow(items, 'omnichat_auth_header', normalizedAuthHeader, nowIso);
+    upsertSettingRow(items, 'omnichat_enabled', normalizeBool(enabled) ? 'true' : 'false', nowIso);
+    upsertSettingRow(items, 'followup_reminder_minutes', String(normalizedReminderMinutes), nowIso);
+    await saveTable('settings', items);
+
+    return res.json({
+      success: true,
+      configured: true,
+      send_url: normalizedUrl,
+      auth_header: normalizedAuthHeader,
+      enabled: normalizeBool(enabled),
+      reminder_minutes: normalizedReminderMinutes,
+      source: 'crm',
+      has_api_key: true,
+    });
+  });
+});
+
+app.get('/api/followups/notifications', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const { items } = await loadTable(SHEET_FOLLOWUP_NOTIFICATIONS);
+  return res.json(items.map(normalizeFollowupNotification));
+});
+
+app.post('/api/followups/run', ensureReadyMiddleware, authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+  const summary = await runFollowUpReminderDispatch({ source: 'manual' });
+  return res.json(summary);
 });
 
 // Middleware global (exceto health/ping) para garantir inicializacao
@@ -3808,6 +4320,7 @@ const bootstrap = async () => {
   console.log('📦 Iniciando inicialização do storage (Google Sheets)...');
   ensureInitialized().then(() => {
     console.log('✅ Storage inicializado com sucesso.');
+    startFollowupReminderScheduler();
   }).catch((err) => {
     console.error('❌ Erro ao preparar storage:', err);
   });

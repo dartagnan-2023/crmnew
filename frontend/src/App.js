@@ -803,10 +803,29 @@ const App = () => {
     email_events: 0,
     last_sync: null,
   });
+  const [omnichatSettings, setOmnichatSettings] = useState({
+    send_url: '',
+    api_key: '',
+    auth_header: 'Authorization',
+    enabled: true,
+    reminder_minutes: 30,
+    configured: false,
+    source: 'none',
+    has_api_key: false,
+  });
   const [savingMailrelaySettings, setSavingMailrelaySettings] = useState(false);
+  const [savingOmnichatSettings, setSavingOmnichatSettings] = useState(false);
+  const [runningFollowupDispatch, setRunningFollowupDispatch] = useState(false);
   const [syncingMailrelay, setSyncingMailrelay] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const pendingLeadsRef = useRef(null);
+  const [pendingLeadId, setPendingLeadId] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('leadId') || '';
+    } catch {
+      return '';
+    }
+  });
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkOwnerId, setBulkOwnerId] = useState('');
   const [loadingData, setLoadingData] = useState(false);
@@ -1125,6 +1144,29 @@ const App = () => {
     }
   };
 
+  const loadOmnichatSettings = async () => {
+    if (!token || !isAdmin) return;
+    try {
+      const res = await fetch(`${API_URL}/settings/omnichat`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setOmnichatSettings({
+        send_url: data.send_url || '',
+        api_key: '',
+        auth_header: data.auth_header || 'Authorization',
+        enabled: data.enabled !== undefined ? Boolean(data.enabled) : true,
+        reminder_minutes: Number(data.reminder_minutes || 30),
+        configured: Boolean(data.configured),
+        source: data.source || 'none',
+        has_api_key: Boolean(data.has_api_key),
+      });
+    } catch (err) {
+      console.error('Erro ao carregar Omnichat:', err);
+    }
+  };
+
   const loadStats = async () => {
     if (!token) return;
     try {
@@ -1149,7 +1191,17 @@ const App = () => {
   const loadAll = async () => {
     setLoadingData(true);
     try {
-      await Promise.all([loadLeads(), loadBudgets(), loadAdSpend(), loadEmailEvents(), loadChannels(), loadUsers(), loadStats(), loadMailrelaySettings()]);
+      await Promise.all([
+        loadLeads(),
+        loadBudgets(),
+        loadAdSpend(),
+        loadEmailEvents(),
+        loadChannels(),
+        loadUsers(),
+        loadStats(),
+        loadMailrelaySettings(),
+        loadOmnichatSettings(),
+      ]);
     } finally {
       setLoadingData(false);
     }
@@ -1161,6 +1213,16 @@ const App = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (!pendingLeadId || !user || !Array.isArray(leads) || !leads.length || showLeadModal || leadLoading) {
+      return;
+    }
+    const targetLead = leads.find((lead) => String(lead.id) === String(pendingLeadId));
+    if (!targetLead) return;
+    setPendingLeadId('');
+    void openEditLeadModal(targetLead);
+  }, [pendingLeadId, user, leads, showLeadModal, leadLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!loadingData) return undefined;
@@ -3632,6 +3694,83 @@ const App = () => {
       showToast('Erro ao salvar Mailrelay', 'error');
     } finally {
       setSavingMailrelaySettings(false);
+    }
+  };
+
+  const saveOmnichatSettings = async () => {
+    if (!isAdmin) return;
+    if (!omnichatSettings.send_url || !omnichatSettings.api_key) {
+      showToast('Preencha URL e chave da API do Omnichat', 'error');
+      return;
+    }
+
+    setSavingOmnichatSettings(true);
+    try {
+      const res = await fetch(`${API_URL}/settings/omnichat`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          send_url: omnichatSettings.send_url,
+          api_key: omnichatSettings.api_key,
+          auth_header: omnichatSettings.auth_header || 'Authorization',
+          enabled: omnichatSettings.enabled,
+          reminder_minutes: omnichatSettings.reminder_minutes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao salvar Omnichat', 'error');
+        return;
+      }
+      setOmnichatSettings((prev) => ({
+        ...prev,
+        api_key: '',
+        configured: Boolean(data.configured),
+        source: data.source || 'crm',
+        has_api_key: Boolean(data.has_api_key),
+        send_url: data.send_url || prev.send_url,
+        auth_header: data.auth_header || prev.auth_header,
+        enabled: data.enabled !== undefined ? Boolean(data.enabled) : prev.enabled,
+        reminder_minutes: Number(data.reminder_minutes || prev.reminder_minutes || 30),
+      }));
+      await loadOmnichatSettings();
+      showToast('Configurações do Omnichat salvas com sucesso');
+    } catch (err) {
+      console.error('Erro ao salvar Omnichat:', err);
+      showToast('Erro ao salvar Omnichat', 'error');
+    } finally {
+      setSavingOmnichatSettings(false);
+    }
+  };
+
+  const runFollowupDispatchNow = async () => {
+    if (!isAdmin || runningFollowupDispatch) return;
+    setRunningFollowupDispatch(true);
+    try {
+      const res = await fetch(`${API_URL}/followups/run`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao executar follow-up', 'error');
+        return;
+      }
+      const sent = Number(data.sent || 0);
+      const skipped = Number(data.skipped || 0);
+      const errors = Number(data.errors || 0);
+      showToast(`Follow-up executado: ${sent} enviado(s), ${skipped} ignorado(s), ${errors} erro(s)`);
+    } catch (err) {
+      console.error('Erro ao executar follow-up:', err);
+      showToast('Erro ao executar follow-up', 'error');
+    } finally {
+      setRunningFollowupDispatch(false);
     }
   };
 
@@ -6584,6 +6723,20 @@ const App = () => {
                       Mailrelay
                     </button>
                   )}
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setProfileTab('omnichat');
+                        loadOmnichatSettings();
+                      }}
+                      className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'omnichat'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                        }`}
+                    >
+                      Omnichat
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowProfileModal(false)}
@@ -6902,6 +7055,113 @@ const App = () => {
                       className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
                     >
                       {savingMailrelaySettings ? 'Salvando...' : 'Salvar Mailrelay'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {profileTab === 'omnichat' && isAdmin && (
+                <div className="p-4 space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-slate-800">Integração Omnichat</h3>
+                    <p className="text-xs text-slate-600">
+                      Configure o endpoint de envio e a chave de autenticação para disparar os lembretes de follow-up via WhatsApp.
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className={`px-2 py-1 rounded-full ${omnichatSettings.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {omnichatSettings.configured ? 'Configurado' : 'Não configurado'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                        Origem: {omnichatSettings.source === 'crm' ? 'CRM' : omnichatSettings.source === 'env' ? '.env' : 'Nenhuma'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                        Chave salva: {omnichatSettings.has_api_key ? 'Sim' : 'Não'}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                        Auto follow-up: {omnichatSettings.enabled ? 'Ativo' : 'Desativado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">URL de envio</label>
+                      <input
+                        type="text"
+                        value={omnichatSettings.send_url}
+                        onChange={(e) => setOmnichatSettings({ ...omnichatSettings, send_url: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        placeholder="https://seu-endpoint/whatsapp/send"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Chave da API</label>
+                      <input
+                        type="password"
+                        value={omnichatSettings.api_key}
+                        onChange={(e) => setOmnichatSettings({ ...omnichatSettings, api_key: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        placeholder={omnichatSettings.has_api_key ? 'Informe uma nova chave para substituir a atual' : 'Cole a chave aqui'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nome do header</label>
+                      <input
+                        type="text"
+                        value={omnichatSettings.auth_header}
+                        onChange={(e) => setOmnichatSettings({ ...omnichatSettings, auth_header: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        placeholder="Authorization"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Janela do lembrete (min)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={omnichatSettings.reminder_minutes}
+                        onChange={(e) =>
+                          setOmnichatSettings({
+                            ...omnichatSettings,
+                            reminder_minutes: Number(e.target.value || 30),
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={!!omnichatSettings.enabled}
+                      onChange={(e) =>
+                        setOmnichatSettings({ ...omnichatSettings, enabled: e.target.checked })
+                      }
+                    />
+                    Ativar disparo automático de follow-up
+                  </label>
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={runFollowupDispatchNow}
+                      disabled={runningFollowupDispatch}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg disabled:opacity-50"
+                    >
+                      {runningFollowupDispatch ? 'Executando...' : 'Executar agora'}
+                    </button>
+                    <button
+                      onClick={() => setShowProfileModal(false)}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      onClick={saveOmnichatSettings}
+                      disabled={savingOmnichatSettings}
+                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                    >
+                      {savingOmnichatSettings ? 'Salvando...' : 'Salvar Omnichat'}
                     </button>
                   </div>
                 </div>
