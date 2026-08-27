@@ -2318,13 +2318,14 @@ app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const {
     api_base = '',
+    send_url = '',
     api_key = '',
     auth_header = 'x-api-key',
     enabled = true,
     reminder_minutes = 30,
   } = req.body || {};
 
-  const normalizedUrl = String(api_base || '').trim().replace(/\/+$/, '');
+  const normalizedUrl = String(api_base || send_url || '').trim().replace(/\/+$/, '');
   const normalizedKey = String(api_key || '').trim();
   const normalizedAuthHeader = String(auth_header || 'x-api-key').trim() || 'x-api-key';
   const normalizedReminderMinutes = Math.max(1, Number(reminder_minutes || 30) || 30);
@@ -2347,6 +2348,7 @@ app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
       success: true,
       configured: true,
       api_base: normalizedUrl,
+      send_url: normalizedUrl,
       auth_header: normalizedAuthHeader,
       enabled: normalizeBool(enabled),
       reminder_minutes: normalizedReminderMinutes,

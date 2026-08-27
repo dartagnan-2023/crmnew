@@ -3699,7 +3699,8 @@ const App = () => {
 
   const saveOmnichatSettings = async () => {
     if (!isAdmin) return;
-    if (!omnichatSettings.send_url || !omnichatSettings.api_key) {
+    const normalizedBaseUrl = String(omnichatSettings.send_url || '').trim();
+    if (!normalizedBaseUrl || !omnichatSettings.api_key) {
       showToast('Preencha URL e chave da API do Omnichat', 'error');
       return;
     }
@@ -3713,7 +3714,8 @@ const App = () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          api_base: omnichatSettings.send_url,
+          api_base: normalizedBaseUrl,
+          send_url: normalizedBaseUrl,
           api_key: omnichatSettings.api_key,
           auth_header: omnichatSettings.auth_header || 'x-api-key',
           enabled: omnichatSettings.enabled,
