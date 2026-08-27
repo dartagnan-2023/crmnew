@@ -1446,13 +1446,14 @@ const syncFollowupStatusByNotification = async (notification, config = null) => 
   };
 };
 
-const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {}) => {
+const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, leadId = '' } = {}) => {
   if (syncFollowupSchedules._running) {
     return { success: false, skipped: true, reason: 'already_running', source };
   }
 
   syncFollowupSchedules._running = true;
   const startedAt = new Date().toISOString();
+  const targetLeadId = String(leadId || '').trim();
   try {
     const config = await getOmnichatConfig();
     if (!config.apiBase || !config.apiKey) {
@@ -1475,6 +1476,15 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
       const notificationMap = buildFollowupNotificationSummaryMap(notifications);
       const nowIso = new Date().toISOString();
       const now = new Date();
+      const scopedLeads = targetLeadId
+        ? leads.filter((lead) => String(lead.id || '').trim() === targetLeadId)
+        : leads;
+      if (targetLeadId && !scopedLeads.length) {
+        return { success: true, skipped: true, reason: 'lead_not_found', source };
+      }
+      const scopedNotifications = targetLeadId
+        ? notifications.filter((notification) => String(notification.lead_id || '').trim() === targetLeadId)
+        : notifications;
       const summary = {
         success: true,
         source,
@@ -1489,10 +1499,10 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
         processed: 0,
       };
 
-      const leadMap = new Map(leads.map((lead) => [String(lead.id || '').trim(), lead]));
+      const leadMap = new Map(scopedLeads.map((lead) => [String(lead.id || '').trim(), lead]));
 
       if (!syncOnly) {
-        for (const lead of leads) {
+        for (const lead of scopedLeads) {
           const nextContact = toIsoStringOrEmpty(lead?.next_contact || '');
           const scheduledDateKey = getFollowupDateKey(nextContact);
           const currentKey = buildFollowupReminderKey(lead.id, scheduledDateKey, 'alert');
@@ -1654,7 +1664,7 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
         }
       }
 
-      for (const notification of notifications) {
+      for (const notification of scopedNotifications) {
         const status = String(notification.status || '').toLowerCase();
         if (!['pending', 'processing'].includes(status)) continue;
         summary.processed += 1;
@@ -1688,7 +1698,7 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
       }
 
       const followupByLead = new Map();
-      notifications.map(normalizeFollowupNotification).forEach((notification) => {
+      scopedNotifications.map(normalizeFollowupNotification).forEach((notification) => {
         if (!notification.lead_id) return;
         const current = followupByLead.get(notification.lead_id) || null;
         if (!current) {
@@ -1701,7 +1711,7 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
       });
 
       const enrichedLeads = leadMap.size
-        ? leads.map((lead) => {
+        ? scopedLeads.map((lead) => {
             const followup = followupByLead.get(String(lead.id || '').trim()) || null;
             if (!followup) return lead;
             return {
@@ -1716,7 +1726,7 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {
               followup_error_msg: followup.error_msg || followup.last_error || '',
             };
           })
-        : leads;
+        : scopedLeads;
 
       await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
       return {
@@ -1775,7 +1785,7 @@ const startFollowupReminderScheduler = () => {
   if (!FOLLOWUP_AUTORUN) return;
   const intervalMs = Math.max(5, FOLLOWUP_AUTORUN_INTERVAL_MINUTES) * 60 * 1000;
   setTimeout(() => {
-    void syncFollowupSchedules({ source: 'startup', syncOnly: false }).catch((err) => {
+    void syncFollowupSchedules({ source: 'startup', syncOnly: true }).catch((err) => {
       console.error('Erro na sincronizacao inicial de follow-up:', err);
     });
   }, 30000);
@@ -3895,7 +3905,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     applyLeadAutomationOnWrite(lead, { nowIso: now, isCreate: true });
     leads.push(lead);
     await saveTable('leads', leads);
-    const followupSync = await syncFollowupSchedules({ source: 'lead-create' });
+    const followupSync = await syncFollowupSchedules({ source: 'lead-create', leadId: lead.id });
     const [
       { items: leadsAfter },
       { items: channelsAfter },
@@ -4110,7 +4120,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     });
 
     await saveTable('leads', leads);
-    const followupSync = await syncFollowupSchedules({ source: 'lead-update' });
+    const followupSync = await syncFollowupSchedules({ source: 'lead-update', leadId: req.params.id });
     const [
       { items: leadsAfter },
       { items: channelsAfter },
