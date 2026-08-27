@@ -2740,7 +2740,26 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
-      showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
+      const followupDateLabel = leadForm.next_contact ? formatDateBR(leadForm.next_contact) : '';
+      const followupSync = data?.followup_sync || null;
+      if (followupDateLabel && followupSync?.skipped) {
+        showToast(
+          `Lead salvo, mas o follow-up não foi sincronizado (${followupSync.reason || 'indisponível'})`,
+          'error'
+        );
+      } else if (followupDateLabel && Number(followupSync?.errors || 0) > 0) {
+        showToast(
+          `Lead salvo, mas o follow-up teve ${Number(followupSync.errors)} erro(s)`,
+          'error'
+        );
+      } else if (followupDateLabel) {
+        showToast(
+          `${editingLead ? 'Lead atualizado' : 'Lead criado'} e follow-up agendado para ${followupDateLabel}`,
+          'success'
+        );
+      } else {
+        showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
+      }
     } catch (err) {
       console.error('Erro ao salvar lead:', err);
       showToast('Erro ao salvar lead', 'error');
