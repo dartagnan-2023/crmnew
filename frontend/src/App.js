@@ -2741,22 +2741,25 @@ const App = () => {
       setShowLeadModal(false);
       setEditingLead(null);
       const followupDateLabel = leadForm.next_contact ? formatDateBR(leadForm.next_contact) : '';
-      const followupSync = data?.followup_sync || null;
-      if (followupDateLabel && followupSync?.skipped) {
+      const followupStatus = String(data?.followup_status || '').toLowerCase();
+      const followupError = String(
+        data?.followup_error_msg ||
+          data?.followup_sync?.error ||
+          data?.followup_sync?.reason ||
+          ''
+      ).trim();
+      if (followupDateLabel && followupStatus === 'error') {
         showToast(
-          `Lead salvo, mas o follow-up não foi sincronizado (${followupSync.reason || 'indisponível'})`,
+          `Lead salvo, mas o follow-up não foi confirmado${followupError ? ` (${followupError})` : ''}`,
           'error'
         );
-      } else if (followupDateLabel && Number(followupSync?.errors || 0) > 0) {
+      } else if (followupDateLabel && data?.followup_sync?.skipped) {
         showToast(
-          `Lead salvo, mas o follow-up teve ${Number(followupSync.errors)} erro(s)`,
+          `Lead salvo. Follow-up não executado${followupError ? ` (${followupError})` : ''}`,
           'error'
         );
       } else if (followupDateLabel) {
-        showToast(
-          `${editingLead ? 'Lead atualizado' : 'Lead criado'} e follow-up agendado para ${followupDateLabel}`,
-          'success'
-        );
+        showToast(`${editingLead ? 'Lead atualizado' : 'Lead criado'} e follow-up agendado para ${followupDateLabel}`);
       } else {
         showToast(editingLead ? 'Lead atualizado' : 'Lead criado', 'success');
       }
