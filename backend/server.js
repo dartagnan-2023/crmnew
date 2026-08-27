@@ -52,7 +52,7 @@ const MAILRELAY_API_KEY = process.env.MAILRELAY_API_KEY || '';
 const OMNICHAT_API_BASE = (process.env.OMNICHAT_API_BASE || '').replace(/\/+$/, '');
 const OMNICHAT_API_KEY = process.env.OMNICHAT_API_KEY || '';
 const OMNICHAT_SEND_URL = (process.env.OMNICHAT_SEND_URL || '').trim();
-const OMNICHAT_AUTH_HEADER = String(process.env.OMNICHAT_AUTH_HEADER || 'Authorization').trim();
+const OMNICHAT_AUTH_HEADER = String(process.env.OMNICHAT_AUTH_HEADER || 'x-api-key').trim();
 const OMNICHAT_REMINDER_MINUTES = Number(process.env.OMNICHAT_REMINDER_MINUTES || 30);
 const FOLLOWUP_AUTORUN = ['1', 'true', 'sim', 'yes'].includes(
   String(process.env.FOLLOWUP_AUTORUN || 'true').toLowerCase().trim()
@@ -581,24 +581,33 @@ const SHEETS_CONFIG = {
   followup_notifications: [
     'id',
     'reminder_key',
+    'external_id',
+    'type',
     'lead_id',
     'lead_name',
     'lead_company',
     'owner_id',
     'owner_name',
     'owner_phone',
-    'next_contact',
-    'due_at',
+    'phone',
+    'notify_phone',
+    'scheduled_at',
+    'scheduled_date_key',
     'status',
     'attempts',
     'provider',
     'provider_message_id',
+    'conversation_id',
     'message',
     'last_error',
     'created_at',
     'updated_at',
     'sent_at',
     'last_attempt_at',
+    'executed_at',
+    'error_msg',
+    'last_synced_at',
+    'canceled_at',
   ],
   email_events: [
     'id',
@@ -1017,7 +1026,7 @@ const getOmnichatConfig = async () => {
   let storedReminderMinutes = '';
   try {
     const { items } = await loadTable('settings');
-    storedSendUrl = getSettingValue(items, 'omnichat_send_url');
+    storedSendUrl = getSettingValue(items, 'omnichat_api_base') || getSettingValue(items, 'omnichat_send_url');
     storedKey = getSettingValue(items, 'omnichat_api_key');
     storedAuthHeader = getSettingValue(items, 'omnichat_auth_header');
     storedEnabled = getSettingValue(items, 'omnichat_enabled');
@@ -1027,9 +1036,9 @@ const getOmnichatConfig = async () => {
   }
 
   return {
-    sendUrl: storedSendUrl || OMNICHAT_SEND_URL || OMNICHAT_API_BASE || '',
+    apiBase: (storedSendUrl || OMNICHAT_API_BASE || OMNICHAT_SEND_URL || '').replace(/\/+$/, ''),
     apiKey: storedKey || OMNICHAT_API_KEY || '',
-    authHeader: storedAuthHeader || OMNICHAT_AUTH_HEADER || 'Authorization',
+    authHeader: storedAuthHeader || OMNICHAT_AUTH_HEADER || 'x-api-key',
     enabled: normalizeBool(
       storedEnabled !== '' ? storedEnabled : process.env.OMNICHAT_ENABLED || 'false'
     ),
@@ -1114,6 +1123,27 @@ const buildLeadCardUrl = (lead) => {
   return `${CRM_PUBLIC_URL}/?leadId=${encodeURIComponent(String(lead.id))}`;
 };
 
+const getFollowupDateKey = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
+
+const formatFollowupScheduledAtUtc = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().replace('T', ' ').slice(0, 19);
+};
+
+const buildFollowupReminderKey = (leadId, scheduledDateKey, type = 'alert') =>
+  `${String(leadId || '').trim()}::${String(scheduledDateKey || '').trim()}::${String(type || 'alert').trim()}`;
+
 const resolveLeadOwnerContact = (lead, users = []) => {
   const ownerId = String(lead?.ownerId || lead?.user_id || lead?.owner_id || '').trim();
   const ownerName = normalizeName(lead?.owner || lead?.responsible_name || '');
@@ -1165,30 +1195,139 @@ const buildFollowupMessage = (lead, ownerContact, dueAt, cardUrl) => {
     .join('\n');
 };
 
-const buildFollowupReminderKey = (lead, dueAt) => `${String(lead?.id || '').trim()}::${String(dueAt || '').trim()}`;
-
-const normalizeFollowupNotification = (item) => ({
-  id: String(item?.id || ''),
-  reminder_key: String(item?.reminder_key || '').trim(),
-  lead_id: String(item?.lead_id || '').trim(),
-  lead_name: String(item?.lead_name || '').trim(),
-  lead_company: String(item?.lead_company || '').trim(),
-  owner_id: String(item?.owner_id || '').trim(),
-  owner_name: String(item?.owner_name || '').trim(),
-  owner_phone: String(item?.owner_phone || '').trim(),
-  next_contact: toIsoStringOrEmpty(item?.next_contact),
-  due_at: toIsoStringOrEmpty(item?.due_at),
-  status: String(item?.status || '').trim() || 'pending',
-  attempts: Number(item?.attempts || 0),
-  provider: String(item?.provider || '').trim(),
-  provider_message_id: String(item?.provider_message_id || '').trim(),
-  message: String(item?.message || '').trim(),
-  last_error: String(item?.last_error || '').trim(),
-  created_at: toIsoStringOrEmpty(item?.created_at),
-  updated_at: toIsoStringOrEmpty(item?.updated_at),
-  sent_at: toIsoStringOrEmpty(item?.sent_at),
-  last_attempt_at: toIsoStringOrEmpty(item?.last_attempt_at),
+const buildFollowupNotificationPayload = ({ lead, ownerContact, scheduledAt, message, externalId, cardUrl, type = 'alert' }) => ({
+  type,
+  external_id: String(externalId || ''),
+  scheduled_at: formatFollowupScheduledAtUtc(scheduledAt),
+  notify_phone: ownerContact?.phone || '',
+  phone: lead?.phone || '',
+  conversation_id: '',
+  message,
+  title: `Follow-up ${lead?.name || lead?.company || ''}`.trim(),
+  lead_id: String(lead?.id || ''),
+  lead_name: String(lead?.name || ''),
+  lead_company: String(lead?.company || ''),
+  owner_id: String(ownerContact?.id || ''),
+  owner_name: String(ownerContact?.name || ''),
+  card_url: cardUrl || '',
 });
+
+const normalizeOmnichatResponse = (response = null) => ({
+  ok: Boolean(response?.ok),
+  status: Number(response?.status || 0),
+  data: response?.data || null,
+  text: String(response?.text || ''),
+});
+
+const omnichatRequest = async (path, { method = 'GET', body = null, headers = {}, config = null } = {}) => {
+  const resolvedConfig = config || (await getOmnichatConfig());
+  if (!resolvedConfig.apiBase || !resolvedConfig.apiKey) {
+    return { ok: false, status: 503, data: null, text: '', reason: 'omnichat_not_configured' };
+  }
+
+  const base = resolvedConfig.apiBase.replace(/\/+$/, '');
+  const url = new URL(path.startsWith('/') ? path : `/${path}`, `${base}/`);
+  const finalHeaders = {
+    Accept: 'application/json',
+    ...headers,
+  };
+  const authHeader = String(resolvedConfig.authHeader || 'x-api-key').trim() || 'x-api-key';
+  finalHeaders[authHeader] = resolvedConfig.apiKey;
+  if (body !== null && body !== undefined) {
+    finalHeaders['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers: finalHeaders,
+    body: body !== null && body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await response.text().catch(() => '');
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text || null;
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    data,
+    text,
+  };
+};
+
+const scheduleOmnichatTask = async ({ payload, config = null }) => {
+  const response = await omnichatRequest('/api/integrations/schedule', {
+    method: 'POST',
+    body: payload,
+    config,
+  });
+  if (response.status === 404 && String(payload?.type || '').toLowerCase() === 'send_message') {
+    const retryResponse = await omnichatRequest('/api/integrations/schedule', {
+      method: 'POST',
+      body: { ...payload, type: 'alert' },
+      config,
+    });
+    return {
+      ...normalizeOmnichatResponse(retryResponse),
+      retried_as_alert: true,
+    };
+  }
+  return normalizeOmnichatResponse(response);
+};
+
+const getOmnichatTaskStatus = async (externalId, config = null) => {
+  const response = await omnichatRequest(`/api/integrations/schedule/${encodeURIComponent(String(externalId || '').trim())}`, {
+    method: 'GET',
+    config,
+  });
+  return normalizeOmnichatResponse(response);
+};
+
+const cancelOmnichatTask = async (externalId, config = null) => {
+  const response = await omnichatRequest(`/api/integrations/schedule/${encodeURIComponent(String(externalId || '').trim())}`, {
+    method: 'DELETE',
+    config,
+  });
+  return normalizeOmnichatResponse(response);
+};
+
+const normalizeFollowupNotification = (item) => {
+  const scheduledAt = toIsoStringOrEmpty(item?.scheduled_at || item?.due_at);
+  const scheduledDateKey = String(item?.scheduled_date_key || getFollowupDateKey(scheduledAt || item?.next_contact || '') || '').trim();
+  return {
+    id: String(item?.id || ''),
+    reminder_key: String(item?.reminder_key || '').trim(),
+    external_id: String(item?.external_id || '').trim(),
+    type: String(item?.type || 'alert').trim() || 'alert',
+    lead_id: String(item?.lead_id || '').trim(),
+    lead_name: String(item?.lead_name || '').trim(),
+    lead_company: String(item?.lead_company || '').trim(),
+    owner_id: String(item?.owner_id || '').trim(),
+    owner_name: String(item?.owner_name || '').trim(),
+    owner_phone: String(item?.owner_phone || '').trim(),
+    phone: String(item?.phone || '').trim(),
+    notify_phone: String(item?.notify_phone || '').trim(),
+    scheduled_at: scheduledAt,
+    scheduled_date_key: scheduledDateKey,
+    status: String(item?.status || '').trim() || 'pending',
+    attempts: Number(item?.attempts || 0),
+    provider: String(item?.provider || 'omnichat').trim() || 'omnichat',
+    provider_message_id: String(item?.provider_message_id || '').trim(),
+    conversation_id: String(item?.conversation_id || '').trim(),
+    message: String(item?.message || '').trim(),
+    last_error: String(item?.last_error || item?.error_msg || '').trim(),
+    created_at: toIsoStringOrEmpty(item?.created_at),
+    updated_at: toIsoStringOrEmpty(item?.updated_at),
+    sent_at: toIsoStringOrEmpty(item?.sent_at || item?.executed_at),
+    executed_at: toIsoStringOrEmpty(item?.executed_at || item?.sent_at),
+    error_msg: String(item?.error_msg || item?.last_error || '').trim(),
+    last_attempt_at: toIsoStringOrEmpty(item?.last_attempt_at),
+    last_synced_at: toIsoStringOrEmpty(item?.last_synced_at),
+    canceled_at: toIsoStringOrEmpty(item?.canceled_at),
+  };
+};
 
 const buildFollowupNotificationSummaryMap = (items = []) => {
   const map = new Map();
@@ -1196,120 +1335,146 @@ const buildFollowupNotificationSummaryMap = (items = []) => {
     const notification = normalizeFollowupNotification(item);
     if (!notification.reminder_key) return;
     map.set(notification.reminder_key, notification);
+    if (notification.external_id) map.set(notification.external_id, notification);
+    if (notification.lead_id && notification.scheduled_date_key) {
+      map.set(
+        buildFollowupReminderKey(notification.lead_id, notification.scheduled_date_key, notification.type),
+        notification
+      );
+    }
   });
   return map;
 };
 
-const shouldSendFollowupReminder = (lead, now, reminderMinutes) => {
-  const dueAt = new Date(lead?.next_contact || '');
-  if (Number.isNaN(dueAt.getTime())) return false;
-  const nowTs = now.getTime();
-  const diffMs = dueAt.getTime() - nowTs;
-  return diffMs <= reminderMinutes * 60 * 1000;
-};
+const buildFollowupTaskMessage = (lead, ownerContact, scheduledAt, cardUrl) =>
+  buildFollowupMessage(lead, ownerContact, scheduledAt, cardUrl);
 
-const sendOmnichatFollowupMessage = async ({ sendUrl, apiKey, authHeader, payload }) => {
-  if (!sendUrl) return { sent: false, reason: 'send_url_not_configured' };
-  if (!apiKey) return { sent: false, reason: 'api_key_not_configured' };
-
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  };
-  const headerName = String(authHeader || 'Authorization').trim();
-  if (normalizeName(headerName) === 'authorization') {
-    headers.Authorization = `Bearer ${apiKey}`;
-  } else {
-    headers[headerName] = apiKey;
-  }
-
-  const res = await fetch(sendUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
-  const text = await res.text().catch(() => '');
-  if (!res.ok) {
-    return {
-      sent: false,
-      reason: `omnichat_http_${res.status}`,
-      error: text.slice(0, 240),
-    };
-  }
-
-  let parsed = null;
-  try {
-    parsed = text ? JSON.parse(text) : null;
-  } catch {
-    parsed = null;
-  }
-
-  return {
-    sent: true,
-    response: parsed,
-    raw: text.slice(0, 240),
-  };
-};
-
-const buildFollowupNotificationPayload = ({ lead, ownerContact, dueAt, message, reminderKey, cardUrl }) => ({
-  to: ownerContact.phone,
-  phone: ownerContact.phone,
-  recipient: ownerContact.phone,
-  message,
-  text: message,
-  body: message,
-  content: message,
-  lead_id: String(lead?.id || ''),
-  lead_name: String(lead?.name || ''),
-  lead_company: String(lead?.company || ''),
-  owner_id: String(ownerContact?.id || ''),
-  owner_name: String(ownerContact?.name || ''),
-  due_at: dueAt,
-  reminder_key: reminderKey,
-  card_url: cardUrl || '',
+const buildFollowupNotificationRow = ({
+  existing = null,
+  id,
+  reminderKey,
+  externalId,
+  type = 'alert',
+  lead,
+  ownerContact,
+  scheduledAt,
+  scheduledDateKey,
+  status = 'pending',
+  attempts = 1,
+  providerMessageId = '',
+  conversationId = '',
+  message = '',
+  lastError = '',
+  createdAt = '',
+  updatedAt = '',
+  sentAt = '',
+  executedAt = '',
+  lastAttemptAt = '',
+  lastSyncedAt = '',
+  canceledAt = '',
+}) => ({
+  ...(existing || {}),
+  id: String(id || existing?.id || ''),
+  reminder_key: String(reminderKey || existing?.reminder_key || ''),
+  external_id: String(externalId || existing?.external_id || ''),
+  type: String(type || existing?.type || 'alert'),
+  lead_id: String(lead?.id || existing?.lead_id || ''),
+  lead_name: String(lead?.name || existing?.lead_name || ''),
+  lead_company: String(lead?.company || existing?.lead_company || ''),
+  owner_id: String(ownerContact?.id || existing?.owner_id || ''),
+  owner_name: String(ownerContact?.name || existing?.owner_name || ''),
+  owner_phone: String(ownerContact?.phone || existing?.owner_phone || ''),
+  phone: String(lead?.phone || existing?.phone || ''),
+  notify_phone: String(ownerContact?.phone || existing?.notify_phone || ''),
+  scheduled_at: String(formatFollowupScheduledAtUtc(scheduledAt) || existing?.scheduled_at || ''),
+  scheduled_date_key: String(scheduledDateKey || existing?.scheduled_date_key || ''),
+  status: String(status || existing?.status || 'pending'),
+  attempts: String(attempts ?? existing?.attempts ?? 0),
+  provider: 'omnichat',
+  provider_message_id: String(providerMessageId || existing?.provider_message_id || ''),
+  conversation_id: String(conversationId || existing?.conversation_id || ''),
+  message: String(message || existing?.message || ''),
+  last_error: String(lastError || existing?.last_error || ''),
+  created_at: String(createdAt || existing?.created_at || ''),
+  updated_at: String(updatedAt || existing?.updated_at || ''),
+  sent_at: String(sentAt || existing?.sent_at || ''),
+  executed_at: String(executedAt || existing?.executed_at || ''),
+  error_msg: String(lastError || existing?.error_msg || ''),
+  last_attempt_at: String(lastAttemptAt || existing?.last_attempt_at || ''),
+  last_synced_at: String(lastSyncedAt || existing?.last_synced_at || ''),
+  canceled_at: String(canceledAt || existing?.canceled_at || ''),
 });
 
 const upsertFollowupNotificationRow = (rows, item) => {
   const key = String(item?.reminder_key || '').trim();
   if (!key) return;
-  const idx = rows.findIndex((row) => String(row.reminder_key || '').trim() === key);
+  const idx = rows.findIndex((row) => String(row.reminder_key || '').trim() === key || String(row.external_id || '').trim() === String(item.external_id || '').trim());
   if (idx === -1) rows.push(item);
   else rows[idx] = item;
 };
 
-const runFollowUpReminderDispatch = async ({ source = 'manual' } = {}) => {
-  if (runFollowUpReminderDispatch._running) {
+const findLatestFollowupForLead = (notifications = [], leadId, scheduledDateKey = '') => {
+  const normalizedLeadId = String(leadId || '').trim();
+  const normalizedDateKey = String(scheduledDateKey || '').trim();
+  const matches = notifications
+    .map(normalizeFollowupNotification)
+    .filter((item) => item.lead_id === normalizedLeadId && (!normalizedDateKey || item.scheduled_date_key === normalizedDateKey))
+    .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime());
+  return matches[0] || null;
+};
+
+const syncFollowupStatusByNotification = async (notification, config = null) => {
+  if (!notification?.external_id) {
+    return { synced: false, reason: 'missing_external_id' };
+  }
+  const response = await getOmnichatTaskStatus(notification.external_id, config);
+  if (!response.ok) {
+    return {
+      synced: false,
+      reason: `omnichat_http_${response.status}`,
+      error: typeof response.data === 'object' ? JSON.stringify(response.data).slice(0, 240) : String(response.text || '').slice(0, 240),
+    };
+  }
+
+  const payload = response.data && typeof response.data === 'object' ? response.data : {};
+  return {
+    synced: true,
+    status: String(payload.status || notification.status || 'pending').toLowerCase(),
+    executed_at: toIsoStringOrEmpty(payload.executed_at || payload.executedAt || ''),
+    error_msg: String(payload.error_msg || payload.errorMsg || ''),
+    conversation_id: String(payload.conversation_id || payload.conversationId || notification.conversation_id || ''),
+  };
+};
+
+const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false } = {}) => {
+  if (syncFollowupSchedules._running) {
     return { success: false, skipped: true, reason: 'already_running', source };
   }
 
-  runFollowUpReminderDispatch._running = true;
+  syncFollowupSchedules._running = true;
   const startedAt = new Date().toISOString();
-
   try {
     const config = await getOmnichatConfig();
+    if (!config.apiBase || !config.apiKey) {
+      return { success: true, skipped: true, reason: 'omnichat_not_configured', source };
+    }
     if (!config.enabled) {
       return { success: true, skipped: true, reason: 'omnichat_disabled', source };
     }
-    if (!config.sendUrl || !config.apiKey) {
-      return { success: true, skipped: true, reason: 'omnichat_not_configured', source };
-    }
 
     return await withTableLock(SHEET_FOLLOWUP_NOTIFICATIONS, async () => {
-      const [
-        { items: leadsRaw },
-        { items: users },
-        { items: notificationsRaw },
-      ] = await Promise.all([
+      const [{ items: leadsRaw }, { items: users }, { items: notificationsRaw }] = await Promise.all([
         loadTable('leads', true),
         loadTable('users'),
         loadTable(SHEET_FOLLOWUP_NOTIFICATIONS, true),
       ]);
 
       const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
-      const notifications = Array.isArray(notificationsRaw) ? notificationsRaw : [];
+      const usersList = Array.isArray(users) ? users : [];
+      const notifications = Array.isArray(notificationsRaw) ? notificationsRaw.map(normalizeFollowupNotification) : [];
       const notificationMap = buildFollowupNotificationSummaryMap(notifications);
+      const nowIso = new Date().toISOString();
       const now = new Date();
-      const nowIso = now.toISOString();
       const summary = {
         success: true,
         source,
@@ -1317,163 +1482,310 @@ const runFollowUpReminderDispatch = async ({ source = 'manual' } = {}) => {
         finished_at: nowIso,
         configured: true,
         enabled: true,
-        reminder_minutes: config.reminderMinutes,
-        candidates: 0,
-        sent: 0,
-        skipped: 0,
+        scheduled: 0,
+        canceled: 0,
+        synced: 0,
         errors: 0,
         processed: 0,
       };
 
-      for (const lead of leads) {
-        if (!shouldSendFollowupReminder(lead, now, config.reminderMinutes)) continue;
+      const leadMap = new Map(leads.map((lead) => [String(lead.id || '').trim(), lead]));
 
-        const dueAt = toIsoStringOrEmpty(lead?.next_contact || '');
-        if (!dueAt) continue;
+      if (!syncOnly) {
+        for (const lead of leads) {
+          const nextContact = toIsoStringOrEmpty(lead?.next_contact || '');
+          const scheduledDateKey = getFollowupDateKey(nextContact);
+          const currentKey = buildFollowupReminderKey(lead.id, scheduledDateKey, 'alert');
+          const existing = notificationMap.get(currentKey) || findLatestFollowupForLead(notifications, lead.id, scheduledDateKey);
 
-        const reminderKey = buildFollowupReminderKey(lead, dueAt);
-        if (!reminderKey) continue;
-        summary.candidates += 1;
-        summary.processed += 1;
-
-        const existing = notificationMap.get(reminderKey) || null;
-        const existingStatus = String(existing?.status || '').toLowerCase();
-        if (existingStatus === 'sent') {
-          summary.skipped += 1;
-          continue;
-        }
-        if (existingStatus === 'processing') {
-          const lastAttempt = new Date(existing?.last_attempt_at || existing?.updated_at || '');
-          const lastAttemptAge = Number.isNaN(lastAttempt.getTime()) ? Infinity : now.getTime() - lastAttempt.getTime();
-          if (lastAttemptAge < 10 * 60 * 1000) {
-            summary.skipped += 1;
+          if (!nextContact) {
+            if (existing && ['pending', 'processing'].includes(String(existing.status || '').toLowerCase())) {
+              const cancelResult = await cancelOmnichatTask(existing.external_id, config);
+              const updated = buildFollowupNotificationRow({
+                existing,
+                status: cancelResult.ok || cancelResult.status === 404 ? 'dismissed' : 'error',
+                lastError: cancelResult.ok || cancelResult.status === 404 ? '' : cancelResult.reason || `omnichat_http_${cancelResult.status}`,
+                canceledAt: nowIso,
+                lastAttemptAt: nowIso,
+                lastSyncedAt: nowIso,
+                updatedAt: nowIso,
+              });
+              upsertFollowupNotificationRow(notifications, updated);
+              notificationMap.set(updated.reminder_key, updated);
+              if (updated.external_id) notificationMap.set(updated.external_id, updated);
+              summary.canceled += 1;
+              summary.processed += 1;
+            }
             continue;
           }
+
+          const ownerContact = resolveLeadOwnerContact(lead, usersList);
+          const cardUrl = buildLeadCardUrl(lead);
+          const message = buildFollowupTaskMessage(lead, ownerContact, nextContact, cardUrl);
+          const scheduledAt = formatFollowupScheduledAtUtc(nextContact);
+          const scheduledDateKeyKey = getFollowupDateKey(nextContact);
+          const reminderKey = buildFollowupReminderKey(lead.id, scheduledDateKeyKey, 'alert');
+          const alreadyFinal = existing && ['done', 'dismissed'].includes(String(existing.status || '').toLowerCase());
+          const staleOpenNotifications = notifications.filter((notification) => {
+            const normalized = normalizeFollowupNotification(notification);
+            if (normalized.lead_id !== String(lead.id || '').trim()) return false;
+            if (!normalized.scheduled_date_key || normalized.scheduled_date_key === scheduledDateKeyKey) return false;
+            return ['pending', 'processing'].includes(String(normalized.status || '').toLowerCase());
+          });
+
+          for (const staleNotification of staleOpenNotifications) {
+            const cancelResult = await cancelOmnichatTask(staleNotification.external_id, config);
+            const updated = buildFollowupNotificationRow({
+              existing: staleNotification,
+              status: cancelResult.ok || cancelResult.status === 404 ? 'dismissed' : 'error',
+              lastError: cancelResult.ok || cancelResult.status === 404 ? '' : cancelResult.reason || `omnichat_http_${cancelResult.status}`,
+              canceledAt: nowIso,
+              lastAttemptAt: nowIso,
+              lastSyncedAt: nowIso,
+              updatedAt: nowIso,
+            });
+            upsertFollowupNotificationRow(notifications, updated);
+            notificationMap.set(updated.reminder_key, updated);
+            if (updated.external_id) notificationMap.set(updated.external_id, updated);
+            summary.canceled += 1;
+            summary.processed += 1;
+          }
+
+          if (existing && String(existing.status || '').toLowerCase() === 'pending') {
+            summary.processed += 1;
+            const syncResult = await syncFollowupStatusByNotification(existing, config);
+            if (syncResult.synced) {
+              const updated = buildFollowupNotificationRow({
+                existing,
+                status: syncResult.status,
+                executedAt: syncResult.executed_at || existing.executed_at,
+                conversationId: syncResult.conversation_id || existing.conversation_id,
+                lastError: syncResult.error_msg || '',
+                lastSyncedAt: nowIso,
+                updatedAt: nowIso,
+              });
+              upsertFollowupNotificationRow(notifications, updated);
+              notificationMap.set(updated.reminder_key, updated);
+              if (updated.external_id) notificationMap.set(updated.external_id, updated);
+              summary.synced += 1;
+            } else {
+              const updated = buildFollowupNotificationRow({
+                existing,
+                lastError: syncResult.error || syncResult.reason || 'sync_failed',
+                lastSyncedAt: nowIso,
+                updatedAt: nowIso,
+              });
+              upsertFollowupNotificationRow(notifications, updated);
+              notificationMap.set(updated.reminder_key, updated);
+              if (updated.external_id) notificationMap.set(updated.external_id, updated);
+              summary.errors += 1;
+            }
+            continue;
+          }
+
+          if (alreadyFinal) {
+            continue;
+          }
+
+          if (existing && String(existing.status || '').toLowerCase() === 'processing') {
+            continue;
+          }
+
+          const rowId = nextId(notifications);
+          const externalId = String(rowId);
+          const newRow = buildFollowupNotificationRow({
+            id: rowId,
+            reminderKey,
+            externalId,
+            type: 'alert',
+            lead,
+            ownerContact,
+            scheduledAt,
+            scheduledDateKey: scheduledDateKeyKey,
+            status: 'processing',
+            attempts: Number(existing?.attempts || 0) + 1,
+            message,
+            createdAt: existing?.created_at || nowIso,
+            updatedAt: nowIso,
+            lastAttemptAt: nowIso,
+            lastSyncedAt: nowIso,
+          });
+          upsertFollowupNotificationRow(notifications, newRow);
+          notificationMap.set(newRow.reminder_key, newRow);
+          notificationMap.set(newRow.external_id, newRow);
+
+          const payload = buildFollowupNotificationPayload({
+            lead,
+            ownerContact,
+            scheduledAt,
+            message,
+            externalId: newRow.external_id,
+            cardUrl,
+            type: 'alert',
+          });
+          const scheduleResult = await scheduleOmnichatTask({ payload, config });
+          const nextRow = buildFollowupNotificationRow({
+            existing: newRow,
+            status: scheduleResult.ok || scheduleResult.status === 200 ? 'pending' : 'error',
+            providerMessageId:
+              (scheduleResult.data && typeof scheduleResult.data === 'object'
+                ? String(pickFirstNonEmpty(scheduleResult.data.id, scheduleResult.data.schedule_id, scheduleResult.data.scheduleId) || '')
+                : '') || '',
+            conversationId:
+              (scheduleResult.data && typeof scheduleResult.data === 'object'
+                ? String(pickFirstNonEmpty(scheduleResult.data.conversation_id, scheduleResult.data.conversationId) || '')
+                : '') || '',
+            lastError: scheduleResult.ok || scheduleResult.status === 200 || scheduleResult.data?.duplicado
+              ? ''
+              : scheduleResult.data && typeof scheduleResult.data === 'object'
+                ? String(pickFirstNonEmpty(scheduleResult.data.error_msg, scheduleResult.data.error, scheduleResult.data.message) || scheduleResult.reason || `omnichat_http_${scheduleResult.status}`)
+                : scheduleResult.reason || `omnichat_http_${scheduleResult.status}`,
+            sentAt: scheduleResult.ok || scheduleResult.status === 200 ? nowIso : '',
+            lastAttemptAt: nowIso,
+            lastSyncedAt: nowIso,
+            updatedAt: nowIso,
+          });
+          upsertFollowupNotificationRow(notifications, nextRow);
+          notificationMap.set(nextRow.reminder_key, nextRow);
+          notificationMap.set(nextRow.external_id, nextRow);
+          summary.processed += 1;
+          if (scheduleResult.ok || scheduleResult.status === 200 || scheduleResult.data?.duplicado) summary.scheduled += 1;
+          else summary.errors += 1;
         }
-
-        const ownerContact = resolveLeadOwnerContact(lead, users);
-        if (!ownerContact?.phone) {
-          const row = {
-            ...(existing || {}),
-            id: existing?.id || nextId(notifications),
-            reminder_key: reminderKey,
-            lead_id: String(lead?.id || ''),
-            lead_name: String(lead?.name || ''),
-            lead_company: String(lead?.company || ''),
-            owner_id: ownerContact?.id || '',
-            owner_name: ownerContact?.name || '',
-            owner_phone: '',
-            next_contact: toIsoStringOrEmpty(lead?.next_contact || ''),
-            due_at: dueAt,
-            status: 'error',
-            attempts: String(Number(existing?.attempts || 0) + 1),
-            provider: 'omnichat',
-            provider_message_id: '',
-            message: '',
-            last_error: 'owner_phone_not_found',
-            created_at: existing?.created_at || nowIso,
-            updated_at: nowIso,
-            sent_at: existing?.sent_at || '',
-            last_attempt_at: nowIso,
-          };
-          upsertFollowupNotificationRow(notifications, row);
-          notificationMap.set(reminderKey, row);
-          summary.errors += 1;
-          continue;
-        }
-
-        const cardUrl = buildLeadCardUrl(lead);
-        const message = buildFollowupMessage(lead, ownerContact, dueAt, cardUrl);
-        const payload = buildFollowupNotificationPayload({
-          lead,
-          ownerContact,
-          dueAt,
-          message,
-          reminderKey,
-          cardUrl,
-        });
-
-        const preRow = {
-          ...(existing || {}),
-          id: existing?.id || nextId(notifications),
-          reminder_key: reminderKey,
-          lead_id: String(lead?.id || ''),
-          lead_name: String(lead?.name || ''),
-          lead_company: String(lead?.company || ''),
-          owner_id: ownerContact.id || '',
-          owner_name: ownerContact.name || '',
-          owner_phone: ownerContact.phone || '',
-          next_contact: toIsoStringOrEmpty(lead?.next_contact || ''),
-          due_at: dueAt,
-          status: 'processing',
-          attempts: String(Number(existing?.attempts || 0) + 1),
-          provider: 'omnichat',
-          provider_message_id: existing?.provider_message_id || '',
-          message,
-          last_error: '',
-          created_at: existing?.created_at || nowIso,
-          updated_at: nowIso,
-          sent_at: existing?.sent_at || '',
-          last_attempt_at: nowIso,
-        };
-        upsertFollowupNotificationRow(notifications, preRow);
-        notificationMap.set(reminderKey, preRow);
-        await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
-
-        const sendResult = await sendOmnichatFollowupMessage({
-          sendUrl: config.sendUrl,
-          apiKey: config.apiKey,
-          authHeader: config.authHeader,
-          payload,
-        });
-
-        const nextRow = {
-          ...preRow,
-          status: sendResult.sent ? 'sent' : 'error',
-          provider_message_id: String(
-            pickFirstNonEmpty(
-              sendResult?.response?.id,
-              sendResult?.response?.message_id,
-              sendResult?.response?.data?.id,
-              sendResult?.response?.data?.message_id,
-              preRow.provider_message_id || ''
-            ) || ''
-          ),
-          last_error: sendResult.sent ? '' : String(sendResult.error || sendResult.reason || 'send_failed'),
-          sent_at: sendResult.sent ? nowIso : preRow.sent_at || '',
-          updated_at: nowIso,
-        };
-        upsertFollowupNotificationRow(notifications, nextRow);
-        notificationMap.set(reminderKey, nextRow);
-        await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
-
-        if (sendResult.sent) summary.sent += 1;
-        else summary.errors += 1;
       }
 
-      return summary;
+      for (const notification of notifications) {
+        const status = String(notification.status || '').toLowerCase();
+        if (!['pending', 'processing'].includes(status)) continue;
+        summary.processed += 1;
+        const syncResult = await syncFollowupStatusByNotification(notification, config);
+        if (syncResult.synced) {
+          const updated = buildFollowupNotificationRow({
+            existing: notification,
+            status: syncResult.status,
+            executedAt: syncResult.executed_at || notification.executed_at,
+            conversationId: syncResult.conversation_id || notification.conversation_id,
+            lastError: syncResult.error_msg || '',
+            lastSyncedAt: nowIso,
+            updatedAt: nowIso,
+          });
+          upsertFollowupNotificationRow(notifications, updated);
+          notificationMap.set(updated.reminder_key, updated);
+          if (updated.external_id) notificationMap.set(updated.external_id, updated);
+          summary.synced += 1;
+        } else {
+          const updated = buildFollowupNotificationRow({
+            existing: notification,
+            lastError: syncResult.error || syncResult.reason || 'sync_failed',
+            lastSyncedAt: nowIso,
+            updatedAt: nowIso,
+          });
+          upsertFollowupNotificationRow(notifications, updated);
+          notificationMap.set(updated.reminder_key, updated);
+          if (updated.external_id) notificationMap.set(updated.external_id, updated);
+          summary.errors += 1;
+        }
+      }
+
+      const followupByLead = new Map();
+      notifications.map(normalizeFollowupNotification).forEach((notification) => {
+        if (!notification.lead_id) return;
+        const current = followupByLead.get(notification.lead_id) || null;
+        if (!current) {
+          followupByLead.set(notification.lead_id, notification);
+          return;
+        }
+        const currentTs = new Date(current.updated_at || current.created_at || 0).getTime();
+        const nextTs = new Date(notification.updated_at || notification.created_at || 0).getTime();
+        if (nextTs >= currentTs) followupByLead.set(notification.lead_id, notification);
+      });
+
+      const enrichedLeads = leadMap.size
+        ? leads.map((lead) => {
+            const followup = followupByLead.get(String(lead.id || '').trim()) || null;
+            if (!followup) return lead;
+            return {
+              ...lead,
+              followup_external_id: followup.external_id || '',
+              followup_status: followup.status || '',
+              followup_type: followup.type || '',
+              followup_scheduled_at: followup.scheduled_at || '',
+              followup_scheduled_date_key: followup.scheduled_date_key || '',
+              followup_executed_at: followup.executed_at || '',
+              followup_conversation_id: followup.conversation_id || '',
+              followup_error_msg: followup.error_msg || followup.last_error || '',
+            };
+          })
+        : leads;
+
+      await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
+      return {
+        ...summary,
+        leads_updated: enrichedLeads.length,
+      };
     });
   } finally {
-    runFollowUpReminderDispatch._running = false;
+    syncFollowupSchedules._running = false;
   }
+};
+
+const cancelFollowupTasksForLead = async (lead, { source = 'delete' } = {}) => {
+  if (!lead?.id) return { success: true, skipped: true, reason: 'missing_lead' };
+  const config = await getOmnichatConfig();
+  if (!config.apiBase || !config.apiKey || !config.enabled) {
+    return { success: true, skipped: true, reason: 'omnichat_not_configured', source };
+  }
+
+  return await withTableLock(SHEET_FOLLOWUP_NOTIFICATIONS, async () => {
+    const { items: notificationsRaw } = await loadTable(SHEET_FOLLOWUP_NOTIFICATIONS, true);
+    const notifications = Array.isArray(notificationsRaw) ? notificationsRaw.map(normalizeFollowupNotification) : [];
+    const nowIso = new Date().toISOString();
+    let canceled = 0;
+    let errors = 0;
+
+    for (const notification of notifications) {
+      if (String(notification.lead_id || '') !== String(lead.id || '')) continue;
+      if (!['pending', 'processing'].includes(String(notification.status || '').toLowerCase())) continue;
+      const cancelResult = await cancelOmnichatTask(notification.external_id, config);
+      const updated = buildFollowupNotificationRow({
+        existing: notification,
+        status: cancelResult.ok || cancelResult.status === 404 ? 'dismissed' : 'error',
+        lastError: cancelResult.ok || cancelResult.status === 404 ? '' : cancelResult.reason || `omnichat_http_${cancelResult.status}`,
+        canceledAt: nowIso,
+        lastAttemptAt: nowIso,
+        lastSyncedAt: nowIso,
+        updatedAt: nowIso,
+      });
+      upsertFollowupNotificationRow(notifications, updated);
+      canceled += 1;
+      if (!cancelResult.ok && cancelResult.status !== 404) errors += 1;
+    }
+
+    await saveTable(SHEET_FOLLOWUP_NOTIFICATIONS, notifications);
+    return {
+      success: true,
+      canceled,
+      errors,
+      source,
+    };
+  });
 };
 
 const startFollowupReminderScheduler = () => {
   if (!FOLLOWUP_AUTORUN) return;
-  const intervalMs = FOLLOWUP_AUTORUN_INTERVAL_MINUTES * 60 * 1000;
+  const intervalMs = Math.max(5, FOLLOWUP_AUTORUN_INTERVAL_MINUTES) * 60 * 1000;
   setTimeout(() => {
-    void runFollowUpReminderDispatch({ source: 'startup' }).catch((err) => {
-      console.error('Erro no disparo inicial de follow-up:', err);
+    void syncFollowupSchedules({ source: 'startup', syncOnly: false }).catch((err) => {
+      console.error('Erro na sincronizacao inicial de follow-up:', err);
     });
   }, 30000);
   setInterval(() => {
-    void runFollowUpReminderDispatch({ source: 'scheduler' }).catch((err) => {
-      console.error('Erro no disparo agendado de follow-up:', err);
+    void syncFollowupSchedules({ source: 'scheduler', syncOnly: true }).catch((err) => {
+      console.error('Erro na sincronizacao agendada de follow-up:', err);
     });
   }, intervalMs);
-  console.log(`📣 Follow-up automático habilitado a cada ${FOLLOWUP_AUTORUN_INTERVAL_MINUTES} minuto(s).`);
+  console.log(`📣 Follow-up automático habilitado a cada ${Math.max(5, FOLLOWUP_AUTORUN_INTERVAL_MINUTES)} minuto(s).`);
 };
-
 const extractMailrelayCampaign = (item) => {
   const id = String(
     pickFirstNonEmpty(item?.id, item?.campaign_id, item?.campaignId, item?.mailing_id, item?.mailingId) || ''
@@ -1991,12 +2303,12 @@ app.get('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const config = await getOmnichatConfig();
   return res.json({
-    send_url: config.sendUrl || '',
+    api_base: config.apiBase || '',
     api_key: '',
-    auth_header: config.authHeader || 'Authorization',
+    auth_header: config.authHeader || 'x-api-key',
     enabled: Boolean(config.enabled),
     reminder_minutes: Number(config.reminderMinutes || 30),
-    configured: Boolean(config.sendUrl && config.apiKey),
+    configured: Boolean(config.apiBase && config.apiKey),
     source: config.source,
     has_api_key: Boolean(config.apiKey),
   });
@@ -2005,16 +2317,16 @@ app.get('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
 app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
   const {
-    send_url = '',
+    api_base = '',
     api_key = '',
-    auth_header = 'Authorization',
+    auth_header = 'x-api-key',
     enabled = true,
     reminder_minutes = 30,
   } = req.body || {};
 
-  const normalizedUrl = String(send_url || '').trim().replace(/\/+$/, '');
+  const normalizedUrl = String(api_base || '').trim().replace(/\/+$/, '');
   const normalizedKey = String(api_key || '').trim();
-  const normalizedAuthHeader = String(auth_header || 'Authorization').trim() || 'Authorization';
+  const normalizedAuthHeader = String(auth_header || 'x-api-key').trim() || 'x-api-key';
   const normalizedReminderMinutes = Math.max(1, Number(reminder_minutes || 30) || 30);
 
   if (!normalizedUrl) return res.status(400).json({ error: 'URL do envio obrigatoria' });
@@ -2024,7 +2336,7 @@ app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
     const { items } = await loadTable('settings', true);
     const nowIso = new Date().toISOString();
 
-    upsertSettingRow(items, 'omnichat_send_url', normalizedUrl, nowIso);
+    upsertSettingRow(items, 'omnichat_api_base', normalizedUrl, nowIso);
     upsertSettingRow(items, 'omnichat_api_key', normalizedKey, nowIso);
     upsertSettingRow(items, 'omnichat_auth_header', normalizedAuthHeader, nowIso);
     upsertSettingRow(items, 'omnichat_enabled', normalizeBool(enabled) ? 'true' : 'false', nowIso);
@@ -2034,7 +2346,7 @@ app.put('/api/settings/omnichat', ensureReadyMiddleware, authMiddleware, async (
     return res.json({
       success: true,
       configured: true,
-      send_url: normalizedUrl,
+      api_base: normalizedUrl,
       auth_header: normalizedAuthHeader,
       enabled: normalizeBool(enabled),
       reminder_minutes: normalizedReminderMinutes,
@@ -2052,7 +2364,7 @@ app.get('/api/followups/notifications', ensureReadyMiddleware, authMiddleware, a
 
 app.post('/api/followups/run', ensureReadyMiddleware, authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
-  const summary = await runFollowUpReminderDispatch({ source: 'manual' });
+  const summary = await syncFollowupSchedules({ source: 'manual', syncOnly: false });
   return res.json(summary);
 });
 
@@ -2398,8 +2710,9 @@ const filterLeadsByUser = (leads, user, query) => {
   });
 };
 
-const hydrateLeads = (leads, channels, interactions = []) => {
+const hydrateLeads = (leads, channels, interactions = [], followups = []) => {
   const interactionSummary = buildLeadInteractionSummaryMap(interactions);
+  const followupSummary = buildFollowupNotificationSummaryMap(followups);
   return leads.map((l) => {
     const channel = channels.find((c) => String(c.id) === String(l.channel_id));
     const createdAt = toIsoStringOrEmpty(l.created_at);
@@ -2417,7 +2730,23 @@ const hydrateLeads = (leads, channels, interactions = []) => {
       is_out_of_scope: normalizeBool(l.is_out_of_scope),
       region: getRegionByPhone(l.phone || l.phone2),
     });
-    return attachLeadInteractionSummary(lead, interactionSummary.get(String(l.id)) || {});
+    const enriched = attachLeadInteractionSummary(lead, interactionSummary.get(String(l.id)) || {});
+    const nextContactKey = getFollowupDateKey(enriched.next_contact || '');
+    const followup = followupSummary.get(buildFollowupReminderKey(enriched.id, nextContactKey, 'alert'))
+      || followupSummary.get(String(enriched.id))
+      || null;
+    if (!followup) return enriched;
+    return {
+      ...enriched,
+      followup_external_id: followup.external_id || '',
+      followup_status: followup.status || '',
+      followup_type: followup.type || '',
+      followup_scheduled_at: followup.scheduled_at || '',
+      followup_scheduled_date_key: followup.scheduled_date_key || '',
+      followup_executed_at: followup.executed_at || '',
+      followup_conversation_id: followup.conversation_id || '',
+      followup_error_msg: followup.error_msg || followup.last_error || '',
+    };
   });
 };
 
@@ -3200,24 +3529,26 @@ app.post('/api/mcp', mcpAuthMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequ
 app.post('/api/mcp/k/:token', mcpPathTokenMiddleware, mcpRateLimitMiddleware, mcpHandleRpcRequest);
 
 app.get('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
-  const [{ items: leads }, { items: channels }, { items: interactions }] = await Promise.all([
+  const [{ items: leads }, { items: channels }, { items: interactions }, { items: followups }] = await Promise.all([
     loadTable(SHEET_LEADS),
     loadTable(SHEET_CHANNELS),
     loadTable(SHEET_LEAD_INTERACTIONS),
+    loadTable(SHEET_FOLLOWUP_NOTIFICATIONS),
   ]);
-  const visible = filterLeadsByUser(hydrateLeads(leads, channels, interactions), req.user, req.query);
+  const visible = filterLeadsByUser(hydrateLeads(leads, channels, interactions, followups), req.user, req.query);
   const filtered = applyLeadFilters(visible, req.query);
   const paginated = paginateLeads(filtered, req.query);
   return res.json(paginated || filtered);
 });
 
 app.get('/api/leads/:id', apiKeyLeadsMiddleware, async (req, res) => {
-  const [{ items: leads }, { items: channels }, { items: interactions }] = await Promise.all([
+  const [{ items: leads }, { items: channels }, { items: interactions }, { items: followups }] = await Promise.all([
     loadTable('leads'),
     loadTable('channels'),
     loadTable(SHEET_LEAD_INTERACTIONS),
+    loadTable(SHEET_FOLLOWUP_NOTIFICATIONS),
   ]);
-  const filtered = filterLeadsByUser(hydrateLeads(leads, channels, interactions), req.user, req.query);
+  const filtered = filterLeadsByUser(hydrateLeads(leads, channels, interactions, followups), req.user, req.query);
   const lead = filtered.find((l) => String(l.id) === String(req.params.id));
   if (!lead) {
     return res.status(404).json({ error: 'Lead nao encontrado' });
@@ -3562,7 +3893,24 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     applyLeadAutomationOnWrite(lead, { nowIso: now, isCreate: true });
     leads.push(lead);
     await saveTable('leads', leads);
-    return res.json(lead);
+    const followupSync = await syncFollowupSchedules({ source: 'lead-create' });
+    const [
+      { items: leadsAfter },
+      { items: channelsAfter },
+      { items: interactionsAfter },
+      { items: followupsAfter },
+    ] = await Promise.all([
+      loadTable('leads', true),
+      loadTable('channels'),
+      loadTable(SHEET_LEAD_INTERACTIONS),
+      loadTable(SHEET_FOLLOWUP_NOTIFICATIONS),
+    ]);
+    const hydrated = hydrateLeads(leadsAfter, channelsAfter, interactionsAfter, followupsAfter);
+    const [hydratedLead] = hydrated.filter((item) => String(item.id) === String(lead.id));
+    return res.json({
+      ...(hydratedLead || lead),
+      followup_sync: followupSync,
+    });
   });
 });
 
@@ -3760,7 +4108,24 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     });
 
     await saveTable('leads', leads);
-    return res.json(leads[idx]);
+    const followupSync = await syncFollowupSchedules({ source: 'lead-update' });
+    const [
+      { items: leadsAfter },
+      { items: channelsAfter },
+      { items: interactionsAfter },
+      { items: followupsAfter },
+    ] = await Promise.all([
+      loadTable('leads', true),
+      loadTable('channels'),
+      loadTable(SHEET_LEAD_INTERACTIONS),
+      loadTable(SHEET_FOLLOWUP_NOTIFICATIONS),
+    ]);
+    const hydrated = hydrateLeads(leadsAfter, channelsAfter, interactionsAfter, followupsAfter);
+    const [hydratedLead] = hydrated.filter((item) => String(item.id) === String(req.params.id));
+    return res.json({
+      ...(hydratedLead || leads[idx]),
+      followup_sync: followupSync,
+    });
   });
 });
 
@@ -3786,6 +4151,7 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
       }
     }
 
+    const followupCancel = await cancelFollowupTasksForLead(lead, { source: 'lead-delete' });
     const filtered = leads.filter((l) => String(l.id || '').trim() !== targetId);
     await saveTable('leads', filtered);
 
@@ -3800,7 +4166,7 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
     }
 
     console.log(`Lead ${targetId} removido. Antes: ${leads.length}, depois: ${afterSave.length}`);
-    return res.json({ success: true, removed: leads.length - afterSave.length });
+    return res.json({ success: true, removed: leads.length - afterSave.length, followup_cancel: followupCancel });
   });
 });
 
