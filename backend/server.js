@@ -54,7 +54,9 @@ const OMNICHAT_API_KEY = process.env.OMNICHAT_API_KEY || '';
 const OMNICHAT_SEND_URL = (process.env.OMNICHAT_SEND_URL || '').trim();
 const OMNICHAT_AUTH_HEADER = String(process.env.OMNICHAT_AUTH_HEADER || 'Authorization').trim();
 const OMNICHAT_REMINDER_MINUTES = Number(process.env.OMNICHAT_REMINDER_MINUTES || 30);
-const FOLLOWUP_AUTORUN = normalizeBool(process.env.FOLLOWUP_AUTORUN || 'true');
+const FOLLOWUP_AUTORUN = ['1', 'true', 'sim', 'yes'].includes(
+  String(process.env.FOLLOWUP_AUTORUN || 'true').toLowerCase().trim()
+);
 const FOLLOWUP_AUTORUN_INTERVAL_MINUTES = Math.max(
   1,
   Number(process.env.FOLLOWUP_AUTORUN_INTERVAL_MINUTES || 5) || 5
