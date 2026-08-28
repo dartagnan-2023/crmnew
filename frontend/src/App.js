@@ -1340,50 +1340,43 @@ const App = () => {
       showToast('Nenhum lead para exportar', 'error');
       return;
     }
-    const headers = [
-      'ID',
-      'Nome',
-      'Empresa',
-      'Email',
-      'Telefone',
-      'Telefone 2',
-      'Responsavel',
-      'Status',
-      'Campanha',
-      'Canal',
-      'Valor',
-      'Primeiro Contato',
-      'Proximo Contato',
-      'Criado em',
-      'Notas',
-    ];
-    const rows = filteredLeads.map((l) => [
-      l.id,
-      `"${(l.name || '').replace(/"/g, '""')}"`,
-      `"${(l.company || '').replace(/"/g, '""')}"`,
-      l.email || '',
-      l.phone || '',
-      l.phone2 || '',
-      l.owner || l.responsible_name || '',
-      l.status || '',
-      l.campaign || '',
-      l.channel_name || '',
-      Number(l.value || 0),
-      l.first_contact || '',
-      l.next_contact || '',
-      l.created_at || '',
-      `"${(l.notes || '').replace(/"/g, '""')}"`,
-    ]);
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    // prefixa BOM para Excel abrir em UTF-8 sem quebrar acentos
-    const csvWithBom = '\ufeff' + csv;
-    const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'leads.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    const cleanDigits = (value) => String(value || '').replace(/\D/g, '');
+    const cleanEmail = (value) => String(value || '').trim().toLowerCase();
+    const normalizeContactPhone = (value) => {
+      const digits = cleanDigits(value);
+      if (!digits) return '';
+      if (digits.length === 13 && digits.startsWith('55')) return digits;
+      if (digits.length === 12 && digits.startsWith('55')) return digits;
+      if (digits.length === 11) return digits;
+      if (digits.length === 10) return digits;
+      if (digits.length > 11 && digits.startsWith('55')) return digits.slice(0, 13);
+      return digits.slice(0, 11);
+    };
+
+    const cleanRows = filteredLeads
+      .map((l) => ({
+        Nome: String(l.name || '').trim(),
+        Empresa: String(l.company || '').trim(),
+        Email: cleanEmail(l.email),
+        Telefone: normalizeContactPhone(l.phone),
+        'Telefone 2': normalizeContactPhone(l.phone2),
+        Responsável: String(l.owner || l.responsible_name || '').trim(),
+        Status: String(l.status || '').trim(),
+        Canal: String(l.channel_name || '').trim(),
+        Campanha: String(l.campaign || '').trim(),
+        Fonte: String(l.source || '').trim(),
+      }))
+      .filter((row) => row.Email || row.Telefone || row['Telefone 2']);
+
+    if (!cleanRows.length) {
+      showToast('Nenhum contato válido com email ou telefone para exportar', 'error');
+      return;
+    }
+
+    const ws = XLSX.utils.json_to_sheet(cleanRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Contatos');
+    XLSX.writeFile(wb, `contatos-limpos-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const filteredLeads = useMemo(() => {
@@ -5260,7 +5253,7 @@ const App = () => {
                 onClick={exportCsv}
                 className="px-4 py-2 bg-white text-slate-800 rounded-xl text-sm border border-slate-200 shadow-sm"
               >
-                Exportar CSV
+                Exportar contatos limpos
               </button>
               <button
                 onClick={clearFilters}
