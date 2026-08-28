@@ -640,6 +640,7 @@ const SHEETS_CONFIG = {
     'first_contact',
     'next_contact',
     'notes',
+    'operator_notes',
     'source',
     'temperature',
     'sla_minutes',
@@ -3792,6 +3793,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
     value = 0,
     next_contact = '',
     notes = '',
+    operator_notes = '',
     is_private = false,
     is_customer = false,
     is_out_of_scope = false,
@@ -3866,6 +3868,7 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       first_contact: first_contact || '',
       next_contact: next_contact || '',
       notes: notes || '',
+      operator_notes: operator_notes || '',
       source: req.body.source || deriveLeadSource({ channel_id, channel_name: channelName, campaign }, channels),
       interactions_count: '0',
       last_interaction_at: '',
@@ -3955,6 +3958,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     value,
     next_contact,
     notes,
+    operator_notes,
     is_private,
     is_customer,
     is_out_of_scope,
@@ -4015,6 +4019,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
         return true;
       }
       if (notes !== undefined && String(notes || '') !== String(current.notes || '')) return true;
+      if (operator_notes !== undefined && String(operator_notes || '') !== String(current.operator_notes || '')) return true;
       if (company !== undefined && String(company || '') !== String(current.company || '')) return true;
       if (segment !== undefined && String(segment || '') !== String(current.segment || '')) return true;
       if (source !== undefined && String(source || '') !== String(current.source || '')) return true;
@@ -4072,6 +4077,7 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
     if (first_contact !== undefined) leads[idx].first_contact = first_contact;
     if (next_contact !== undefined) leads[idx].next_contact = next_contact;
     if (notes !== undefined) leads[idx].notes = notes;
+    if (operator_notes !== undefined) leads[idx].operator_notes = operator_notes;
     if (source !== undefined) leads[idx].source = source;
     if (is_private !== undefined) leads[idx].is_private = normalizeBool(is_private);
     if (is_customer !== undefined) leads[idx].is_customer = normalizeBool(is_customer);

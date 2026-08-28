@@ -622,6 +622,7 @@ const emptyLead = {
   status: 'novo',
   value: 0,
   notes: '',
+  operator_notes: '',
   is_private: false,
   is_customer: false,
   is_out_of_scope: false,
@@ -2592,6 +2593,7 @@ const App = () => {
       status: lead.status || 'novo',
       value: lead.value || 0,
       notes: lead.notes || '',
+      operator_notes: lead.operator_notes || '',
       is_private: !!lead.is_private,
       is_customer: !!lead.is_customer,
       is_out_of_scope: !!lead.is_out_of_scope,
@@ -3258,6 +3260,7 @@ const App = () => {
     status: lead.status || 'novo',
     value: Number(lead.value) || 0,
     notes: lead.notes || null,
+    operator_notes: lead.operator_notes || null,
     is_private: lead.is_private || 0,
     highlighted_categories: normalizeListValue(lead.highlighted_categories).join(','),
     customer_type: lead.customer_type || '',
@@ -3469,11 +3472,12 @@ const App = () => {
         email: lead.email,
         phone: lead.phone || null,
         channel_id: lead.channel_id || null,
-        campaign: lead.campaign || null,
-        status: lead.status || 'novo',
-        value: Number(lead.value) || 0,
-        notes: lead.notes || null,
-        is_private: lead.is_private || 0,
+    campaign: lead.campaign || null,
+    status: lead.status || 'novo',
+    value: Number(lead.value) || 0,
+    notes: lead.notes || null,
+    operator_notes: lead.operator_notes || null,
+    is_private: lead.is_private || 0,
       }),
       'Contatos marcados como feitos'
     );
@@ -6323,12 +6327,24 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Observações
+                    Observações da origem
                   </label>
                   <textarea
+                    readOnly
                     value={leadForm.notes}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600 cursor-not-allowed"
+                    rows={3}
+                    title="Campo bloqueado para preservar a observação importada da campanha"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Observações do operador
+                  </label>
+                  <textarea
+                    value={leadForm.operator_notes || ''}
                     onChange={(e) =>
-                      setLeadForm({ ...leadForm, notes: e.target.value })
+                      setLeadForm({ ...leadForm, operator_notes: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                     rows={3}
