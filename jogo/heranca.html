@@ -1,0 +1,892 @@
+<title>Herança</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:WONK,opsz,wght@1,9..144,600..700&family=IBM+Plex+Mono:wght@400;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+
+<style>
+:root{
+  --ink:#12131A;
+  --ink-2:#1A1C26;
+  --ink-3:#232633;
+  --line:#31344333;
+  --line-solid:#2E3140;
+  --vellum:#E8E1D1;
+  --vellum-dim:#8F8A7B;
+  --vellum-faint:#5D5A52;
+  --verdigris:#5FA893;
+  --verdigris-deep:#2F5A50;
+  --ember:#C8542F;
+  --ember-deep:#5A2417;
+  --gilt:#C9A24B;
+  --shadow:0 18px 50px -20px #000000cc;
+
+  --display:"Fraunces","Iowan Old Style",Georgia,serif;
+  --body:"Newsreader",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--ink);
+  color:var(--vellum);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+
+/* faint vertical rule texture, like ruled ledger paper */
+.shell{
+  max-width:480px;
+  margin:0 auto;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:
+    linear-gradient(180deg,#171923 0%,var(--ink) 240px),
+    var(--ink);
+  border-left:1px solid var(--line-solid);
+  border-right:1px solid var(--line-solid);
+  position:relative;
+}
+.shell.jogando{height:100vh;min-height:0;overflow:hidden}
+@media (min-width:520px){
+  body{padding:24px 0}
+  .shell{min-height:calc(100vh - 48px);box-shadow:var(--shadow);border-radius:2px}
+  .shell.jogando{height:calc(100vh - 48px)}
+}
+
+/* ---------- typography primitives ---------- */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--vellum-faint);
+}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- opening ---------- */
+#abertura{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:26px;
+  padding:40px 26px 48px;
+}
+.marca{
+  font-family:var(--display);
+  font-weight:700;
+  font-size:clamp(52px,17vw,76px);
+  line-height:.9;
+  letter-spacing:-.03em;
+  margin:0;
+  text-wrap:balance;
+}
+.marca span{color:var(--verdigris)}
+.subtitulo{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--verdigris);
+  margin:0;
+}
+.premissa{
+  margin:0;
+  max-width:34em;
+  color:#CFC8B8;
+  font-size:17px;
+}
+.premissa em{color:var(--vellum);font-style:italic}
+.regra-ouro{
+  border-left:2px solid var(--verdigris-deep);
+  padding:2px 0 2px 14px;
+  color:var(--vellum-dim);
+  font-size:15px;
+}
+.campo{display:flex;flex-direction:column;gap:7px}
+.campo label{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--vellum-faint)}
+.campo input{
+  background:var(--ink-2);
+  border:1px solid var(--line-solid);
+  border-bottom:2px solid var(--verdigris-deep);
+  color:var(--vellum);
+  font-family:var(--display);
+  font-weight:600;
+  font-size:20px;
+  padding:12px 14px;
+  border-radius:2px;
+  width:100%;
+}
+.campo input:focus{outline:2px solid var(--verdigris);outline-offset:2px}
+
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible{outline:2px solid var(--verdigris);outline-offset:3px}
+button[disabled]{cursor:not-allowed}
+
+.btn-selo{
+  background:var(--verdigris);
+  color:#0C1714;
+  border:none;
+  border-radius:2px;
+  padding:17px 20px;
+  font-family:var(--mono);
+  font-weight:600;
+  font-size:12px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  width:100%;
+  transition:background .16s ease,transform .16s ease;
+}
+.btn-selo:hover{background:#74C0A9}
+.btn-selo:active{transform:translateY(1px)}
+
+/* ---------- head: village state ---------- */
+#jogo{flex:1;display:flex;flex-direction:column;min-height:0}
+
+.cabeca{
+  padding:14px 18px 15px;
+  border-bottom:1px solid var(--line-solid);
+  background:var(--ink-2);
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+.cabeca-topo{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:13px;
+}
+.lugar{font-family:var(--display);font-weight:600;font-size:19px;letter-spacing:-.01em}
+.lugar small{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--vellum-faint);font-weight:400;margin-top:2px}
+
+.medidores{display:flex;flex-direction:column;gap:9px}
+.medidor{display:grid;grid-template-columns:76px 1fr 42px;align-items:center;gap:10px}
+.medidor .rotulo{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--vellum-dim)}
+.trilho{
+  height:9px;
+  background:
+    repeating-linear-gradient(90deg,#00000000 0 5px,#0E0F15 5px 6px),
+    var(--ink-3);
+  border:1px solid var(--line-solid);
+  position:relative;
+  overflow:hidden;
+}
+.preenche{
+  position:absolute;inset:0 auto 0 0;
+  width:0%;
+  background:var(--verdigris-deep);
+  transition:width .5s cubic-bezier(.2,.7,.3,1),background .3s ease;
+}
+.preenche.alto{background:var(--verdigris)}
+.preenche.baixo{background:var(--ember)}
+.medidor .valor{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;text-align:right;color:var(--vellum)}
+.medidor.pulsa .valor{animation:bater .5s ease}
+@keyframes bater{0%,100%{transform:none}35%{transform:scale(1.28)}}
+
+/* ---------- chronicle ---------- */
+.cronica{
+  flex:1;
+  overflow-y:auto;
+  padding:22px 20px 26px;
+  display:flex;
+  flex-direction:column;
+  gap:26px;
+  min-height:0;
+}
+.entrada{display:flex;flex-direction:column;gap:11px;animation:surgir .5s ease both}
+@keyframes surgir{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.selo-ano{
+  display:flex;align-items:center;gap:11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--vellum-faint);
+}
+.selo-ano::after{content:"";flex:1;height:1px;background:var(--line-solid)}
+
+.texto-cronica{
+  margin:0;
+  font-size:17.5px;
+  line-height:1.62;
+  color:#DED7C6;
+  font-optical-sizing:auto;
+}
+.texto-cronica::first-letter{}
+.entrada.destaque .texto-cronica{color:var(--vellum)}
+.pensando{color:var(--vellum-faint);font-style:italic}
+
+.acoes-do-ano{display:flex;flex-direction:column;gap:1px;background:var(--line-solid);border:1px solid var(--line-solid)}
+.linha-casa{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+  background:var(--ink-2);padding:7px 11px;
+  font-size:13px;
+}
+.linha-casa.eu{background:#1E2530}
+.linha-casa .quem{font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:-.005em}
+.linha-casa.eu .quem{color:var(--verdigris)}
+.linha-casa .fez{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--vellum-dim);text-align:right}
+
+.marca-evento{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  padding:5px 10px;
+  border:1px solid;
+  align-self:flex-start;
+}
+.marca-evento.ruim{color:var(--ember);border-color:#5A2417;background:#1F1210}
+.marca-evento.boa{color:var(--verdigris);border-color:var(--verdigris-deep);background:#101C19}
+.marca-evento.neutra{color:var(--vellum-dim);border-color:var(--line-solid);background:var(--ink-2)}
+
+/* ---------- your house + tray ---------- */
+.rodape{border-top:1px solid var(--line-solid);background:var(--ink-2)}
+
+.minha-casa{
+  display:grid;grid-template-columns:1fr repeat(3,auto);gap:14px;align-items:center;
+  padding:11px 18px;border-bottom:1px solid var(--line-solid);
+}
+.minha-casa .nome{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pilha{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.pilha b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;line-height:1}
+.pilha span{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--vellum-faint)}
+.pilha.ouro b{color:var(--gilt)}
+
+.aviso{padding:9px 18px 0;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--vellum-faint)}
+
+.bandeja{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-solid);border-top:1px solid var(--line-solid)}
+.acao{
+  background:var(--ink-2);
+  border:none;
+  text-align:left;
+  padding:12px 13px 13px;
+  display:flex;flex-direction:column;gap:4px;
+  transition:background .14s ease;
+}
+.acao:nth-child(5){grid-column:1 / -1}
+.acao:hover:not([disabled]){background:var(--ink-3)}
+.acao:active:not([disabled]){background:#2B2F3E}
+.acao[disabled]{opacity:.34}
+.acao .verbo{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:-.01em}
+.acao .efeito{font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--vellum-dim);line-height:1.5}
+.acao .efeito .g{color:var(--verdigris)}
+.acao .efeito .p{color:var(--ember)}
+.acao .efeito .o{color:var(--gilt)}
+.bandeja.travada .acao{pointer-events:none;opacity:.34}
+
+/* ---------- ending ---------- */
+#fim{padding:32px 22px 40px;display:flex;flex-direction:column;gap:24px}
+.veredicto{font-family:var(--display);font-weight:700;font-size:38px;line-height:.98;letter-spacing:-.025em;margin:0;text-wrap:balance}
+.veredicto.ruina{color:var(--ember)}
+.veredicto.vive{color:var(--verdigris)}
+.epilogo{margin:0;font-size:17.5px;line-height:1.62;color:#DED7C6}
+
+.placar{display:flex;flex-direction:column;gap:1px;background:var(--line-solid);border:1px solid var(--line-solid)}
+.placar-linha{
+  display:grid;grid-template-columns:20px 1fr auto;gap:12px;align-items:center;
+  background:var(--ink-2);padding:11px 13px;
+}
+.placar-linha.eu{background:#1E2530}
+.placar-linha .pos{font-family:var(--mono);font-size:11px;color:var(--vellum-faint)}
+.placar-linha .casa{font-family:var(--display);font-weight:600;font-size:16px}
+.placar-linha.eu .casa{color:var(--verdigris)}
+.placar-linha .detalhe{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--vellum-faint);display:block;font-weight:400;text-transform:uppercase;margin-top:2px}
+.placar-linha .renome{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;font-weight:600;color:var(--gilt)}
+
+.semente{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--vellum-faint);text-align:center}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+
+<div class="shell">
+
+  <!-- ================= ABERTURA ================= -->
+  <section id="abertura">
+    <div>
+      <p class="subtitulo">Vale Fundo · cinco casas · doze anos</p>
+      <h1 class="marca">Heran<span>ç</span>a</h1>
+    </div>
+
+    <p class="premissa">Cinco linhagens dividem uma vila. O celeiro, a muralha e a concórdia são <em>de todos</em>. O ouro e as terras são <em>seus</em>.</p>
+
+    <p class="regra-ouro">Uma escolha por ano. O ano resolve sozinho — e o que você fizer, os outros aprendem a fazer.</p>
+
+    <div class="campo">
+      <label for="nome-casa">O nome da sua casa</label>
+      <input id="nome-casa" maxlength="22" value="Casa Bragantina" autocomplete="off" spellcheck="false">
+    </div>
+
+    <button class="btn-selo" id="comecar">Abrir a crônica</button>
+  </section>
+
+  <!-- ================= JOGO ================= -->
+  <section id="jogo" hidden>
+    <div class="cabeca">
+      <div class="cabeca-topo">
+        <div class="lugar">Vale Fundo<small id="rotulo-ano">Ano 1 de 12</small></div>
+        <div class="eyebrow" id="almas-topo">— almas</div>
+      </div>
+      <div class="medidores" id="medidores"></div>
+    </div>
+
+    <div class="cronica" id="cronica"></div>
+
+    <div class="rodape">
+      <div class="minha-casa">
+        <div class="nome" id="meu-nome">Casa Bragantina</div>
+        <div class="pilha ouro"><b id="meu-ouro">10</b><span>ouro</span></div>
+        <div class="pilha"><b id="minhas-terras">2</b><span>terras</span></div>
+        <div class="pilha"><b id="meus-bracos">4</b><span>braços</span></div>
+      </div>
+      <div class="bandeja" id="bandeja"></div>
+    </div>
+  </section>
+
+  <!-- ================= FIM ================= -->
+  <section id="fim" hidden>
+    <div>
+      <p class="eyebrow" id="fim-eyebrow">O fim da crônica</p>
+      <h2 class="veredicto" id="veredicto">—</h2>
+    </div>
+    <p class="epilogo" id="epilogo"></p>
+    <div class="placar" id="placar"></div>
+    <p class="semente" id="semente"></p>
+    <button class="btn-selo" id="denovo">Começar outra crônica</button>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     1. O MOTOR — regras rígidas, determinísticas, sem IA nenhuma.
+        A IA só narra o que este bloco decidiu.
+     ============================================================ */
+
+  var ANOS = 12;
+
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function clamp(v,min,max){ return v < min ? min : v > max ? max : v; }
+
+  var ACOES = {
+    semear: {
+      verbo:"Semear",
+      efeito:'<span class="g">+celeiro</span> conforme suas terras',
+      resumo:"semeou os campos comuns",
+      aplica:function(c,v){ v.celeiro += 5 + 2*c.terras; c.ouro += 1; }
+    },
+    erguer: {
+      verbo:"Erguer pedra",
+      efeito:'<span class="g">+12 muralha</span> · <span class="o">−4 ouro</span>',
+      resumo:"levantou pedra na muralha",
+      custo:function(c){ return c.ouro >= 4; },
+      aplica:function(c,v){ v.muralha += 12; c.ouro -= 4; v.concordia += 3; }
+    },
+    acolher: {
+      verbo:"Acolher",
+      efeito:'<span class="g">+1 braço, +concórdia</span> · <span class="p">−4 celeiro</span>',
+      resumo:"acolheu forasteiros na casa",
+      aplica:function(c,v){ c.bracos += 1; v.celeiro -= 4; v.concordia += 6; }
+    },
+    comerciar: {
+      verbo:"Comerciar",
+      efeito:'<span class="o">+ouro</span> · <span class="p">−9 celeiro, −concórdia</span>',
+      resumo:"vendeu o excedente a mercadores de fora",
+      aplica:function(c,v){ c.ouro += 8 + 2*c.terras; v.celeiro -= 9; v.concordia -= 4; }
+    },
+    cercar: {
+      verbo:"Cercar o comum",
+      efeito:'<span class="g">+1 terra sua</span> · <span class="p">−5 celeiro, −11 concórdia</span>',
+      resumo:"cercou um pedaço da terra comunal",
+      aplica:function(c,v){ c.terras += 1; v.celeiro -= 5; v.concordia -= 11; }
+    }
+  };
+  var ORDEM_ACOES = ["semear","erguer","acolher","comerciar","cercar"];
+
+  /* As quatro casas rivais. Políticas fixas e legíveis — o jogador
+     consegue prever quem é quem, que é o que dá peso à escolha dele. */
+  var RIVAIS = [
+    { nome:"Casa Ferro", indole:"guarda a muralha",
+      decide:function(c,v){ return (v.muralha < 45 && c.ouro >= 4) ? "erguer" : "semear"; } },
+    { nome:"Casa Corvo", indole:"não perde negócio",
+      decide:function(c,v,ano){
+        if (v.celeiro < 14) return "semear";
+        if (ano % 3 === 0) return "cercar";
+        return "comerciar";
+      } },
+    { nome:"Casa Espiga", indole:"cuida do celeiro",
+      decide:function(c,v){
+        if (v.celeiro < 45) return "semear";
+        return v.concordia > 50 ? "acolher" : "cercar";
+      } },
+    // A casa-espelho. É ela que transforma a sua ganância em epidemia.
+    { nome:"Casa Vinha", indole:"faz o que você faz",
+      espelho:true,
+      decide:function(c,v,ano,ultimaDoJogador){
+        var a = ultimaDoJogador || "semear";
+        if (a === "erguer" && c.ouro < 4) return "semear";
+        return a;
+      } }
+  ];
+
+  var S = null;
+
+  function novoJogo(nomeCasa){
+    var seed = Math.floor(Math.random()*9000) + 1000;
+    var casas = [{ nome:nomeCasa, eu:true, ouro:10, terras:2, bracos:4, indole:"você" }];
+    RIVAIS.forEach(function(r){
+      casas.push({ nome:r.nome, eu:false, ouro:10, terras:2, bracos:4, indole:r.indole, pol:r });
+    });
+    return {
+      seed:seed, rnd:mulberry32(seed), ano:1, fim:false, colapso:false,
+      vila:{ celeiro:40, muralha:20, concordia:60 }, cismaRecente:false,
+      casas:casas,
+      ultimaDoJogador:null,
+      historico:[]
+    };
+  }
+
+  function almas(s){
+    return s.casas.reduce(function(t,c){ return t + c.bracos; }, 0);
+  }
+
+  /* Resolve um ano inteiro. Devolve um boletim de FATOS — nada de prosa. */
+  function resolverAno(s, acaoDoJogador){
+    var v = s.vila;
+    var antes = { celeiro:v.celeiro, muralha:v.muralha, concordia:v.concordia, almas:almas(s) };
+    var escolhas = [];
+
+    s.casas.forEach(function(c){
+      var a = c.eu ? acaoDoJogador : c.pol.decide(c, v, s.ano, s.ultimaDoJogador);
+      if (ACOES[a].custo && !ACOES[a].custo(c)) a = "semear";
+      ACOES[a].aplica(c, v);
+      c.ultimaAcao = a;
+      escolhas.push({ casa:c.nome, eu:c.eu, acao:a, resumo:ACOES[a].resumo });
+    });
+    s.ultimaDoJogador = acaoDoJogador;
+
+    // Consumo: cada braço come um. É aqui que a população vira pressão.
+    var bocas = almas(s);
+    v.celeiro -= bocas;
+
+    var fome = null;
+    if (v.celeiro < 0){
+      var mortes = Math.ceil(-v.celeiro / 3);
+      v.celeiro = 0;
+      v.concordia -= 12;
+      fome = { mortes:0, porCasa:{} };
+      for (var i=0;i<mortes;i++){
+        var alvo = null;
+        s.casas.forEach(function(c){ if (c.bracos > 0 && (!alvo || c.bracos > alvo.bracos)) alvo = c; });
+        if (!alvo) break;
+        alvo.bracos -= 1;
+        fome.mortes += 1;
+        fome.porCasa[alvo.nome] = (fome.porCasa[alvo.nome]||0) + 1;
+      }
+    }
+
+    v.muralha -= 4;   // o tempo derruba a pedra sozinho
+    v.concordia += 4; // e fecha as feridas devagar, se ninguem as reabrir
+
+    // ---- um grande acontecimento por ano, por prioridade ----
+    var evento = { chave:"quieto", titulo:"Ano quieto", tom:"neutra",
+                   fato:"Nada de notável aconteceu, e um ano sem sobressalto aproxima as casas." };
+    var r = s.rnd();
+    var cismaAntes = s.cismaRecente;
+    s.cismaRecente = false;
+
+    // A vila se vira contra quem mais acumulou — por desconfiança OU por desigualdade.
+    var riqueza = function(c){ return c.ouro + c.terras*8; };
+    var rico = s.casas.slice().sort(function(a,b){ return riqueza(b) - riqueza(a); })[0];
+    var media = s.casas.reduce(function(t,c){ return t + riqueza(c); }, 0) / s.casas.length;
+    var porInveja = riqueza(rico) > media * 1.8 && riqueza(rico) > 45;
+
+    if ((v.concordia < 25 || porInveja) && !cismaAntes){
+      var saque = Math.round(rico.ouro * 0.4);
+      rico.ouro -= saque;
+      var parte = Math.floor(saque / (s.casas.length - 1));
+      s.casas.forEach(function(c){ if (c !== rico) c.ouro += parte; });
+      var cerca = "";
+      if (rico.terras > 1){ rico.terras -= 1; v.celeiro += 6;
+        cerca = " Derrubaram também uma de suas cercas e devolveram a terra ao comum."; }
+      v.concordia += porInveja ? 8 : 22;
+      s.cismaRecente = true;
+      evento = { chave:"cisma", titulo: porInveja ? "Revolta" : "Cisma", tom:"ruim",
+        fato:(porInveja
+              ? "A fartura de "+rico.nome+" ficou grande demais para os olhos da vila. As outras casas a saquearam"
+              : "A concórdia ruiu. As outras casas saquearam "+rico.nome)
+             +" em "+saque+" de ouro e dividiram entre si."+cerca };
+    } else if (r < 0.15 + s.ano*0.04){
+      s.cismaRecente = false;
+      var sev = clamp((55 - v.muralha)/55, 0, 1);
+      if (sev <= 0.05){
+        v.muralha -= 6;
+        evento = { chave:"repelida", titulo:"Assalto repelido", tom:"boa",
+          fato:"Bandos armados vieram do norte e a muralha os repeliu sem perda de vidas." };
+      } else {
+        var perdidos = 0, ouroPerdido = 0;
+        s.casas.forEach(function(c){
+          var m = Math.round(c.bracos * 0.3 * sev);
+          var o = Math.round(c.ouro * 0.4 * sev);
+          c.bracos = Math.max(0, c.bracos - m); c.ouro = Math.max(0, c.ouro - o);
+          perdidos += m; ouroPerdido += o;
+        });
+        v.muralha = Math.max(0, v.muralha - 15);
+        v.concordia -= 5;
+        evento = { chave:"invasao", titulo:"Invasão", tom:"ruim",
+          fato:"Bandos armados romperam a muralha: "+perdidos+" mortos e "+ouroPerdido+" de ouro levado." };
+      }
+    } else if (r < 0.30 + (antes.almas > 25 ? 0.12 : 0) + (v.concordia < 40 ? 0.08 : 0)){
+      s.cismaRecente = false;
+      var vitimas = 0;
+      s.casas.forEach(function(c){
+        var m = c.bracos > 6 ? 2 : (c.bracos > 0 ? 1 : 0);
+        c.bracos -= m; vitimas += m;
+      });
+      v.concordia -= 4;
+      evento = { chave:"peste", titulo:"Peste", tom:"ruim",
+        fato:"Uma febre correu as casas e levou "+vitimas+" pessoas." };
+    } else if (v.celeiro > 80){
+      s.cismaRecente = false;
+      v.celeiro += 20; v.concordia += 5;
+      evento = { chave:"farta", titulo:"Colheita farta", tom:"boa",
+        fato:"A colheita veio dobrada e o celeiro transbordou." };
+    }
+
+    if (evento.chave === "quieto") v.concordia += 5;
+
+    v.celeiro = clamp(v.celeiro, 0, 220);
+    v.muralha = clamp(v.muralha, 0, 100);
+    v.concordia = clamp(v.concordia, 0, 100);
+
+    var depois = { celeiro:v.celeiro, muralha:v.muralha, concordia:v.concordia, almas:almas(s) };
+    if (depois.almas <= 0){ s.colapso = true; s.fim = true; }
+
+    var boletim = {
+      ano:s.ano, escolhas:escolhas, fome:fome, evento:evento,
+      antes:antes, depois:depois, bocas:bocas
+    };
+    s.historico.push(boletim);
+
+    if (s.ano >= ANOS) s.fim = true; else s.ano += 1;
+    return boletim;
+  }
+
+  function renome(c, s){
+    var base = c.ouro*1.5 + c.terras*10 + c.bracos*8;
+    var fator = s.colapso ? 0.10 : (0.15 + 0.85*Math.pow(s.vila.concordia/100, 1.3));
+    return Math.round(base * fator);
+  }
+
+  /* ============================================================
+     2. A NARRAÇÃO — a IA recebe só os fatos e devolve só prosa.
+     ============================================================ */
+
+  var sample = null;
+
+  function fatosDoAno(b, s){
+    var l = [];
+    l.push("ANO " + b.ano + " de " + ANOS + ", na vila de Vale Fundo.");
+    l.push("O que cada casa fez:");
+    b.escolhas.forEach(function(e){
+      l.push("- " + e.casa + (e.eu ? " (o narrador serve esta casa)" : "") + ": " + e.resumo + ".");
+    });
+    l.push("As " + b.bocas + " pessoas da vila comeram do celeiro comum.");
+    if (b.fome){
+      var q = Object.keys(b.fome.porCasa).map(function(k){ return k + " perdeu " + b.fome.porCasa[k]; });
+      l.push("FOME: o celeiro não deu conta. " + b.fome.mortes + " mortos (" + q.join("; ") + ").");
+    }
+    l.push("ACONTECIMENTO: " + b.evento.titulo + " — " + b.evento.fato);
+    l.push("Fim do ano: celeiro " + b.depois.celeiro + " (era " + b.antes.celeiro + "), muralha " +
+           b.depois.muralha + " (era " + b.antes.muralha + "), concórdia " + b.depois.concordia +
+           " (era " + b.antes.concordia + "), " + b.depois.almas + " almas vivas.");
+    return l.join("\n");
+  }
+
+  var REGRAS_CRONISTA =
+    "Você é o cronista da vila de Vale Fundo, escrevendo em português do Brasil.\n" +
+    "Escreva o registro deste ano em 2 ou 3 frases. Tom de crônica antiga: seco, concreto, sem floreio moderno, sem adjetivo gratuito.\n" +
+    "REGRAS RÍGIDAS: use somente os fatos listados. Nunca invente número, nome, personagem ou acontecimento. " +
+    "Não repita os números crus — traduza-os em imagem (celeiro baixo = a farinha rateada; concórdia baixa = portas que não se abrem mais). " +
+    "Não use listas, títulos, aspas nem markdown. Não se dirija ao leitor. Só a prosa.\n\n";
+
+  function narrativaDeReserva(b){
+    var e = b.escolhas.find(function(x){ return x.eu; });
+    var p = "Neste ano a sua casa " + e.resumo + ".";
+    if (b.fome) p += " O celeiro faltou e " + b.fome.mortes + " não passaram do inverno.";
+    if (b.evento.chave !== "quieto") p += " " + b.evento.fato;
+    else p += " De resto, o ano correu sem marca.";
+    if (b.depois.concordia < 30) p += " A vila anda de olho torto.";
+    return p;
+  }
+
+  async function narrar(b, s, alvo){
+    if (!sample) { alvo.textContent = narrativaDeReserva(b); return; }
+    alvo.classList.add("pensando");
+    alvo.textContent = "O cronista molha a pena…";
+    try {
+      var res = await sample(REGRAS_CRONISTA + fatosDoAno(b, s), {
+        modelTier:"quick",
+        onText:function(ev){ alvo.classList.remove("pensando"); alvo.textContent = ev.text; }
+      });
+      alvo.classList.remove("pensando");
+      alvo.textContent = res.text.trim();
+    } catch (err) {
+      alvo.classList.remove("pensando");
+      if (err && err.text && err.text.length > 40) alvo.textContent = err.text.trim();
+      else alvo.textContent = narrativaDeReserva(b);
+      if (err && (err.code === "not_granted" || err.code === "rate_limited")) sample = null;
+    }
+  }
+
+  async function narrarEpilogo(s, placar, alvo){
+    var linhas = s.historico.map(function(b){
+      var eu = b.escolhas.find(function(x){ return x.eu; });
+      return "Ano " + b.ano + ": sua casa " + eu.resumo + "; " + b.evento.titulo.toLowerCase() +
+             (b.fome ? "; fome com " + b.fome.mortes + " mortos" : "") + ".";
+    }).join("\n");
+    var ordem = placar.map(function(p,i){ return (i+1) + "º " + p.casa.nome + " com " + p.renome + " de renome"; }).join("; ");
+    var fim = s.colapso
+      ? "A vila morreu: não sobrou ninguém em Vale Fundo."
+      : "A vila sobreviveu aos doze anos com " + almas(s) + " almas, celeiro " + s.vila.celeiro +
+        ", muralha " + s.vila.muralha + " e concórdia " + s.vila.concordia + ".";
+
+    var prompt =
+      "Você é o cronista de Vale Fundo, escrevendo em português do Brasil.\n" +
+      "Escreva o fecho da crônica em 4 a 5 frases: o que essas doze colheitas revelaram sobre as casas, e o veredicto sobre quem herdou o quê.\n" +
+      "REGRAS RÍGIDAS: use somente os fatos abaixo. Nunca invente número, nome ou acontecimento. Não use listas, títulos nem markdown. Tom de crônica antiga, seco e concreto.\n\n" +
+      "DOZE ANOS:\n" + linhas + "\n\nDESFECHO: " + fim + "\nRENOME FINAL: " + ordem + ".\n" +
+      "A casa do leitor é " + s.casas[0].nome + ".";
+
+    if (!sample){
+      alvo.textContent = fim + " " + placar[0].casa.nome + " fica com o maior renome, " +
+        placar[0].renome + ". O resto é o que se pôde guardar.";
+      return;
+    }
+    alvo.classList.add("pensando");
+    alvo.textContent = "O cronista fecha o livro…";
+    try {
+      var res = await sample(prompt, {
+        onText:function(ev){ alvo.classList.remove("pensando"); alvo.textContent = ev.text; }
+      });
+      alvo.classList.remove("pensando");
+      alvo.textContent = res.text.trim();
+    } catch (err) {
+      alvo.classList.remove("pensando");
+      alvo.textContent = (err && err.text && err.text.length > 60)
+        ? err.text.trim()
+        : fim + " " + placar[0].casa.nome + " fica com o maior renome, " + placar[0].renome + ".";
+    }
+  }
+
+  /* ============================================================
+     3. A TELA
+     ============================================================ */
+
+  var $ = function(id){ return document.getElementById(id); };
+  var elAbertura = $("abertura"), elJogo = $("jogo"), elFim = $("fim");
+  var elCronica = $("cronica"), elBandeja = $("bandeja"), elMedidores = $("medidores");
+
+  var MEDIDORES = [
+    { chave:"celeiro",   rotulo:"Celeiro",   max:120 },
+    { chave:"muralha",   rotulo:"Muralha",   max:100 },
+    { chave:"concordia", rotulo:"Concórdia", max:100 }
+  ];
+
+  function montarMedidores(){
+    elMedidores.innerHTML = MEDIDORES.map(function(m){
+      return '<div class="medidor" id="med-'+m.chave+'">' +
+               '<div class="rotulo">'+m.rotulo+'</div>' +
+               '<div class="trilho"><div class="preenche" id="pre-'+m.chave+'"></div></div>' +
+               '<div class="valor" id="val-'+m.chave+'">0</div>' +
+             '</div>';
+    }).join("");
+  }
+
+  function pintarEstado(pulsar){
+    MEDIDORES.forEach(function(m){
+      var v = S.vila[m.chave];
+      var pct = clamp(v / m.max * 100, 0, 100);
+      var pre = $("pre-"+m.chave);
+      pre.style.width = pct + "%";
+      pre.className = "preenche " + (pct < 22 ? "baixo" : pct > 60 ? "alto" : "");
+      $("val-"+m.chave).textContent = v;
+      if (pulsar) {
+        var box = $("med-"+m.chave);
+        box.classList.remove("pulsa");
+        void box.offsetWidth;
+        box.classList.add("pulsa");
+      }
+    });
+    var eu = S.casas[0];
+    $("meu-nome").textContent = eu.nome;
+    $("meu-ouro").textContent = eu.ouro;
+    $("minhas-terras").textContent = eu.terras;
+    $("meus-bracos").textContent = eu.bracos;
+    $("almas-topo").textContent = almas(S) + " almas";
+    $("rotulo-ano").textContent = "Ano " + S.ano + " de " + ANOS;
+  }
+
+  function montarBandeja(){
+    elBandeja.innerHTML = ORDEM_ACOES.map(function(k){
+      var a = ACOES[k];
+      return '<button class="acao" data-acao="'+k+'">' +
+               '<span class="verbo">'+a.verbo+'</span>' +
+               '<span class="efeito">'+a.efeito+'</span>' +
+             '</button>';
+    }).join("");
+    elBandeja.querySelectorAll(".acao").forEach(function(b){
+      b.addEventListener("click", function(){ jogarAno(b.dataset.acao); });
+    });
+  }
+
+  function atualizarBandeja(){
+    elBandeja.querySelectorAll(".acao").forEach(function(b){
+      var a = ACOES[b.dataset.acao];
+      var pode = !a.custo || a.custo(S.casas[0]);
+      b.disabled = !pode;
+      b.title = pode ? "" : "Ouro insuficiente";
+    });
+  }
+
+  function entradaDeAbertura(){
+    var d = document.createElement("div");
+    d.className = "entrada";
+    d.innerHTML =
+      '<div class="selo-ano">A crônica começa</div>' +
+      '<p class="texto-cronica">Vale Fundo tem quarenta medidas de grão, um muro pela metade e vinte bocas. ' +
+      'Cinco casas escreveram seus nomes no livro no mesmo dia, e nenhuma delas confia inteiramente nas outras. ' +
+      'O primeiro ano espera a sua escolha.</p>';
+    elCronica.appendChild(d);
+  }
+
+  function entradaDoAno(b){
+    var d = document.createElement("div");
+    d.className = "entrada destaque";
+
+    var linhas = b.escolhas.map(function(e){
+      return '<div class="linha-casa'+(e.eu?' eu':'')+'">' +
+               '<span class="quem">'+e.casa+'</span>' +
+               '<span class="fez">'+ACOES[e.acao].verbo+'</span>' +
+             '</div>';
+    }).join("");
+
+    var marcas = "";
+    if (b.fome) marcas += '<span class="marca-evento ruim">Fome · '+b.fome.mortes+' mortos</span>';
+    if (b.evento.chave !== "quieto")
+      marcas += '<span class="marca-evento '+b.evento.tom+'">'+b.evento.titulo+'</span>';
+
+    d.innerHTML =
+      '<div class="selo-ano">Ano '+b.ano+'</div>' +
+      '<div class="acoes-do-ano">'+linhas+'</div>' +
+      (marcas ? '<div style="display:flex;flex-wrap:wrap;gap:7px">'+marcas+'</div>' : '') +
+      '<p class="texto-cronica"></p>';
+
+    elCronica.appendChild(d);
+    return d.querySelector(".texto-cronica");
+  }
+
+  var ocupado = false;
+
+  async function jogarAno(acao){
+    if (ocupado || S.fim) return;
+    ocupado = true;
+    elBandeja.classList.add("travada");
+
+    var b = resolverAno(S, acao);
+    var alvo = entradaDoAno(b);
+    pintarEstado(true);
+    elCronica.scrollTop = elCronica.scrollHeight;
+
+    await narrar(b, S, alvo);
+    elCronica.scrollTop = elCronica.scrollHeight;
+
+    ocupado = false;
+    if (S.fim) { encerrar(); return; }
+    elBandeja.classList.remove("travada");
+    atualizarBandeja();
+  }
+
+  async function encerrar(){
+    var placar = S.casas.map(function(c){ return { casa:c, renome:renome(c, S) }; })
+                        .sort(function(a,b){ return b.renome - a.renome; });
+
+    elJogo.hidden = true;
+    elFim.hidden = false;
+    document.querySelector(".shell").classList.remove("jogando");
+
+    var eu = placar.find(function(p){ return p.casa.eu; });
+    var pos = placar.indexOf(eu) + 1;
+
+    var v = $("veredicto");
+    if (S.colapso){
+      v.className = "veredicto ruina";
+      v.textContent = "Vale Fundo acabou.";
+      $("fim-eyebrow").textContent = "Ano " + S.historico[S.historico.length-1].ano + " · nenhuma alma restou";
+    } else {
+      v.className = "veredicto vive";
+      v.textContent = pos === 1 ? "A herança é sua." : eu.casa.nome + " ficou em " + pos + "º.";
+      $("fim-eyebrow").textContent = "Doze anos · " + almas(S) + " almas de pé";
+    }
+
+    $("placar").innerHTML = placar.map(function(p,i){
+      return '<div class="placar-linha'+(p.casa.eu?' eu':'')+'">' +
+               '<span class="pos num">'+(i+1)+'</span>' +
+               '<span class="casa">'+p.casa.nome +
+                 '<span class="detalhe">'+p.casa.ouro+' ouro · '+p.casa.terras+' terras · '+p.casa.bracos+' braços</span>' +
+               '</span>' +
+               '<span class="renome">'+p.renome+'</span>' +
+             '</div>';
+    }).join("");
+
+    $("semente").textContent = "Semente " + S.seed + " · concórdia final " + S.vila.concordia +
+      " · multiplicador " + (S.colapso ? "0,15" : (0.4 + 0.6*(S.vila.concordia/100)).toFixed(2).replace(".", ","));
+
+    await narrarEpilogo(S, placar, $("epilogo"));
+  }
+
+  function comecar(){
+    var nome = ($("nome-casa").value || "").trim() || "Casa Bragantina";
+    S = novoJogo(nome);
+    ocupado = false;
+    elCronica.innerHTML = "";
+    elAbertura.hidden = true;
+    elFim.hidden = true;
+    elJogo.hidden = false;
+    document.querySelector(".shell").classList.add("jogando");
+    montarMedidores();
+    montarBandeja();
+    pintarEstado(false);
+    atualizarBandeja();
+    elBandeja.classList.remove("travada");
+    entradaDeAbertura();
+  }
+
+  $("comecar").addEventListener("click", comecar);
+  $("nome-casa").addEventListener("keydown", function(e){ if (e.key === "Enter") comecar(); });
+  $("denovo").addEventListener("click", function(){
+    elFim.hidden = true;
+    elAbertura.hidden = false;
+  });
+
+  // A IA chega depois — o jogo já está inteiro sem ela.
+  if (window.claude && typeof window.claude.use === "function"){
+    window.claude.use("sample").then(function(fn){ sample = fn; }).catch(function(){ sample = null; });
+  }
+})();
+</script>
