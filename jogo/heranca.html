@@ -355,7 +355,7 @@ button[disabled]{cursor:not-allowed}
   <!-- ================= ABERTURA ================= -->
   <section id="abertura">
     <div>
-      <p class="subtitulo">Vale Fundo · cinco casas · doze anos</p>
+      <p class="subtitulo">Uma vila · cinco casas · doze anos</p>
       <h1 class="marca">Heran<span>ç</span>a</h1>
     </div>
 
@@ -368,6 +368,10 @@ button[disabled]{cursor:not-allowed}
     <button class="btn-fantasma" id="btn-nova" hidden>Fundar outra casa</button>
 
     <div id="form-nova" style="display:flex;flex-direction:column;gap:16px">
+      <div class="campo">
+        <label for="nome-vila">O nome da vila</label>
+        <input id="nome-vila" maxlength="24" value="Vale Fundo" autocomplete="off" spellcheck="false">
+      </div>
       <div class="campo">
         <label for="nome-casa">O nome da sua casa</label>
         <input id="nome-casa" maxlength="22" value="Casa Bragantina" autocomplete="off" spellcheck="false">
@@ -382,7 +386,7 @@ button[disabled]{cursor:not-allowed}
   <section id="jogo" hidden>
     <div class="cabeca">
       <div class="cabeca-topo">
-        <div class="lugar">Vale Fundo<small id="rotulo-ano">Ano 1 de 12</small></div>
+        <div class="lugar"><span id="nome-vila-topo">Vale Fundo</span><small id="rotulo-ano">Ano 1 de 12</small></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="eyebrow" id="almas-topo">— almas</span>
           <button class="trocar" id="btn-trocar" title="Guardar e voltar ao livro das casas">Livro</button>
@@ -511,13 +515,14 @@ button[disabled]{cursor:not-allowed}
 
   var S = null;
 
-  function novoJogo(nomeCasa){
+  function novoJogo(nomeVila, nomeCasa){
     var seed = Math.floor(Math.random()*9000) + 1000;
     var casas = [{ nome:nomeCasa, eu:true, ouro:10, terras:2, bracos:4, indole:"você" }];
     RIVAIS.forEach(function(r){
       casas.push({ nome:r.nome, eu:false, ouro:10, terras:2, bracos:4, indole:r.indole, pol:r });
     });
     return {
+      vilaNome:nomeVila,
       seed:seed, rnd:fazerRnd(seed, 0), rngN:0, ano:1, fim:false, colapso:false,
       vila:{ celeiro:40, muralha:20, concordia:60 }, cismaRecente:false,
       casas:casas,
@@ -661,7 +666,7 @@ button[disabled]{cursor:not-allowed}
   /* Só dados — nada de função, nada de referência cruzada. */
   function serializar(s){
     return {
-      versao:1, seed:s.seed, rngN:s.rngN, ano:s.ano,
+      versao:2, vilaNome:s.vilaNome, seed:s.seed, rngN:s.rngN, ano:s.ano,
       fim:!!s.fim, colapso:!!s.colapso, cismaRecente:!!s.cismaRecente,
       ultimaDoJogador:s.ultimaDoJogador || null,
       vila:{ celeiro:s.vila.celeiro, muralha:s.vila.muralha, concordia:s.vila.concordia },
@@ -676,6 +681,7 @@ button[disabled]{cursor:not-allowed}
 
   function desserializar(d){
     var s = {
+      vilaNome:d.vilaNome || "Vale Fundo", // partidas antigas nasceram sem nome próprio
       seed:d.seed, rnd:fazerRnd(d.seed, d.rngN), rngN:d.rngN || 0,
       ano:d.ano, fim:!!d.fim, colapso:!!d.colapso, cismaRecente:!!d.cismaRecente,
       vila:{ celeiro:d.vila.celeiro, muralha:d.vila.muralha, concordia:d.vila.concordia },
@@ -700,7 +706,7 @@ button[disabled]{cursor:not-allowed}
 
   function fatosDoAno(b, s){
     var l = [];
-    l.push("ANO " + b.ano + " de " + ANOS + ", na vila de Vale Fundo.");
+    l.push("ANO " + b.ano + " de " + ANOS + ", na vila de " + s.vilaNome + ".");
     l.push("O que cada casa fez:");
     b.escolhas.forEach(function(e){
       l.push("- " + e.casa + (e.eu ? " (o narrador serve esta casa)" : "") + ": " + e.resumo + ".");
@@ -717,12 +723,12 @@ button[disabled]{cursor:not-allowed}
     return l.join("\n");
   }
 
-  var REGRAS_CRONISTA =
-    "Você é o cronista da vila de Vale Fundo, escrevendo em português do Brasil.\n" +
+  var REGRAS_CRONISTA = function(vila){
+    return "Você é o cronista da vila de " + vila + ", escrevendo em português do Brasil.\n" +
     "Escreva o registro deste ano em 2 ou 3 frases. Tom de crônica antiga: seco, concreto, sem floreio moderno, sem adjetivo gratuito.\n" +
     "REGRAS RÍGIDAS: use somente os fatos listados. Nunca invente número, nome, personagem ou acontecimento. " +
     "Não repita os números crus — traduza-os em imagem (celeiro baixo = a farinha rateada; concórdia baixa = portas que não se abrem mais). " +
-    "Não use listas, títulos, aspas nem markdown. Não se dirija ao leitor. Só a prosa.\n\n";
+    "Não use listas, títulos, aspas nem markdown. Não se dirija ao leitor. Só a prosa.\n\n"; };
 
   function narrativaDeReserva(b){
     var e = b.escolhas.find(function(x){ return x.eu; });
@@ -739,7 +745,7 @@ button[disabled]{cursor:not-allowed}
     alvo.classList.add("pensando");
     alvo.textContent = "O cronista molha a pena…";
     try {
-      var res = await sample(REGRAS_CRONISTA + fatosDoAno(b, s), {
+      var res = await sample(REGRAS_CRONISTA(s.vilaNome) + fatosDoAno(b, s), {
         modelTier:"quick",
         onText:function(ev){ alvo.classList.remove("pensando"); alvo.textContent = ev.text; }
       });
@@ -761,12 +767,12 @@ button[disabled]{cursor:not-allowed}
     }).join("\n");
     var ordem = placar.map(function(p,i){ return (i+1) + "º " + p.casa.nome + " com " + p.renome + " de renome"; }).join("; ");
     var fim = s.colapso
-      ? "A vila morreu: não sobrou ninguém em Vale Fundo."
-      : "A vila sobreviveu aos doze anos com " + almas(s) + " almas, celeiro " + s.vila.celeiro +
+      ? "A vila morreu: não sobrou ninguém em " + s.vilaNome + "."
+      : s.vilaNome + " sobreviveu aos doze anos com " + almas(s) + " almas, celeiro " + s.vila.celeiro +
         ", muralha " + s.vila.muralha + " e concórdia " + s.vila.concordia + ".";
 
     var prompt =
-      "Você é o cronista de Vale Fundo, escrevendo em português do Brasil.\n" +
+      "Você é o cronista de " + s.vilaNome + ", escrevendo em português do Brasil.\n" +
       "Escreva o fecho da crônica em 4 a 5 frases: o que essas doze colheitas revelaram sobre as casas, e o veredicto sobre quem herdou o quê.\n" +
       "REGRAS RÍGIDAS: use somente os fatos abaixo. Nunca invente número, nome ou acontecimento. Não use listas, títulos nem markdown. Tom de crônica antiga, seco e concreto.\n\n" +
       "DOZE ANOS:\n" + linhas + "\n\nDESFECHO: " + fim + "\nRENOME FINAL: " + ordem + ".\n" +
@@ -830,7 +836,7 @@ button[disabled]{cursor:not-allowed}
           var snap = await this.db.collection("casas").orderBy("atualizadoEm","desc").limit(60).get();
           return snap.docs.map(function(doc){
             var v = doc.data() || {};
-            return { id:doc.id, nome:v.nome, atualizadoEm:v.atualizadoEm,
+            return { id:doc.id, nome:v.nome, vila:v.vila, atualizadoEm:v.atualizadoEm,
                      ano:v.ano, fim:v.fim, renome:v.renome, jogo:v.jogo };
           });
         } catch (e) { /* a nuvem falhou: o navegador ainda tem tudo */ }
@@ -845,7 +851,7 @@ button[disabled]{cursor:not-allowed}
       if (this.db){
         try {
           await this.db.doc("casas/" + registro.id).set({
-            nome:registro.nome, atualizadoEm:registro.atualizadoEm,
+            nome:registro.nome, vila:registro.vila || null, atualizadoEm:registro.atualizadoEm,
             ano:registro.ano, fim:registro.fim, renome:registro.renome, jogo:registro.jogo
           });
         } catch (e) { /* o espelho local ja guardou */ }
@@ -869,7 +875,7 @@ button[disabled]{cursor:not-allowed}
         for (var i = 0; i < locais.length; i++){
           var c = locais[i];
           await this.db.doc("casas/" + c.id).set({
-            nome:c.nome, atualizadoEm:c.atualizadoEm,
+            nome:c.nome, vila:c.vila || null, atualizadoEm:c.atualizadoEm,
             ano:c.ano, fim:c.fim, renome:c.renome, jogo:c.jogo
           });
         }
@@ -929,6 +935,7 @@ button[disabled]{cursor:not-allowed}
     $("minhas-terras").textContent = eu.terras;
     $("meus-bracos").textContent = eu.bracos;
     $("almas-topo").textContent = almas(S) + " almas";
+    $("nome-vila-topo").textContent = S.vilaNome;
     $("rotulo-ano").textContent = "Ano " + S.ano + " de " + ANOS;
   }
 
@@ -959,9 +966,10 @@ button[disabled]{cursor:not-allowed}
     d.className = "entrada";
     d.innerHTML =
       '<div class="selo-ano">A crônica começa</div>' +
-      '<p class="texto-cronica">Vale Fundo tem quarenta medidas de grão, um muro pela metade e vinte bocas. ' +
+      '<p class="texto-cronica"><span class="vila-aqui"></span> tem quarenta medidas de grão, um muro pela metade e vinte bocas. ' +
       'Cinco casas escreveram seus nomes no livro no mesmo dia, e nenhuma delas confia inteiramente nas outras. ' +
       'O primeiro ano espera a sua escolha.</p>';
+    d.querySelector(".vila-aqui").textContent = S.vilaNome;
     elCronica.appendChild(d);
   }
 
@@ -1003,7 +1011,7 @@ button[disabled]{cursor:not-allowed}
     if (!S || !idAtual) return;
     var meu = S.casas[0];
     await Cofre.salvar({
-      id:idAtual, nome:meu.nome, atualizadoEm:Date.now(),
+      id:idAtual, nome:meu.nome, vila:S.vilaNome, atualizadoEm:Date.now(),
       ano:S.ano, fim:!!S.fim,
       renome:S.fim ? renome(meu, S) : null,
       jogo:serializar(S)
@@ -1045,7 +1053,7 @@ button[disabled]{cursor:not-allowed}
     var v = $("veredicto");
     if (S.colapso){
       v.className = "veredicto ruina";
-      v.textContent = "Vale Fundo acabou.";
+      v.textContent = S.vilaNome + " acabou.";
       $("fim-eyebrow").textContent = "Ano " + S.historico[S.historico.length-1].ano + " · nenhuma alma restou";
     } else {
       v.className = "veredicto vive";
@@ -1098,8 +1106,8 @@ button[disabled]{cursor:not-allowed}
     elLista.hidden = false;
     elLista.innerHTML = casas.map(function(c){
       var estado = c.fim
-        ? '<span class="estado">Crônica encerrada</span>'
-        : '<span class="estado viva">Ano ' + (c.ano || 1) + ' de ' + ANOS + ' · a jogar</span>';
+        ? '<span class="estado"><span class="vila-mini"></span>Crônica encerrada</span>'
+        : '<span class="estado viva"><span class="vila-mini"></span>Ano ' + (c.ano || 1) + ' de ' + ANOS + ' · a jogar</span>';
       return '<div class="casa-linha">' +
                '<button class="casa-abrir"><span class="nome"></span>' + estado + '</button>' +
                (c.fim ? '<span class="renome-mini">' + (c.renome || 0) + '</span>' : '<span></span>') +
@@ -1110,6 +1118,8 @@ button[disabled]{cursor:not-allowed}
     // o nome vem do jogador: entra como texto, nunca como marcação
     elLista.querySelectorAll(".casa-abrir").forEach(function(b, i){
       b.querySelector(".nome").textContent = casas[i].nome || "Casa sem nome";
+      var vilaEl = b.querySelector(".vila-mini");
+      if (vilaEl) vilaEl.textContent = (casas[i].vila || "Vale Fundo") + " · ";
       b.addEventListener("click", function(){ abrirCasa(casas[i]); });
     });
     elLista.querySelectorAll(".casa-apagar").forEach(function(b){
@@ -1147,8 +1157,9 @@ button[disabled]{cursor:not-allowed}
   }
 
   async function criarCasa(){
+    var vila = ($("nome-vila").value || "").trim() || "Vale Fundo";
     var nome = ($("nome-casa").value || "").trim() || "Casa Bragantina";
-    S = novoJogo(nome);
+    S = novoJogo(vila, nome);
     idAtual = novoId();
     prepararTela();
     entradaDeAbertura();
@@ -1179,11 +1190,13 @@ button[disabled]{cursor:not-allowed}
   }
 
   $("comecar").addEventListener("click", criarCasa);
-  $("nome-casa").addEventListener("keydown", function(e){ if (e.key === "Enter") criarCasa(); });
+  ["nome-vila","nome-casa"].forEach(function(id){
+    $(id).addEventListener("keydown", function(e){ if (e.key === "Enter") criarCasa(); });
+  });
   $("btn-nova").addEventListener("click", function(){
     mostrarFormNova();
-    $("nome-casa").focus();
-    $("nome-casa").select();
+    $("nome-vila").focus();
+    $("nome-vila").select();
   });
   $("btn-trocar").addEventListener("click", function(){ if (!ocupado) voltarAoLivro(); });
   $("voltar-livro").addEventListener("click", voltarAoLivro);

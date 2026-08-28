@@ -24,7 +24,10 @@ morreram: sem consequência mecânica, o jogador percebe em três dias que nada 
 
 ## O loop
 
-Cinco linhagens dividem a vila de Vale Fundo por doze anos. No produto final,
+Cinco linhagens dividem uma vila por doze anos. Ao fundar uma partida o jogador
+nomeia **a vila** e **a sua casa** — o nome da vila vale no cabeçalho, na abertura da
+crônica, no placar e no prompt enviado à IA. Partidas salvas antes disso reabrem como
+"Vale Fundo". No produto final,
 **1 ano = 1 dia real** e cada jogador é uma pessoa de verdade. No protótipo, os doze
 anos correm em ~5 minutos contra quatro casas controladas por política fixa.
 
@@ -113,6 +116,8 @@ retoma e apaga perfis, cada um com sua crônica independente.
   eventos, recursos e renome idênticos a uma partida corrida de ponta a ponta.
 - A crônica é reconstruída na reabertura com o texto já narrado, e uma partida encerrada
   reabre no placar sem pagar a IA de novo pelo epílogo.
+- O save carrega `vilaNome`; a desserialização preenche "Vale Fundo" quando ele falta,
+  para os saves da versão 1.
 
 Os perfis são declarados pelo jogador, não autenticados — quem tem o link enxerga as
 casas gravadas na nuvem. Serve para um grupo fechado, que é o público do conceito, mas
