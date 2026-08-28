@@ -1536,30 +1536,6 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
           const scheduledDateKeyKey = getFollowupDateKey(nextContact);
           const reminderKey = buildFollowupReminderKey(lead.id, scheduledDateKeyKey, 'alert');
           const alreadyFinal = existing && ['done', 'dismissed'].includes(String(existing.status || '').toLowerCase());
-          const staleOpenNotifications = notifications.filter((notification) => {
-            const normalized = normalizeFollowupNotification(notification);
-            if (normalized.lead_id !== String(lead.id || '').trim()) return false;
-            if (!normalized.scheduled_date_key || normalized.scheduled_date_key === scheduledDateKeyKey) return false;
-            return ['pending', 'processing'].includes(String(normalized.status || '').toLowerCase());
-          });
-
-          for (const staleNotification of staleOpenNotifications) {
-            const cancelResult = await cancelOmnichatTask(staleNotification.external_id, config);
-            const updated = buildFollowupNotificationRow({
-              existing: staleNotification,
-              status: cancelResult.ok || cancelResult.status === 404 ? 'dismissed' : 'error',
-              lastError: cancelResult.ok || cancelResult.status === 404 ? '' : cancelResult.reason || `omnichat_http_${cancelResult.status}`,
-              canceledAt: nowIso,
-              lastAttemptAt: nowIso,
-              lastSyncedAt: nowIso,
-              updatedAt: nowIso,
-            });
-            upsertFollowupNotificationRow(notifications, updated);
-            notificationMap.set(updated.reminder_key, updated);
-            if (updated.external_id) notificationMap.set(updated.external_id, updated);
-            summary.canceled += 1;
-            summary.processed += 1;
-          }
 
           if (existing && String(existing.status || '').toLowerCase() === 'pending') {
             summary.processed += 1;
@@ -1664,36 +1640,38 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
         }
       }
 
-      for (const notification of scopedNotifications) {
-        const status = String(notification.status || '').toLowerCase();
-        if (!['pending', 'processing'].includes(status)) continue;
-        summary.processed += 1;
-        const syncResult = await syncFollowupStatusByNotification(notification, config);
-        if (syncResult.synced) {
-          const updated = buildFollowupNotificationRow({
-            existing: notification,
-            status: syncResult.status,
-            executedAt: syncResult.executed_at || notification.executed_at,
-            conversationId: syncResult.conversation_id || notification.conversation_id,
-            lastError: syncResult.error_msg || '',
-            lastSyncedAt: nowIso,
-            updatedAt: nowIso,
-          });
-          upsertFollowupNotificationRow(notifications, updated);
-          notificationMap.set(updated.reminder_key, updated);
-          if (updated.external_id) notificationMap.set(updated.external_id, updated);
-          summary.synced += 1;
-        } else {
-          const updated = buildFollowupNotificationRow({
-            existing: notification,
-            lastError: syncResult.error || syncResult.reason || 'sync_failed',
-            lastSyncedAt: nowIso,
-            updatedAt: nowIso,
-          });
-          upsertFollowupNotificationRow(notifications, updated);
-          notificationMap.set(updated.reminder_key, updated);
-          if (updated.external_id) notificationMap.set(updated.external_id, updated);
-          summary.errors += 1;
+      if (!targetLeadId) {
+        for (const notification of scopedNotifications) {
+          const status = String(notification.status || '').toLowerCase();
+          if (!['pending', 'processing'].includes(status)) continue;
+          summary.processed += 1;
+          const syncResult = await syncFollowupStatusByNotification(notification, config);
+          if (syncResult.synced) {
+            const updated = buildFollowupNotificationRow({
+              existing: notification,
+              status: syncResult.status,
+              executedAt: syncResult.executed_at || notification.executed_at,
+              conversationId: syncResult.conversation_id || notification.conversation_id,
+              lastError: syncResult.error_msg || '',
+              lastSyncedAt: nowIso,
+              updatedAt: nowIso,
+            });
+            upsertFollowupNotificationRow(notifications, updated);
+            notificationMap.set(updated.reminder_key, updated);
+            if (updated.external_id) notificationMap.set(updated.external_id, updated);
+            summary.synced += 1;
+          } else {
+            const updated = buildFollowupNotificationRow({
+              existing: notification,
+              lastError: syncResult.error || syncResult.reason || 'sync_failed',
+              lastSyncedAt: nowIso,
+              updatedAt: nowIso,
+            });
+            upsertFollowupNotificationRow(notifications, updated);
+            notificationMap.set(updated.reminder_key, updated);
+            if (updated.external_id) notificationMap.set(updated.external_id, updated);
+            summary.errors += 1;
+          }
         }
       }
 
