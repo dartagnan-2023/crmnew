@@ -96,6 +96,28 @@ maior no fim para o epílogo. **O jogo é inteiro sem ela**: há narração de r
 determinística, e `sample` sendo `null`, `not_granted` ou `rate_limited` degrada em
 silêncio sem quebrar partida.
 
+## Memória e usuários
+
+A partida sobrevive a fechar o jogo. A primeira tela é o **livro das casas**: cria,
+retoma e apaga perfis, cada um com sua crônica independente.
+
+- **Salvamento automático a cada ano**, duas vezes: assim que o ano resolve (antes de
+  a narração chegar) e de novo com a prosa. Fechar durante a narração não perde o ano.
+- **Onde grava:** na coleção `casas` do armazenamento do artifact quando ele está
+  disponível — a casa acompanha o jogador entre aparelhos — e **sempre** espelhado no
+  `localStorage`. Se a nuvem cair ou for negada, o jogo grava igual; casas fundadas
+  antes de a nuvem existir sobem sozinhas na primeira oportunidade.
+- **O gerador aleatório é serializável.** Não dá para guardar um closure num save, então
+  guarda-se quantas vezes o gerador foi chamado (`rngN`) e reconstrói-se avançando-o de
+  novo. Verificado: uma partida de 12 anos com um save/restore *a cada ano* produz
+  eventos, recursos e renome idênticos a uma partida corrida de ponta a ponta.
+- A crônica é reconstruída na reabertura com o texto já narrado, e uma partida encerrada
+  reabre no placar sem pagar a IA de novo pelo epílogo.
+
+Os perfis são declarados pelo jogador, não autenticados — quem tem o link enxerga as
+casas gravadas na nuvem. Serve para um grupo fechado, que é o público do conceito, mas
+não é isolamento de verdade e precisa de identidade real antes de sair desse círculo.
+
 ## O que falta para virar produto
 
 1. **Multiplayer assíncrono real** — servidor de estado, 5 a 20 jogadores humanos,

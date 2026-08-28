@@ -124,6 +124,52 @@ body{
 }
 .campo input:focus{outline:2px solid var(--verdigris);outline-offset:2px}
 
+/* ---------- o livro das casas ---------- */
+.livro{display:flex;flex-direction:column;gap:1px;background:var(--line-solid);border:1px solid var(--line-solid)}
+.casa-linha{
+  display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;
+  background:var(--ink-2);
+}
+.casa-linha:hover{background:var(--ink-3)}
+.casa-abrir{
+  background:none;border:none;text-align:left;padding:13px 4px 13px 14px;
+  display:flex;flex-direction:column;gap:3px;min-width:0;
+}
+.casa-abrir .nome{font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.casa-abrir .estado{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--vellum-faint)}
+.casa-abrir .estado.viva{color:var(--verdigris)}
+.casa-linha .renome-mini{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:16px;font-weight:600;color:var(--gilt)}
+.casa-apagar{
+  background:none;border:none;border-left:1px solid var(--line-solid);
+  color:var(--vellum-faint);padding:0 14px;align-self:stretch;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+}
+.casa-apagar:hover{color:var(--ember);background:#1F1210}
+.casa-apagar.confirmando{color:var(--ember);background:#1F1210}
+
+.btn-fantasma{
+  background:none;
+  border:1px solid var(--line-solid);
+  color:var(--vellum-dim);
+  border-radius:2px;
+  padding:14px 18px;
+  font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  width:100%;
+  transition:border-color .16s ease,color .16s ease;
+}
+.btn-fantasma:hover{border-color:var(--verdigris-deep);color:var(--vellum)}
+
+.onde-salva{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--vellum-faint);text-align:center;margin:0;
+}
+.trocar{
+  background:none;border:1px solid var(--line-solid);color:var(--vellum-faint);
+  font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  padding:5px 9px;border-radius:2px;white-space:nowrap;
+}
+.trocar:hover{color:var(--vellum);border-color:var(--verdigris-deep)}
+
 button{font:inherit;cursor:pointer;color:inherit}
 button:focus-visible{outline:2px solid var(--verdigris);outline-offset:3px}
 button[disabled]{cursor:not-allowed}
@@ -315,14 +361,21 @@ button[disabled]{cursor:not-allowed}
 
     <p class="premissa">Cinco linhagens dividem uma vila. O celeiro, a muralha e a concórdia são <em>de todos</em>. O ouro e as terras são <em>seus</em>.</p>
 
-    <p class="regra-ouro">Uma escolha por ano. O ano resolve sozinho — e o que você fizer, os outros aprendem a fazer.</p>
+    <p class="regra-ouro" id="regra-ouro">Uma escolha por ano. O ano resolve sozinho — e o que você fizer, os outros aprendem a fazer.</p>
 
-    <div class="campo">
-      <label for="nome-casa">O nome da sua casa</label>
-      <input id="nome-casa" maxlength="22" value="Casa Bragantina" autocomplete="off" spellcheck="false">
+    <div class="livro" id="lista-casas" hidden></div>
+
+    <button class="btn-fantasma" id="btn-nova" hidden>Fundar outra casa</button>
+
+    <div id="form-nova" style="display:flex;flex-direction:column;gap:16px">
+      <div class="campo">
+        <label for="nome-casa">O nome da sua casa</label>
+        <input id="nome-casa" maxlength="22" value="Casa Bragantina" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn-selo" id="comecar">Abrir a crônica</button>
     </div>
 
-    <button class="btn-selo" id="comecar">Abrir a crônica</button>
+    <p class="onde-salva" id="onde-salva"></p>
   </section>
 
   <!-- ================= JOGO ================= -->
@@ -330,7 +383,10 @@ button[disabled]{cursor:not-allowed}
     <div class="cabeca">
       <div class="cabeca-topo">
         <div class="lugar">Vale Fundo<small id="rotulo-ano">Ano 1 de 12</small></div>
-        <div class="eyebrow" id="almas-topo">— almas</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="eyebrow" id="almas-topo">— almas</span>
+          <button class="trocar" id="btn-trocar" title="Guardar e voltar ao livro das casas">Livro</button>
+        </div>
       </div>
       <div class="medidores" id="medidores"></div>
     </div>
@@ -358,6 +414,7 @@ button[disabled]{cursor:not-allowed}
     <div class="placar" id="placar"></div>
     <p class="semente" id="semente"></p>
     <button class="btn-selo" id="denovo">Começar outra crônica</button>
+    <button class="btn-fantasma" id="voltar-livro">Voltar ao livro das casas</button>
   </section>
 
 </div>
@@ -382,6 +439,14 @@ button[disabled]{cursor:not-allowed}
     };
   }
   function clamp(v,min,max){ return v < min ? min : v > max ? max : v; }
+
+  // Um save nao consegue guardar um closure. Guarda-se quantas vezes o rng
+  // foi chamado e reconstroi-se avancando-o de novo — sao no maximo 12.
+  function fazerRnd(seed, avancos){
+    var f = mulberry32(seed);
+    for (var i = 0; i < (avancos || 0); i++) f();
+    return f;
+  }
 
   var ACOES = {
     semear: {
@@ -453,7 +518,7 @@ button[disabled]{cursor:not-allowed}
       casas.push({ nome:r.nome, eu:false, ouro:10, terras:2, bracos:4, indole:r.indole, pol:r });
     });
     return {
-      seed:seed, rnd:mulberry32(seed), ano:1, fim:false, colapso:false,
+      seed:seed, rnd:fazerRnd(seed, 0), rngN:0, ano:1, fim:false, colapso:false,
       vila:{ celeiro:40, muralha:20, concordia:60 }, cismaRecente:false,
       casas:casas,
       ultimaDoJogador:null,
@@ -506,7 +571,7 @@ button[disabled]{cursor:not-allowed}
     // ---- um grande acontecimento por ano, por prioridade ----
     var evento = { chave:"quieto", titulo:"Ano quieto", tom:"neutra",
                    fato:"Nada de notável aconteceu, e um ano sem sobressalto aproxima as casas." };
-    var r = s.rnd();
+    var r = s.rnd(); s.rngN += 1;
     var cismaAntes = s.cismaRecente;
     s.cismaRecente = false;
 
@@ -591,6 +656,40 @@ button[disabled]{cursor:not-allowed}
     var base = c.ouro*1.5 + c.terras*10 + c.bracos*8;
     var fator = s.colapso ? 0.10 : (0.15 + 0.85*Math.pow(s.vila.concordia/100, 1.3));
     return Math.round(base * fator);
+  }
+
+  /* Só dados — nada de função, nada de referência cruzada. */
+  function serializar(s){
+    return {
+      versao:1, seed:s.seed, rngN:s.rngN, ano:s.ano,
+      fim:!!s.fim, colapso:!!s.colapso, cismaRecente:!!s.cismaRecente,
+      ultimaDoJogador:s.ultimaDoJogador || null,
+      vila:{ celeiro:s.vila.celeiro, muralha:s.vila.muralha, concordia:s.vila.concordia },
+      casas:s.casas.map(function(c){
+        return { nome:c.nome, eu:!!c.eu, ouro:c.ouro, terras:c.terras,
+                 bracos:c.bracos, indole:c.indole, ultimaAcao:c.ultimaAcao || null };
+      }),
+      historico:s.historico,
+      epilogo:s.epilogo || null
+    };
+  }
+
+  function desserializar(d){
+    var s = {
+      seed:d.seed, rnd:fazerRnd(d.seed, d.rngN), rngN:d.rngN || 0,
+      ano:d.ano, fim:!!d.fim, colapso:!!d.colapso, cismaRecente:!!d.cismaRecente,
+      vila:{ celeiro:d.vila.celeiro, muralha:d.vila.muralha, concordia:d.vila.concordia },
+      casas:d.casas.map(function(c, i){
+        var casa = { nome:c.nome, eu:i === 0, ouro:c.ouro, terras:c.terras,
+                     bracos:c.bracos, indole:c.indole, ultimaAcao:c.ultimaAcao };
+        if (i > 0) casa.pol = RIVAIS[i-1]; // as políticas voltam por posição
+        return casa;
+      }),
+      ultimaDoJogador:d.ultimaDoJogador,
+      historico:d.historico || [],
+      epilogo:d.epilogo || null
+    };
+    return s;
   }
 
   /* ============================================================
@@ -692,6 +791,97 @@ button[disabled]{cursor:not-allowed}
         ? err.text.trim()
         : fim + " " + placar[0].casa.nome + " fica com o maior renome, " + placar[0].renome + ".";
     }
+  }
+
+  /* ============================================================
+     2b. O COFRE — a partida sobrevive a fechar o jogo.
+         Escreve sempre no navegador; escreve TAMBÉM na nuvem quando
+         ela existe, para a casa acompanhar você entre aparelhos.
+     ============================================================ */
+
+  var CHAVE_LOCAL = "heranca.casas.v1";
+
+  var Cofre = {
+    db:null,
+    pronto:false,
+
+    async iniciar(){
+      if (window.claude && typeof window.claude.use === "function"){
+        try {
+          var d = await window.claude.use("db");
+          if (d) this.db = d;
+        } catch (e) { this.db = null; }
+      }
+      this.pronto = true;
+      if (this.db) await this.migrarParaNuvem();
+    },
+
+    lerLocal(){
+      try { return JSON.parse(localStorage.getItem(CHAVE_LOCAL) || "[]"); }
+      catch (e) { return []; }
+    },
+    gravarLocal(lista){
+      try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(lista)); } catch (e) {}
+    },
+
+    async listar(){
+      if (this.db){
+        try {
+          var snap = await this.db.collection("casas").orderBy("atualizadoEm","desc").limit(60).get();
+          return snap.docs.map(function(doc){
+            var v = doc.data() || {};
+            return { id:doc.id, nome:v.nome, atualizadoEm:v.atualizadoEm,
+                     ano:v.ano, fim:v.fim, renome:v.renome, jogo:v.jogo };
+          });
+        } catch (e) { /* a nuvem falhou: o navegador ainda tem tudo */ }
+      }
+      return this.lerLocal().sort(function(a,b){ return (b.atualizadoEm||0) - (a.atualizadoEm||0); });
+    },
+
+    async salvar(registro){
+      var lista = this.lerLocal().filter(function(c){ return c.id !== registro.id; });
+      lista.unshift(registro);
+      this.gravarLocal(lista.slice(0, 60));
+      if (this.db){
+        try {
+          await this.db.doc("casas/" + registro.id).set({
+            nome:registro.nome, atualizadoEm:registro.atualizadoEm,
+            ano:registro.ano, fim:registro.fim, renome:registro.renome, jogo:registro.jogo
+          });
+        } catch (e) { /* o espelho local ja guardou */ }
+      }
+    },
+
+    async apagar(id){
+      this.gravarLocal(this.lerLocal().filter(function(c){ return c.id !== id; }));
+      if (this.db){
+        try { await this.db.doc("casas/" + id).delete(); } catch (e) {}
+      }
+    },
+
+    // Casas fundadas antes de a nuvem existir sobem na primeira oportunidade.
+    async migrarParaNuvem(){
+      var locais = this.lerLocal();
+      if (!locais.length) return;
+      try {
+        var snap = await this.db.collection("casas").limit(1).get();
+        if (!snap.empty) return;
+        for (var i = 0; i < locais.length; i++){
+          var c = locais[i];
+          await this.db.doc("casas/" + c.id).set({
+            nome:c.nome, atualizadoEm:c.atualizadoEm,
+            ano:c.ano, fim:c.fim, renome:c.renome, jogo:c.jogo
+          });
+        }
+      } catch (e) {}
+    },
+
+    onde(){ return this.db ? "As casas ficam guardadas na nuvem" : "As casas ficam guardadas neste aparelho"; }
+  };
+
+  function novoId(){
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
   }
 
   /* ============================================================
@@ -802,6 +992,23 @@ button[disabled]{cursor:not-allowed}
   }
 
   var ocupado = false;
+  var idAtual = null;
+
+  function placarDe(s){
+    return s.casas.map(function(c){ return { casa:c, renome:renome(c, s) }; })
+                  .sort(function(a,b){ return b.renome - a.renome; });
+  }
+
+  async function guardar(){
+    if (!S || !idAtual) return;
+    var meu = S.casas[0];
+    await Cofre.salvar({
+      id:idAtual, nome:meu.nome, atualizadoEm:Date.now(),
+      ano:S.ano, fim:!!S.fim,
+      renome:S.fim ? renome(meu, S) : null,
+      jogo:serializar(S)
+    });
+  }
 
   async function jogarAno(acao){
     if (ocupado || S.fim) return;
@@ -812,9 +1019,12 @@ button[disabled]{cursor:not-allowed}
     var alvo = entradaDoAno(b);
     pintarEstado(true);
     elCronica.scrollTop = elCronica.scrollHeight;
+    await guardar(); // o ano ja esta salvo antes de a prosa chegar
 
     await narrar(b, S, alvo);
+    b.narrativa = alvo.textContent;
     elCronica.scrollTop = elCronica.scrollHeight;
+    await guardar();
 
     ocupado = false;
     if (S.fim) { encerrar(); return; }
@@ -823,8 +1033,7 @@ button[disabled]{cursor:not-allowed}
   }
 
   async function encerrar(){
-    var placar = S.casas.map(function(c){ return { casa:c, renome:renome(c, S) }; })
-                        .sort(function(a,b){ return b.renome - a.renome; });
+    var placar = placarDe(S);
 
     elJogo.hidden = true;
     elFim.hidden = false;
@@ -857,12 +1066,73 @@ button[disabled]{cursor:not-allowed}
     $("semente").textContent = "Semente " + S.seed + " · concórdia final " + S.vila.concordia +
       " · multiplicador " + (S.colapso ? "0,15" : (0.4 + 0.6*(S.vila.concordia/100)).toFixed(2).replace(".", ","));
 
-    await narrarEpilogo(S, placar, $("epilogo"));
+    if (S.epilogo){
+      $("epilogo").textContent = S.epilogo;   // partida reaberta: nao paga a IA de novo
+    } else {
+      await narrarEpilogo(S, placar, $("epilogo"));
+      S.epilogo = $("epilogo").textContent;
+    }
+    await guardar();
   }
 
-  function comecar(){
-    var nome = ($("nome-casa").value || "").trim() || "Casa Bragantina";
-    S = novoJogo(nome);
+  /* ---------- o livro das casas ---------- */
+
+  var elLista = $("lista-casas"), elFormNova = $("form-nova"), elBtnNova = $("btn-nova");
+
+  function mostrarFormNova(){
+    elFormNova.style.display = "flex";
+    elBtnNova.hidden = true;
+  }
+
+  async function renderLivro(){
+    var casas = await Cofre.listar();
+    $("onde-salva").textContent = Cofre.onde() + ".";
+
+    if (!casas.length){
+      elLista.hidden = true;
+      $("regra-ouro").hidden = false;
+      mostrarFormNova();
+      return;
+    }
+
+    elLista.hidden = false;
+    elLista.innerHTML = casas.map(function(c){
+      var estado = c.fim
+        ? '<span class="estado">Crônica encerrada</span>'
+        : '<span class="estado viva">Ano ' + (c.ano || 1) + ' de ' + ANOS + ' · a jogar</span>';
+      return '<div class="casa-linha">' +
+               '<button class="casa-abrir"><span class="nome"></span>' + estado + '</button>' +
+               (c.fim ? '<span class="renome-mini">' + (c.renome || 0) + '</span>' : '<span></span>') +
+               '<button class="casa-apagar" data-id="' + c.id + '">Apagar</button>' +
+             '</div>';
+    }).join("");
+
+    // o nome vem do jogador: entra como texto, nunca como marcação
+    elLista.querySelectorAll(".casa-abrir").forEach(function(b, i){
+      b.querySelector(".nome").textContent = casas[i].nome || "Casa sem nome";
+      b.addEventListener("click", function(){ abrirCasa(casas[i]); });
+    });
+    elLista.querySelectorAll(".casa-apagar").forEach(function(b){
+      b.addEventListener("click", async function(){
+        if (b.classList.contains("confirmando")){
+          await Cofre.apagar(b.dataset.id);
+          await renderLivro();
+        } else {
+          elLista.querySelectorAll(".casa-apagar").forEach(function(o){
+            o.classList.remove("confirmando"); o.textContent = "Apagar";
+          });
+          b.classList.add("confirmando");
+          b.textContent = "Apagar mesmo?";
+        }
+      });
+    });
+
+    elBtnNova.hidden = false;
+    elFormNova.style.display = "none";
+    $("regra-ouro").hidden = true;
+  }
+
+  function prepararTela(){
     ocupado = false;
     elCronica.innerHTML = "";
     elAbertura.hidden = true;
@@ -874,19 +1144,63 @@ button[disabled]{cursor:not-allowed}
     pintarEstado(false);
     atualizarBandeja();
     elBandeja.classList.remove("travada");
-    entradaDeAbertura();
   }
 
-  $("comecar").addEventListener("click", comecar);
-  $("nome-casa").addEventListener("keydown", function(e){ if (e.key === "Enter") comecar(); });
-  $("denovo").addEventListener("click", function(){
+  async function criarCasa(){
+    var nome = ($("nome-casa").value || "").trim() || "Casa Bragantina";
+    S = novoJogo(nome);
+    idAtual = novoId();
+    prepararTela();
+    entradaDeAbertura();
+    await guardar();
+  }
+
+  function abrirCasa(registro){
+    S = desserializar(registro.jogo);
+    idAtual = registro.id;
+    prepararTela();
+    entradaDeAbertura();
+    S.historico.forEach(function(b){
+      var alvo = entradaDoAno(b);
+      alvo.textContent = b.narrativa || narrativaDeReserva(b);
+    });
+    elCronica.scrollTop = elCronica.scrollHeight;
+    if (S.fim) encerrar();
+  }
+
+  async function voltarAoLivro(){
+    await guardar();
+    S = null; idAtual = null;
+    elJogo.hidden = true;
     elFim.hidden = true;
+    document.querySelector(".shell").classList.remove("jogando");
     elAbertura.hidden = false;
+    await renderLivro();
+  }
+
+  $("comecar").addEventListener("click", criarCasa);
+  $("nome-casa").addEventListener("keydown", function(e){ if (e.key === "Enter") criarCasa(); });
+  $("btn-nova").addEventListener("click", function(){
+    mostrarFormNova();
+    $("nome-casa").focus();
+    $("nome-casa").select();
+  });
+  $("btn-trocar").addEventListener("click", function(){ if (!ocupado) voltarAoLivro(); });
+  $("voltar-livro").addEventListener("click", voltarAoLivro);
+  $("denovo").addEventListener("click", async function(){
+    elFim.hidden = true;
+    document.querySelector(".shell").classList.remove("jogando");
+    elAbertura.hidden = false;
+    await renderLivro();
+    mostrarFormNova();
   });
 
   // A IA chega depois — o jogo já está inteiro sem ela.
   if (window.claude && typeof window.claude.use === "function"){
     window.claude.use("sample").then(function(fn){ sample = fn; }).catch(function(){ sample = null; });
   }
+
+  // O cofre abre antes de tudo: o livro precisa saber o que já existe.
+  Cofre.iniciar().then(renderLivro).catch(function(){ renderLivro(); });
 })();
 </script>
