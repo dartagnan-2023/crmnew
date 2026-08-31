@@ -120,7 +120,14 @@ const followupToIso = (value) => {
 };
 
 const formatFollowupBR = (value) => {
-  const date = resolveFollowupDate(value);
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  // Lead antigo, salvo so com data: nao inventar horario na tela. O lembrete
+  // dele continua com o agendamento antigo no OmniChat; exibir uma hora aqui
+  // seria mostrar algo que nao vai acontecer.
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+  const date = resolveFollowupDate(raw);
   if (!date) return '-';
   return date.toLocaleString('pt-BR', {
     day: '2-digit',
@@ -3367,7 +3374,7 @@ const App = () => {
         return;
       }
       await Promise.all([loadLeads(), loadStats()]);
-      showToast(`Contato reagendado para ${formatDateBR(next)}`, 'success');
+      showToast(`Contato reagendado para ${formatFollowupBR(next.toISOString())}`, 'success');
     } catch (err) {
       console.error('Erro ao reagendar contato:', err);
       showToast('Erro ao reagendar contato', 'error');

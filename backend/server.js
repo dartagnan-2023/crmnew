@@ -1142,64 +1142,21 @@ const formatFollowupScheduledAtUtc = (value) => {
   return date.toISOString().replace('T', ' ').slice(0, 19);
 };
 
-// Hora local padrao aplicada a leads antigos que so tem data, sem horario.
-const FOLLOWUP_DEFAULT_HOUR_LOCAL = Math.min(
-  23,
-  Math.max(0, Number(process.env.FOLLOWUP_DEFAULT_HOUR_LOCAL || 9) || 9)
-);
-
 // O OmniChat rejeita agendamento no passado com HTTP 422 (guarda criada apos o
 // incidente de ago/2026, quando o CRM despejou 1.194 follow-ups vencidos).
 const FOLLOWUP_PAST_TOLERANCE_MS = 5 * 60 * 1000;
 
-// Converte uma hora local de MCP_TIMEZONE no instante UTC correspondente, sem
-// depender do fuso configurado no servidor onde o backend roda.
-const zonedTimeToUtc = (year, month, day, hour = 0, minute = 0, timeZone = MCP_TIMEZONE) => {
-  const guess = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-    .formatToParts(new Date(guess))
-    .reduce((acc, part) => {
-      acc[part.type] = part.value;
-      return acc;
-    }, {});
-  const hourPart = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    hourPart,
-    Number(parts.minute),
-    Number(parts.second)
-  );
-  return new Date(guess - (asUtc - guess));
-};
-
-// next_contact pode chegar so com data (legado) ou com data e hora (ISO em UTC).
-const resolveFollowupInstant = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) return null;
-  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnly) {
-    return zonedTimeToUtc(
-      Number(dateOnly[1]),
-      Number(dateOnly[2]),
-      Number(dateOnly[3]),
-      FOLLOWUP_DEFAULT_HOUR_LOCAL,
-      0
-    );
-  }
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
+// Teto de reagendamentos por ciclo. Medido contra o OmniChat real: ele aceita
+// exatamente 100 agendamentos pendentes por hora vindos do CRM e devolve 429 no
+// 101o. Com o autorun a cada 5 min sao 12 ciclos por hora, entao 4 por ciclo =
+// 48/hora, deixando ~52/hora livres para leads novos (o fluxo normal do dia).
+// Sem esse teto, a primeira execucao apos subir o horario tentaria migrar de uma
+// vez TODOS os follow-ups antigos (que passam de 00:00 para o horario padrao),
+// estouraria o limite e repetiria o incidente de ago/2026.
+const FOLLOWUP_MAX_RESCHEDULES_PER_RUN = Math.max(
+  1,
+  Number(process.env.FOLLOWUP_MAX_RESCHEDULES_PER_RUN || 4) || 4
+);
 
 const buildFollowupReminderKey = (leadId, scheduledDateKey, type = 'alert') =>
   `${String(leadId || '').trim()}::${String(scheduledDateKey || '').trim()}::${String(type || 'alert').trim()}`;
@@ -1558,14 +1515,15 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
         errors: 0,
         processed: 0,
         skipped_past: 0,
+        reschedule_deferred: 0,
       };
 
       const leadMap = new Map(scopedLeads.map((lead) => [String(lead.id || '').trim(), lead]));
+      let rescheduledThisRun = 0;
 
       if (!syncOnly) {
         for (const lead of scopedLeads) {
-          const nextContactInstant = resolveFollowupInstant(lead?.next_contact || '');
-          const nextContact = nextContactInstant ? nextContactInstant.toISOString() : '';
+          const nextContact = toIsoStringOrEmpty(lead?.next_contact || '');
           const scheduledDateKey = getFollowupDateKey(nextContact);
           const currentKey = buildFollowupReminderKey(lead.id, scheduledDateKey, 'alert');
           const existing = notificationMap.get(currentKey) || findLatestFollowupForLead(notifications, lead.id, scheduledDateKey);
@@ -1610,8 +1568,15 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
           // O OmniChat deduplica por external_id: reenviar o mesmo id devolve
           // {duplicado:true} e MANTEM o horario antigo. Para mudar o horario e
           // obrigatorio cancelar a tarefa antiga antes de criar a nova.
+          if (scheduleChanged && rescheduledThisRun >= FOLLOWUP_MAX_RESCHEDULES_PER_RUN) {
+            // Teto atingido: deixa como esta e migra no proximo ciclo.
+            summary.reschedule_deferred += 1;
+            continue;
+          }
+
           if (scheduleChanged) {
             summary.processed += 1;
+            rescheduledThisRun += 1;
             const cancelResult = await cancelOmnichatTask(existing.external_id, config);
             const canceledOk = cancelResult.ok || cancelResult.status === 404;
             const replaced = buildFollowupNotificationRow({
@@ -1677,9 +1642,10 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
 
           // Nao enviar vencidos: o OmniChat devolveria 422 e a coluna de erro
           // encheria a cada ciclo do autorun (a cada 5 min).
+          const nextContactTime = nextContact ? new Date(nextContact).getTime() : NaN;
           if (
-            nextContactInstant &&
-            nextContactInstant.getTime() < Date.now() - FOLLOWUP_PAST_TOLERANCE_MS
+            Number.isFinite(nextContactTime) &&
+            nextContactTime < Date.now() - FOLLOWUP_PAST_TOLERANCE_MS
           ) {
             summary.skipped_past += 1;
             continue;
