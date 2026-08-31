@@ -1142,6 +1142,65 @@ const formatFollowupScheduledAtUtc = (value) => {
   return date.toISOString().replace('T', ' ').slice(0, 19);
 };
 
+// Hora local padrao aplicada a leads antigos que so tem data, sem horario.
+const FOLLOWUP_DEFAULT_HOUR_LOCAL = Math.min(
+  23,
+  Math.max(0, Number(process.env.FOLLOWUP_DEFAULT_HOUR_LOCAL || 9) || 9)
+);
+
+// O OmniChat rejeita agendamento no passado com HTTP 422 (guarda criada apos o
+// incidente de ago/2026, quando o CRM despejou 1.194 follow-ups vencidos).
+const FOLLOWUP_PAST_TOLERANCE_MS = 5 * 60 * 1000;
+
+// Converte uma hora local de MCP_TIMEZONE no instante UTC correspondente, sem
+// depender do fuso configurado no servidor onde o backend roda.
+const zonedTimeToUtc = (year, month, day, hour = 0, minute = 0, timeZone = MCP_TIMEZONE) => {
+  const guess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+    .formatToParts(new Date(guess))
+    .reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+  const hourPart = Number(parts.hour) === 24 ? 0 : Number(parts.hour);
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    hourPart,
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  return new Date(guess - (asUtc - guess));
+};
+
+// next_contact pode chegar so com data (legado) ou com data e hora (ISO em UTC).
+const resolveFollowupInstant = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    return zonedTimeToUtc(
+      Number(dateOnly[1]),
+      Number(dateOnly[2]),
+      Number(dateOnly[3]),
+      FOLLOWUP_DEFAULT_HOUR_LOCAL,
+      0
+    );
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const buildFollowupReminderKey = (leadId, scheduledDateKey, type = 'alert') =>
   `${String(leadId || '').trim()}::${String(scheduledDateKey || '').trim()}::${String(type || 'alert').trim()}`;
 
@@ -1498,13 +1557,15 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
         synced: 0,
         errors: 0,
         processed: 0,
+        skipped_past: 0,
       };
 
       const leadMap = new Map(scopedLeads.map((lead) => [String(lead.id || '').trim(), lead]));
 
       if (!syncOnly) {
         for (const lead of scopedLeads) {
-          const nextContact = toIsoStringOrEmpty(lead?.next_contact || '');
+          const nextContactInstant = resolveFollowupInstant(lead?.next_contact || '');
+          const nextContact = nextContactInstant ? nextContactInstant.toISOString() : '';
           const scheduledDateKey = getFollowupDateKey(nextContact);
           const currentKey = buildFollowupReminderKey(lead.id, scheduledDateKey, 'alert');
           const existing = notificationMap.get(currentKey) || findLatestFollowupForLead(notifications, lead.id, scheduledDateKey);
@@ -1538,7 +1599,43 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
           const reminderKey = buildFollowupReminderKey(lead.id, scheduledDateKeyKey, 'alert');
           const alreadyFinal = existing && ['done', 'dismissed'].includes(String(existing.status || '').toLowerCase());
 
-          if (existing && String(existing.status || '').toLowerCase() === 'pending') {
+          const previousScheduledAt = String(existing?.scheduled_at || '').trim();
+          const scheduleChanged =
+            Boolean(existing) &&
+            ['pending', 'processing'].includes(String(existing?.status || '').toLowerCase()) &&
+            Boolean(scheduledAt) &&
+            Boolean(previousScheduledAt) &&
+            previousScheduledAt !== scheduledAt;
+
+          // O OmniChat deduplica por external_id: reenviar o mesmo id devolve
+          // {duplicado:true} e MANTEM o horario antigo. Para mudar o horario e
+          // obrigatorio cancelar a tarefa antiga antes de criar a nova.
+          if (scheduleChanged) {
+            summary.processed += 1;
+            const cancelResult = await cancelOmnichatTask(existing.external_id, config);
+            const canceledOk = cancelResult.ok || cancelResult.status === 404;
+            const replaced = buildFollowupNotificationRow({
+              existing,
+              status: canceledOk ? 'dismissed' : 'error',
+              lastError: canceledOk
+                ? ''
+                : cancelResult.reason || `omnichat_http_${cancelResult.status}`,
+              canceledAt: nowIso,
+              lastAttemptAt: nowIso,
+              lastSyncedAt: nowIso,
+              updatedAt: nowIso,
+            });
+            upsertFollowupNotificationRow(notifications, replaced);
+            notificationMap.set(replaced.reminder_key, replaced);
+            if (replaced.external_id) notificationMap.set(replaced.external_id, replaced);
+            if (!canceledOk) {
+              summary.errors += 1;
+              continue;
+            }
+            summary.canceled += 1;
+          }
+
+          if (existing && String(existing.status || '').toLowerCase() === 'pending' && !scheduleChanged) {
             summary.processed += 1;
             const syncResult = await syncFollowupStatusByNotification(existing, config);
             if (syncResult.synced) {
@@ -1574,7 +1671,17 @@ const syncFollowupSchedules = async ({ source = 'manual', syncOnly = false, lead
             continue;
           }
 
-          if (existing && String(existing.status || '').toLowerCase() === 'processing') {
+          if (existing && String(existing.status || '').toLowerCase() === 'processing' && !scheduleChanged) {
+            continue;
+          }
+
+          // Nao enviar vencidos: o OmniChat devolveria 422 e a coluna de erro
+          // encheria a cada ciclo do autorun (a cada 5 min).
+          if (
+            nextContactInstant &&
+            nextContactInstant.getTime() < Date.now() - FOLLOWUP_PAST_TOLERANCE_MS
+          ) {
+            summary.skipped_past += 1;
             continue;
           }
 

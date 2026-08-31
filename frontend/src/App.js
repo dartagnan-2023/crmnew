@@ -83,6 +83,54 @@ const toDateTimeLocalInput = (value) => {
   return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
 };
 
+// Hora local padrao para leads antigos que so tem data, sem horario.
+const FOLLOWUP_DEFAULT_HOUR_LOCAL = 9;
+
+// next_contact pode ser 'YYYY-MM-DD' (legado) ou ISO completo em UTC.
+const resolveFollowupDate = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    return new Date(
+      Number(dateOnly[1]),
+      Number(dateOnly[2]) - 1,
+      Number(dateOnly[3]),
+      FOLLOWUP_DEFAULT_HOUR_LOCAL,
+      0,
+      0
+    );
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+// Valor para <input type="datetime-local"> (horario local do navegador).
+const followupToInput = (value) => {
+  const date = resolveFollowupDate(value);
+  if (!date) return '';
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+// Sempre enviar ISO em UTC: o backend repassa ao OmniChat, que le como UTC.
+const followupToIso = (value) => {
+  const date = resolveFollowupDate(value);
+  return date ? date.toISOString() : '';
+};
+
+const formatFollowupBR = (value) => {
+  const date = resolveFollowupDate(value);
+  if (!date) return '-';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const formatDateBR = (value) => {
   if (!value) return '-';
   const dateStr = String(value).split('T')[0];
@@ -2566,13 +2614,7 @@ const App = () => {
   };
 
   const buildLeadFormFromLead = (lead) => {
-    let nextContact = '';
-    if (lead.next_contact) {
-      const d = new Date(lead.next_contact);
-      if (!Number.isNaN(d.getTime())) {
-        nextContact = d.toISOString().slice(0, 10);
-      }
-    }
+    const nextContact = followupToInput(lead.next_contact);
     const firstContact = toDateInput(lead.first_contact);
     return {
       name: lead.name || '',
@@ -2693,6 +2735,7 @@ const App = () => {
       cooling_reason: normalizeListValue(leadForm.cooling_reason).join(','),
       ownerId: leadForm.ownerId || user?.id || null,
       first_contact: leadForm.first_contact || '',
+      next_contact: followupToIso(leadForm.next_contact),
       value: Number(leadForm.value) || 0,
     };
     try {
@@ -2735,7 +2778,7 @@ const App = () => {
       await Promise.all([loadLeads(), loadStats()]);
       setShowLeadModal(false);
       setEditingLead(null);
-      const followupDateLabel = leadForm.next_contact ? formatDateBR(leadForm.next_contact) : '';
+      const followupDateLabel = leadForm.next_contact ? formatFollowupBR(leadForm.next_contact) : '';
       const followupStatus = String(data?.followup_status || '').toLowerCase();
       const followupError = String(
         data?.followup_error_msg ||
@@ -3302,8 +3345,8 @@ const App = () => {
     }
     setAgendaUpdatingId(lead.id);
     try {
-      const current = new Date(lead.next_contact);
-      if (Number.isNaN(current.getTime())) {
+      const current = resolveFollowupDate(lead.next_contact);
+      if (!current || Number.isNaN(current.getTime())) {
         showToast('Data inválida', 'error');
         return;
       }
@@ -5128,7 +5171,7 @@ const App = () => {
                       <div className="text-right">
                         <p className="text-xs text-slate-600">
                           {lead.next_contact
-                            ? formatDateBR(lead.next_contact)
+                            ? formatFollowupBR(lead.next_contact)
                             : '-'}
                         </p>
                         <p className="text-[11px] text-slate-500">
@@ -5587,7 +5630,7 @@ const App = () => {
                           <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-xs text-slate-500">
                             {lead.next_contact
-                              ? formatDateBR(lead.next_contact)
+                              ? formatFollowupBR(lead.next_contact)
                               : '-'}
                           </td>
                           <td className="py-2 px-2 text-right space-x-2">
@@ -5709,7 +5752,7 @@ const App = () => {
                             <div className="flex items-center gap-2">
                               <span>
                                 {lead.next_contact
-                                  ? formatDateBR(lead.next_contact)
+                                  ? formatFollowupBR(lead.next_contact)
                                   : '-'}
                               </span>
                               <span className="text-[10px] text-slate-400">
@@ -6165,7 +6208,7 @@ const App = () => {
                     Próximo contato (agenda)
                   </label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     value={leadForm.next_contact || ''}
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, next_contact: e.target.value })
