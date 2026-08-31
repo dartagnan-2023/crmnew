@@ -246,7 +246,7 @@ button[disabled]{cursor:not-allowed}
   gap:26px;
   min-height:0;
 }
-.entrada{display:flex;flex-direction:column;gap:11px;animation:surgir .5s ease both}
+.entrada{display:flex;flex-direction:column;gap:11px;scroll-margin-top:14px;animation:surgir .5s ease both}
 @keyframes surgir{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 .selo-ano{
@@ -289,11 +289,65 @@ button[disabled]{cursor:not-allowed}
 .marca-evento.boa{color:var(--verdigris);border-color:var(--verdigris-deep);background:#101C19}
 .marca-evento.neutra{color:var(--vellum-dim);border-color:var(--line-solid);background:var(--ink-2)}
 
+/* o que a SUA escolha rendeu — a linha mais importante da crônica */
+.meu-ano{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+  padding:10px 12px;
+  background:#151E1B;
+  border:1px solid var(--verdigris-deep);
+  border-left-width:3px;
+}
+.meu-ano .rot{
+  flex:1 0 100%;
+  font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--verdigris);margin-bottom:2px;
+}
+.ganho{
+  font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12px;font-weight:600;
+  padding:3px 8px;border:1px solid;border-radius:2px;white-space:nowrap;
+}
+.ganho.bom{color:var(--verdigris);border-color:var(--verdigris-deep);background:#101C19}
+.ganho.ouro{color:var(--gilt);border-color:#5A4A20;background:#1C1810}
+.ganho.ruim{color:var(--ember);border-color:#5A2417;background:#1F1210}
+
+.marca-marco{
+  display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+  padding:9px 12px;border:1px solid #5A4A20;background:#1C1810;
+}
+.marca-marco b{font-family:var(--display);font-weight:700;font-size:15px;color:var(--gilt)}
+.marca-marco span{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--vellum-dim)}
+
+/* avisos: o acaso deixa de ser surpresa e vira decisão informada */
+.avisos{display:flex;flex-direction:column;gap:5px;margin-top:11px}
+.aviso-risco{
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+  padding:5px 9px;border-left:2px solid;
+}
+.aviso-risco.grave{color:var(--ember);border-color:var(--ember);background:#1B100E}
+.aviso-risco.medio{color:var(--gilt);border-color:#7A6428;background:#191509}
+
+.pilha.renome b{color:var(--verdigris)}
+.pilha b .delta{
+  font-size:10px;margin-left:3px;opacity:0;
+  animation:subir 1.5s ease forwards;
+}
+@keyframes subir{
+  0%{opacity:0;transform:translateY(4px)}
+  18%{opacity:1;transform:none}
+  75%{opacity:1}
+  100%{opacity:0}
+}
+.acao .preco{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--gilt);
+}
+.acao[disabled] .preco{color:var(--ember)}
+
 /* ---------- your house + tray ---------- */
 .rodape{border-top:1px solid var(--line-solid);background:var(--ink-2)}
 
 .minha-casa{
-  display:grid;grid-template-columns:1fr repeat(3,auto);gap:14px;align-items:center;
+  display:grid;grid-template-columns:1fr repeat(4,auto);gap:11px;align-items:center;
   padding:11px 18px;border-bottom:1px solid var(--line-solid);
 }
 .minha-casa .nome{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -309,16 +363,16 @@ button[disabled]{cursor:not-allowed}
   background:var(--ink-2);
   border:none;
   text-align:left;
-  padding:12px 13px 13px;
-  display:flex;flex-direction:column;gap:4px;
+  padding:10px 12px 11px;
+  display:flex;flex-direction:column;gap:3px;
+  min-height:76px;
   transition:background .14s ease;
 }
-.acao:nth-child(5){grid-column:1 / -1}
 .acao:hover:not([disabled]){background:var(--ink-3)}
 .acao:active:not([disabled]){background:#2B2F3E}
 .acao[disabled]{opacity:.34}
-.acao .verbo{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:-.01em}
-.acao .efeito{font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--vellum-dim);line-height:1.5}
+.acao .verbo{font-family:var(--display);font-weight:600;font-size:15.5px;letter-spacing:-.01em;line-height:1.15}
+.acao .efeito{font-family:var(--mono);font-size:9.5px;letter-spacing:.02em;color:var(--vellum-dim);line-height:1.45}
 .acao .efeito .g{color:var(--verdigris)}
 .acao .efeito .p{color:var(--ember)}
 .acao .efeito .o{color:var(--gilt)}
@@ -393,6 +447,7 @@ button[disabled]{cursor:not-allowed}
         </div>
       </div>
       <div class="medidores" id="medidores"></div>
+      <div class="avisos" id="avisos"></div>
     </div>
 
     <div class="cronica" id="cronica"></div>
@@ -403,6 +458,7 @@ button[disabled]{cursor:not-allowed}
         <div class="pilha ouro"><b id="meu-ouro">10</b><span>ouro</span></div>
         <div class="pilha"><b id="minhas-terras">2</b><span>terras</span></div>
         <div class="pilha"><b id="meus-bracos">4</b><span>braços</span></div>
+        <div class="pilha renome"><b id="meu-renome">0</b><span>renome</span></div>
       </div>
       <div class="bandeja" id="bandeja"></div>
     </div>
@@ -452,46 +508,108 @@ button[disabled]{cursor:not-allowed}
     return f;
   }
 
+  /* Cada ação devolve um mapa de deltas. O que cai em VILA é comum;
+     o resto é da casa. Toda ação rende alguma coisa a quem a escolhe, e
+     o rendimento CRESCE com o que a casa já construiu — é essa composição
+     que faz a escolha do jogador valer a pena ano após ano. */
+  var CAMPOS_VILA = { celeiro:1, muralha:1, concordia:1 };
+
   var ACOES = {
     semear: {
       verbo:"Semear",
-      efeito:'<span class="g">+celeiro</span> conforme suas terras',
+      efeito:'<span class="g">+celeiro</span> · <span class="o">+ouro seu</span> — cresce com suas terras e braços',
       resumo:"semeou os campos comuns",
-      aplica:function(c,v){ v.celeiro += 5 + 2*c.terras; c.ouro += 1; }
+      deltas:function(c){
+        return { celeiro: 4 + 2*c.terras + Math.floor(c.bracos/2),
+                 ouro:    2 + c.terras };
+      }
     },
-    erguer: {
-      verbo:"Erguer pedra",
-      efeito:'<span class="g">+12 muralha</span> · <span class="o">−4 ouro</span>',
-      resumo:"levantou pedra na muralha",
-      custo:function(c){ return c.ouro >= 4; },
-      aplica:function(c,v){ v.muralha += 12; c.ouro -= 4; v.concordia += 3; }
+    arar: {
+      verbo:"Arar novo campo",
+      efeito:'<span class="g">+1 terra sua</span> · <span class="o">−6 ouro</span> — terra ganha, não tomada',
+      resumo:"arou um campo novo na borda do vale",
+      custo:function(c){ return c.ouro >= 6; },
+      porque:function(){ return "Precisa de 6 de ouro"; },
+      deltas:function(){ return { ouro:-6, terras:1, concordia:2 }; }
     },
     acolher: {
       verbo:"Acolher",
-      efeito:'<span class="g">+1 braço, +concórdia</span> · <span class="p">−4 celeiro</span>',
+      efeito:'<span class="g">+1 braço</span> · <span class="g">+6 concórdia</span> · <span class="p">−3 celeiro</span>',
       resumo:"acolheu forasteiros na casa",
-      aplica:function(c,v){ c.bracos += 1; v.celeiro -= 4; v.concordia += 6; }
+      deltas:function(){ return { bracos:1, celeiro:-3, concordia:6 }; }
+    },
+    erguer: {
+      verbo:"Erguer pedra",
+      efeito:'<span class="g">+12 muralha</span> · <span class="g">+2 renome seu</span> — cada trecho custa mais',
+      resumo:"levantou pedra na muralha",
+      // quanto mais alto o muro, mais caro o próximo trecho — senão vira botão infinito
+      preco:function(c){ return 4 + Math.floor((c.obras || 0) / 2); },
+      // num muro já cheio não há o que erguer: a ação some e obriga a diversificar
+      custo:function(c, v){ return c.ouro >= ACOES.erguer.preco(c) && v.muralha < 92; },
+      porque:function(c, v){
+        return v.muralha >= 92 ? "A muralha já está cheia"
+                               : "Precisa de " + ACOES.erguer.preco(c) + " de ouro";
+      },
+      deltas:function(c){
+        return { ouro:-ACOES.erguer.preco(c), muralha:12, concordia:2, obras:2 };
+      }
     },
     comerciar: {
       verbo:"Comerciar",
-      efeito:'<span class="o">+ouro</span> · <span class="p">−9 celeiro, −concórdia</span>',
+      efeito:'<span class="o">+muito ouro</span> · <span class="p">−8 celeiro</span> · <span class="p">−4 concórdia</span>',
       resumo:"vendeu o excedente a mercadores de fora",
-      aplica:function(c,v){ c.ouro += 8 + 2*c.terras; v.celeiro -= 9; v.concordia -= 4; }
+      deltas:function(c){
+        return { ouro: 5 + 2*c.terras + 2*c.bracos, celeiro:-8, concordia:-4 };
+      }
     },
     cercar: {
       verbo:"Cercar o comum",
-      efeito:'<span class="g">+1 terra sua</span> · <span class="p">−5 celeiro, −11 concórdia</span>',
+      efeito:'<span class="g">+1 terra de graça</span> · <span class="p">−5 celeiro</span> · <span class="p">−11 concórdia</span>',
       resumo:"cercou um pedaço da terra comunal",
-      aplica:function(c,v){ c.terras += 1; v.celeiro -= 5; v.concordia -= 11; }
+      deltas:function(){ return { terras:1, celeiro:-5, concordia:-11 }; }
     }
   };
-  var ORDEM_ACOES = ["semear","erguer","acolher","comerciar","cercar"];
+  var ORDEM_ACOES = ["semear","arar","acolher","erguer","comerciar","cercar"];
+
+  function aplicarDeltas(c, v, d){
+    for (var k in d){ if (CAMPOS_VILA[k]) v[k] += d[k]; else c[k] += d[k]; }
+  }
+
+  /* Metas de médio prazo: dão ao jogador algo para perseguir antes do ano 12,
+     e pagam na hora. Valem para todas as casas; só as suas são anunciadas. */
+  var MARCOS = [
+    { id:"posses",   titulo:"Casa de posses",  exige:function(c){ return c.terras >= 4; },
+      premio:{ ouro:8 },  conta:"quatro campos seus" },
+    { id:"numerosa", titulo:"Casa numerosa",   exige:function(c){ return c.bracos >= 7; },
+      premio:{ obras:4 }, conta:"sete braços à mesa" },
+    { id:"pedra",    titulo:"Casa de pedra",   exige:function(c){ return c.obras >= 6; },
+      premio:{ ouro:12 }, conta:"três trechos de muralha" },
+    { id:"prospera", titulo:"Casa próspera",   exige:function(c){ return c.ouro >= 45; },
+      premio:{ obras:4 }, conta:"quarenta e cinco de ouro" }
+  ];
+
+  function conferirMarcos(s){
+    var ganhos = [];
+    s.casas.forEach(function(c){
+      MARCOS.forEach(function(m){
+        if (c.marcos.indexOf(m.id) >= 0 || !m.exige(c)) return;
+        c.marcos.push(m.id);
+        for (var k in m.premio) c[k] += m.premio[k];
+        if (c.eu) ganhos.push({ titulo:m.titulo, conta:m.conta, premio:m.premio });
+      });
+    });
+    return ganhos;
+  }
 
   /* As quatro casas rivais. Políticas fixas e legíveis — o jogador
      consegue prever quem é quem, que é o que dá peso à escolha dele. */
   var RIVAIS = [
     { nome:"Casa Ferro", indole:"guarda a muralha",
-      decide:function(c,v){ return (v.muralha < 45 && c.ouro >= 4) ? "erguer" : "semear"; } },
+      decide:function(c,v){
+        if (v.muralha < 50 && ACOES.erguer.custo(c, v)) return "erguer";
+        if (c.ouro >= 12 && c.terras < 4) return "arar";
+        return "semear";
+      } },
     { nome:"Casa Corvo", indole:"não perde negócio",
       decide:function(c,v,ano){
         if (v.celeiro < 14) return "semear";
@@ -500,15 +618,16 @@ button[disabled]{cursor:not-allowed}
       } },
     { nome:"Casa Espiga", indole:"cuida do celeiro",
       decide:function(c,v){
-        if (v.celeiro < 45) return "semear";
-        return v.concordia > 50 ? "acolher" : "cercar";
+        if (v.celeiro < 40) return "semear";
+        if (c.bracos < 6) return "acolher";
+        return c.ouro >= 6 ? "arar" : "semear";
       } },
     // A casa-espelho. É ela que transforma a sua ganância em epidemia.
     { nome:"Casa Vinha", indole:"faz o que você faz",
       espelho:true,
       decide:function(c,v,ano,ultimaDoJogador){
         var a = ultimaDoJogador || "semear";
-        if (a === "erguer" && c.ouro < 4) return "semear";
+        if (ACOES[a].custo && !ACOES[a].custo(c, v)) return "semear";
         return a;
       } }
   ];
@@ -517,9 +636,10 @@ button[disabled]{cursor:not-allowed}
 
   function novoJogo(nomeVila, nomeCasa){
     var seed = Math.floor(Math.random()*9000) + 1000;
-    var casas = [{ nome:nomeCasa, eu:true, ouro:10, terras:2, bracos:4, indole:"você" }];
+    var casas = [{ nome:nomeCasa, eu:true, ouro:10, terras:2, bracos:4, obras:0, marcos:[], indole:"você" }];
     RIVAIS.forEach(function(r){
-      casas.push({ nome:r.nome, eu:false, ouro:10, terras:2, bracos:4, indole:r.indole, pol:r });
+      casas.push({ nome:r.nome, eu:false, ouro:10, terras:2, bracos:4, obras:0, marcos:[],
+                   indole:r.indole, pol:r });
     });
     return {
       vilaNome:nomeVila,
@@ -541,10 +661,13 @@ button[disabled]{cursor:not-allowed}
     var antes = { celeiro:v.celeiro, muralha:v.muralha, concordia:v.concordia, almas:almas(s) };
     var escolhas = [];
 
+    var meuGanho = null;
     s.casas.forEach(function(c){
       var a = c.eu ? acaoDoJogador : c.pol.decide(c, v, s.ano, s.ultimaDoJogador);
-      if (ACOES[a].custo && !ACOES[a].custo(c)) a = "semear";
-      ACOES[a].aplica(c, v);
+      if (ACOES[a].custo && !ACOES[a].custo(c, v)) a = "semear";
+      var d = ACOES[a].deltas(c, v);
+      if (c.eu) meuGanho = d;
+      aplicarDeltas(c, v, d);
       c.ultimaAcao = a;
       escolhas.push({ casa:c.nome, eu:c.eu, acao:a, resumo:ACOES[a].resumo });
     });
@@ -571,7 +694,7 @@ button[disabled]{cursor:not-allowed}
     }
 
     v.muralha -= 4;   // o tempo derruba a pedra sozinho
-    v.concordia += 4; // e fecha as feridas devagar, se ninguem as reabrir
+    v.concordia += 3; // e fecha as feridas devagar, se ninguem as reabrir
 
     // ---- um grande acontecimento por ano, por prioridade ----
     var evento = { chave:"quieto", titulo:"Ano quieto", tom:"neutra",
@@ -638,7 +761,9 @@ button[disabled]{cursor:not-allowed}
         fato:"A colheita veio dobrada e o celeiro transbordou." };
     }
 
-    if (evento.chave === "quieto") v.concordia += 5;
+    if (evento.chave === "quieto") v.concordia += 3;
+
+    var marcos = conferirMarcos(s);
 
     v.celeiro = clamp(v.celeiro, 0, 220);
     v.muralha = clamp(v.muralha, 0, 100);
@@ -648,8 +773,8 @@ button[disabled]{cursor:not-allowed}
     if (depois.almas <= 0){ s.colapso = true; s.fim = true; }
 
     var boletim = {
-      ano:s.ano, escolhas:escolhas, fome:fome, evento:evento,
-      antes:antes, depois:depois, bocas:bocas
+      ano:s.ano, escolhas:escolhas, fome:fome, evento:evento, marcos:marcos,
+      meuGanho:meuGanho, antes:antes, depois:depois, bocas:bocas
     };
     s.historico.push(boletim);
 
@@ -658,7 +783,7 @@ button[disabled]{cursor:not-allowed}
   }
 
   function renome(c, s){
-    var base = c.ouro*1.5 + c.terras*10 + c.bracos*8;
+    var base = c.ouro*1.2 + c.terras*10 + c.bracos*8 + (c.obras||0)*8;
     var fator = s.colapso ? 0.10 : (0.15 + 0.85*Math.pow(s.vila.concordia/100, 1.3));
     return Math.round(base * fator);
   }
@@ -671,8 +796,9 @@ button[disabled]{cursor:not-allowed}
       ultimaDoJogador:s.ultimaDoJogador || null,
       vila:{ celeiro:s.vila.celeiro, muralha:s.vila.muralha, concordia:s.vila.concordia },
       casas:s.casas.map(function(c){
-        return { nome:c.nome, eu:!!c.eu, ouro:c.ouro, terras:c.terras,
-                 bracos:c.bracos, indole:c.indole, ultimaAcao:c.ultimaAcao || null };
+        return { nome:c.nome, eu:!!c.eu, ouro:c.ouro, terras:c.terras, bracos:c.bracos,
+                 obras:c.obras || 0, marcos:(c.marcos || []).slice(),
+                 indole:c.indole, ultimaAcao:c.ultimaAcao || null };
       }),
       historico:s.historico,
       epilogo:s.epilogo || null
@@ -686,8 +812,9 @@ button[disabled]{cursor:not-allowed}
       ano:d.ano, fim:!!d.fim, colapso:!!d.colapso, cismaRecente:!!d.cismaRecente,
       vila:{ celeiro:d.vila.celeiro, muralha:d.vila.muralha, concordia:d.vila.concordia },
       casas:d.casas.map(function(c, i){
-        var casa = { nome:c.nome, eu:i === 0, ouro:c.ouro, terras:c.terras,
-                     bracos:c.bracos, indole:c.indole, ultimaAcao:c.ultimaAcao };
+        var casa = { nome:c.nome, eu:i === 0, ouro:c.ouro, terras:c.terras, bracos:c.bracos,
+                     obras:c.obras || 0, marcos:(c.marcos || []).slice(),
+                     indole:c.indole, ultimaAcao:c.ultimaAcao };
         if (i > 0) casa.pol = RIVAIS[i-1]; // as políticas voltam por posição
         return casa;
       }),
@@ -716,6 +843,9 @@ button[disabled]{cursor:not-allowed}
       var q = Object.keys(b.fome.porCasa).map(function(k){ return k + " perdeu " + b.fome.porCasa[k]; });
       l.push("FOME: o celeiro não deu conta. " + b.fome.mortes + " mortos (" + q.join("; ") + ").");
     }
+    (b.marcos || []).forEach(function(m){
+      l.push("MARCA DA CASA DO NARRADOR: alcançou " + m.conta + " — a vila passou a chamá-la de " + m.titulo + ".");
+    });
     l.push("ACONTECIMENTO: " + b.evento.titulo + " — " + b.evento.fato);
     l.push("Fim do ano: celeiro " + b.depois.celeiro + " (era " + b.antes.celeiro + "), muralha " +
            b.depois.muralha + " (era " + b.antes.muralha + "), concórdia " + b.depois.concordia +
@@ -914,7 +1044,7 @@ button[disabled]{cursor:not-allowed}
     }).join("");
   }
 
-  function pintarEstado(pulsar){
+  function pintarEstado(pulsar, delta){
     MEDIDORES.forEach(function(m){
       var v = S.vila[m.chave];
       var pct = clamp(v / m.max * 100, 0, 100);
@@ -931,12 +1061,50 @@ button[disabled]{cursor:not-allowed}
     });
     var eu = S.casas[0];
     $("meu-nome").textContent = eu.nome;
-    $("meu-ouro").textContent = eu.ouro;
-    $("minhas-terras").textContent = eu.terras;
-    $("meus-bracos").textContent = eu.bracos;
+    var pilhas = { "meu-ouro":eu.ouro, "minhas-terras":eu.terras,
+                   "meus-bracos":eu.bracos, "meu-renome":eu.obras || 0 };
+    var chaveDelta = { "meu-ouro":"ouro", "minhas-terras":"terras",
+                       "meus-bracos":"bracos", "meu-renome":"obras" };
+    for (var id in pilhas){
+      var el = $(id);
+      var d = delta && delta[chaveDelta[id]];
+      el.textContent = pilhas[id];
+      if (d){
+        var chip = document.createElement("span");
+        chip.className = "delta";
+        chip.textContent = (d > 0 ? "+" : "") + d;
+        chip.style.color = d > 0 ? "var(--verdigris)" : "var(--ember)";
+        el.appendChild(chip);
+      }
+    }
     $("almas-topo").textContent = almas(S) + " almas";
     $("nome-vila-topo").textContent = S.vilaNome;
     $("rotulo-ano").textContent = "Ano " + S.ano + " de " + ANOS;
+    pintarAvisos();
+  }
+
+  /* O jogador precisa poder antecipar o desastre — senão o ano vira loteria. */
+  function pintarAvisos(){
+    var v = S.vila, bocas = almas(S), avisos = [];
+    if (v.celeiro < bocas)
+      avisos.push({ t:"grave", txt:"O celeiro tem " + v.celeiro + " e a vila come " + bocas + ": vai faltar." });
+    else if (v.celeiro < bocas * 1.5)
+      avisos.push({ t:"medio", txt:"O celeiro cobre este ano por pouco." });
+    if (v.muralha < 25)
+      avisos.push({ t:"grave", txt:"A muralha está em " + v.muralha + ": um assalto passaria." });
+    else if (v.muralha < 45)
+      avisos.push({ t:"medio", txt:"A muralha cede um pouco a cada ano." });
+    if (v.concordia < 25)
+      avisos.push({ t:"grave", txt:"A concórdia está em " + v.concordia + ": a vila vai se voltar contra a casa mais rica." });
+    else if (v.concordia < 45)
+      avisos.push({ t:"medio", txt:"A vila anda desconfiada." });
+
+    $("avisos").innerHTML = avisos.slice(0, 2).map(function(a){
+      return '<div class="aviso-risco ' + a.t + '"></div>';
+    }).join("");
+    $("avisos").querySelectorAll(".aviso-risco").forEach(function(el, i){
+      el.textContent = avisos[i].txt;
+    });
   }
 
   function montarBandeja(){
@@ -945,6 +1113,7 @@ button[disabled]{cursor:not-allowed}
       return '<button class="acao" data-acao="'+k+'">' +
                '<span class="verbo">'+a.verbo+'</span>' +
                '<span class="efeito">'+a.efeito+'</span>' +
+               (a.preco ? '<span class="preco"></span>' : '') +
              '</button>';
     }).join("");
     elBandeja.querySelectorAll(".acao").forEach(function(b){
@@ -955,9 +1124,16 @@ button[disabled]{cursor:not-allowed}
   function atualizarBandeja(){
     elBandeja.querySelectorAll(".acao").forEach(function(b){
       var a = ACOES[b.dataset.acao];
-      var pode = !a.custo || a.custo(S.casas[0]);
+      var pode = !a.custo || a.custo(S.casas[0], S.vila);
       b.disabled = !pode;
-      b.title = pode ? "" : "Ouro insuficiente";
+      var motivo = (!pode && a.porque) ? a.porque(S.casas[0], S.vila) : "";
+      b.title = motivo;
+      var elPreco = b.querySelector(".preco");
+      if (elPreco){
+        elPreco.textContent = pode
+          ? "Custa " + a.preco(S.casas[0]) + " de ouro"
+          : motivo;
+      }
     });
   }
 
@@ -971,6 +1147,38 @@ button[disabled]{cursor:not-allowed}
       'O primeiro ano espera a sua escolha.</p>';
     d.querySelector(".vila-aqui").textContent = S.vilaNome;
     elCronica.appendChild(d);
+  }
+
+  var ROTULO_GANHO = {
+    celeiro:  { txt:"ao celeiro comum", classe:"bom" },
+    muralha:  { txt:"de muralha",       classe:"bom" },
+    concordia:{ txt:"de concórdia",     classe:"bom" },
+    ouro:     { txt:"de ouro seu",      classe:"ouro" },
+    terras:   { txt:"terra sua",        classe:"ouro" },
+    bracos:   { txt:"braço seu",        classe:"ouro" },
+    obras:    { txt:"de renome seu",    classe:"bom" }
+  };
+
+  /* A linha que responde "o que eu ganhei com isso?" — sem ela o jogador
+     só vê o total da vila mexer e nunca reconhece a própria escolha. */
+  function blocoDoMeuAno(b){
+    var g = b.meuGanho;
+    if (!g) return "";
+    var chips = Object.keys(ROTULO_GANHO).filter(function(k){ return g[k]; }).map(function(k){
+      var r = ROTULO_GANHO[k], v = g[k];
+      var classe = v < 0 ? "ruim" : r.classe;
+      return '<span class="ganho ' + classe + '">' + (v > 0 ? "+" : "") + v + " " + r.txt + "</span>";
+    }).join("");
+    return '<div class="meu-ano"><span class="rot">A sua escolha rendeu</span>' + chips + "</div>";
+  }
+
+  function blocoDosMarcos(b){
+    return (b.marcos || []).map(function(m){
+      var premio = Object.keys(m.premio).map(function(k){
+        return "+" + m.premio[k] + " " + (k === "obras" ? "renome" : k);
+      }).join(" · ");
+      return '<div class="marca-marco"><b>' + m.titulo + '</b><span>' + m.conta + " — " + premio + "</span></div>";
+    }).join("");
   }
 
   function entradaDoAno(b){
@@ -991,11 +1199,14 @@ button[disabled]{cursor:not-allowed}
 
     d.innerHTML =
       '<div class="selo-ano">Ano '+b.ano+'</div>' +
+      blocoDoMeuAno(b) +
       '<div class="acoes-do-ano">'+linhas+'</div>' +
+      blocoDosMarcos(b) +
       (marcas ? '<div style="display:flex;flex-wrap:wrap;gap:7px">'+marcas+'</div>' : '') +
       '<p class="texto-cronica"></p>';
 
     elCronica.appendChild(d);
+    d.scrollIntoView({ block:"start" });
     return d.querySelector(".texto-cronica");
   }
 
@@ -1025,13 +1236,11 @@ button[disabled]{cursor:not-allowed}
 
     var b = resolverAno(S, acao);
     var alvo = entradaDoAno(b);
-    pintarEstado(true);
-    elCronica.scrollTop = elCronica.scrollHeight;
+    pintarEstado(true, b.meuGanho);
     await guardar(); // o ano ja esta salvo antes de a prosa chegar
 
     await narrar(b, S, alvo);
     b.narrativa = alvo.textContent;
-    elCronica.scrollTop = elCronica.scrollHeight;
     await guardar();
 
     ocupado = false;
@@ -1065,7 +1274,8 @@ button[disabled]{cursor:not-allowed}
       return '<div class="placar-linha'+(p.casa.eu?' eu':'')+'">' +
                '<span class="pos num">'+(i+1)+'</span>' +
                '<span class="casa">'+p.casa.nome +
-                 '<span class="detalhe">'+p.casa.ouro+' ouro · '+p.casa.terras+' terras · '+p.casa.bracos+' braços</span>' +
+                 '<span class="detalhe">'+p.casa.ouro+' ouro · '+p.casa.terras+' terras · '+
+                   p.casa.bracos+' braços · '+(p.casa.obras||0)+' renome</span>' +
                '</span>' +
                '<span class="renome">'+p.renome+'</span>' +
              '</div>';

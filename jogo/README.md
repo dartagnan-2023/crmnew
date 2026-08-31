@@ -39,27 +39,64 @@ anos correm em ~5 minutos contra quatro casas controladas por política fixa.
 
 ## As regras (o que a IA não decide)
 
-Tudo abaixo é determinístico e vive em `resolverAno()`.
+Tudo abaixo é determinístico e vive em `resolverAno()`. **Toda ação rende algo à casa
+que a escolhe, e o rendimento cresce com o que ela já construiu** — é essa composição
+que faz a escolha valer a pena ano após ano.
 
-| Ação | Você ganha | A vila paga |
+| Ação | Retorno seu | A vila |
 |---|---|---|
-| Semear | +1 ouro | +5 +2×terras celeiro |
-| Erguer pedra | — | −4 do seu ouro, +12 muralha, +3 concórdia |
-| Acolher | +1 braço | −4 celeiro, +6 concórdia |
-| Comerciar | +8 +2×terras ouro | −9 celeiro, −4 concórdia |
-| Cercar o comum | +1 terra | −5 celeiro, −11 concórdia |
+| **Semear** | +2 +terras ouro | +4 +2×terras +⌊braços/2⌋ celeiro |
+| **Arar novo campo** | +1 terra, −6 ouro | +2 concórdia |
+| **Acolher** | +1 braço | −3 celeiro, +6 concórdia |
+| **Erguer pedra** | +2 renome, −(4+⌊renome/2⌋) ouro | +12 muralha, +2 concórdia |
+| **Comerciar** | +5 +2×terras +2×braços ouro | −8 celeiro, −4 concórdia |
+| **Cercar o comum** | +1 terra de graça | −5 celeiro, −11 concórdia |
 
-Resolução do ano, nesta ordem: as cinco casas agem → cada braço come 1 do celeiro →
-fome se o celeiro não fecha (1 morte a cada 3 de déficit) → a muralha perde 4 e a
-concórdia recupera 4 → um grande acontecimento.
+Terras e braços multiplicam semear e comerciar; renome entra direto no placar. **Arar e
+cercar dão a mesma terra** — um custa ouro, o outro custa a vila: é a decisão moral
+central, e agora as duas fazem a casa crescer. Erguer fica indisponível com a muralha
+acima de 92 (não há o que erguer), o que impede a estratégia de botão único.
+
+**Marcos** pagam metas de médio prazo: 4 terras → +8 ouro; 7 braços → +4 renome;
+6 de renome → +12 ouro; 45 de ouro → +4 renome.
+
+Resolução do ano, nesta ordem: as casas agem → cada braço come 1 do celeiro → fome se o
+celeiro não fecha (1 morte a cada 3 de déficit) → a muralha perde 4 e a concórdia
+recupera 3 → um grande acontecimento → conferência dos marcos.
 
 Acontecimentos, por prioridade: **Cisma/Revolta** (concórdia < 25, ou uma casa com
-riqueza > 1,8× a média — as outras a saqueiam e derrubam uma cerca) → **Invasão**
-(probabilidade sobe com o ano, severidade cai com a muralha) → **Peste** → **Colheita
-farta** → **Ano quieto** (+5 concórdia: a paz é o único jeito de a confiança subir).
+riqueza > 1,8× a média) → **Invasão** (probabilidade sobe com o ano, severidade cai com
+a muralha) → **Peste** → **Colheita farta** → **Ano quieto** (+3 concórdia).
 
-`renome = (ouro×1,5 + terras×10 + braços×8) × (0,15 + 0,85 × (concórdia/100)^1,3)`,
-e ×0,10 se a vila colapsar.
+`renome final = (ouro×1,2 + terras×10 + braços×8 + obras×8) × (0,15 + 0,85 ×
+(concórdia/100)^1,3)`, e ×0,10 se a vila colapsar.
+
+## Por que a economia foi reescrita
+
+O primeiro desenho falhou num ponto que só aparece jogando: **o caminho honesto não
+tinha juros compostos.** Semear rendia `5 + 2×terras` e terras só vinham de cercar, a
+ação antissocial. Cooperar era uma reta horizontal.
+
+Medido no motor antigo, jogando "só semear" por doze anos: ouro 10 → 23, terras 2 → 2,
+braços 4 → **2,4**. O jogador cooperava a partida inteira e terminava com menos gente do
+que começou, enquanto "só cercar" levava terras a 11,6. Pior: a contribuição da escolha
+do jogador ao celeiro tinha **razão sinal/ruído de 0,89** — menor que o que as outras
+casas e os eventos causavam no mesmo ano, então ele semeava +9 e via o celeiro cair −2.
+
+Depois da reescrita, "só semear" leva o ouro de 10 a ~60 com ganho limpo e previsível, e
+"arar + semear" leva as terras de 2 a 6.
+
+## Recompensa visível
+
+Metade do problema era de tela, não de regra:
+
+- **"A sua escolha rendeu"** — bloco no topo de cada ano da crônica, com os deltas
+  exatos da sua ação, separados do total da vila. A crônica rola para o topo da entrada
+  nova, não para o fim, para que essa linha caia na primeira dobra.
+- **Deltas piscando** no rodapé sobre ouro, terras, braços e renome.
+- **Avisos de risco** no cabeçalho antes do desastre ("O celeiro tem 19 e a vila come
+  20: vai faltar"), o que transforma o acaso em decisão informada.
+- **Preço dinâmico** de erguer na própria bandeja, e o motivo quando a ação está travada.
 
 ## As quatro casas rivais
 
@@ -76,20 +113,25 @@ substituto de motor único para o que, no produto real, é contágio social entr
 
 ## Balanceamento verificado
 
-Simulação headless do motor, 5 sementes × 7 estratégias (`scratchpad/sim.js`, descartável):
+Simulação headless do motor, 6 sementes × 8 estratégias (`scratchpad/sim2.js`, descartável),
+por renome final:
 
-| Estratégia | Renome |
-|---|---|
-| Equilibrada | 66–106 |
-| Guardiã da vila | 72–78 |
-| Só semear | 39–90 |
-| Gananciosa esperta | 18–61 |
-| **Só cercar (egoísta pura)** | **18–22** |
+| Estratégia | Renome médio | Posição média |
+|---|---|---|
+| Só erguer | 161 | 4,8 |
+| Construtor honesto (mista) | 153 | 3,2 |
+| Fazendeiro (arar + semear) | 123 | 2,5 |
+| Só semear | 84 | 3,5 |
+| Oportunista total | 55 | 2,0 |
+| Só comerciar | 52 | 3,8 |
+| Ganancioso esperto | 52 | 1,3 |
+| **Só cercar (egoísta pura)** | **21** | 3,0 |
 
-A egoísta pura termina em 1º no placar *local* e com o pior renome absoluto do jogo:
-ela vence a disputa e perde a herança, porque zera a concórdia e divide o multiplicador
-de todos por seis. É a fábula que o jogo existe para contar, e ela se sustenta na
-matemática, não na narração.
+As construtivas ficam ~3× acima das extrativas. "Só erguer" empata com a mista porque,
+quando não pode pagar a pedra, recai em semear — na prática ela *é* a mista; e repare na
+posição média 4,8: ela termina em último no placar local, porque as rivais colhem a
+concórdia que ela constrói. A egoísta pura continua vencendo a disputa local e perdendo a
+herança.
 
 ## Onde a IA entra
 
