@@ -34,9 +34,22 @@ Regras de trabalho:
 7. Nunca apague arquivos que não foram criados por você.
 8. Sempre valide com:
    - node --check backend/server.js
-   - node --check frontend/src/App.js
    - cd frontend && npm run build
    - git diff --check
+
+   ATENCAO: nao use `node --check frontend/src/App.js`. Ele NAO valida esse
+   arquivo. Testado em 31/08/2026: com um erro de JSX injetado de proposito, o
+   comando retornou 0 (sucesso). O App.js comeca com `import`, e tratado como
+   ESM e nao passa por analise completa. O unico jeito de validar o frontend e
+   `npm run build`.
+
+9. Ao commitar, use sempre caminho explicito (`git add <arquivo>`).
+   NUNCA `git add .` nem `git add -A`: o repositorio tem divergencia de fim de
+   linha (CRLF/LF) em cerca de 39 arquivos. Medido: 36.657 insercoes contra
+   36.657 delecoes, e `git diff --ignore-cr-at-eol` volta vazio, ou seja, zero
+   mudanca real de conteudo. Um `git add .` geraria um commit de dezenas de
+   milhares de linhas capaz de esconder alteracao verdadeira no meio.
+   Para ver o que mudou de fato: `git diff --ignore-cr-at-eol`.
 
 Como trabalhar:
 - Primeiro entenda o contexto do código antes de editar.

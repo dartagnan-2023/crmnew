@@ -87,10 +87,39 @@ Execute sempre:
 
 ```bash
 node --check backend/server.js
-node --check frontend/src/App.js
 cd frontend && npm run build
 git diff --check
 ```
+
+> **Nao use `node --check frontend/src/App.js`.** Ele nao valida esse arquivo.
+> Testado em 31/08/2026: injetamos um erro grosseiro de JSX numa copia do
+> `App.js` e o comando **retornou 0 (sucesso)**. O mesmo `node --check` rejeita
+> corretamente um arquivo JSX pequeno e um arquivo com erro de JS puro — o
+> problema e especifico deste arquivo, que comeca com `import`, e tratado como
+> ESM e nao passa por analise sintatica completa.
+>
+> Quem confiou nesse passo achou que estava validando o frontend e nao estava.
+> **So `npm run build` valida o frontend.**
+>
+> O `node --check backend/server.js` continua valido: o backend e CommonJS e nao
+> tem JSX.
+
+### Como commitar sem gerar ruido
+
+O repositorio tem divergencia de fim de linha (CRLF/LF) em cerca de 39 arquivos.
+Medido em 31/08/2026: `git diff` acusa 36.657 insercoes contra 36.657 delecoes
+(numero identico) e `git diff --ignore-cr-at-eol` volta **vazio** — ou seja, zero
+mudanca real de conteudo.
+
+Por isso:
+
+- **Nunca** use `git add .` nem `git add -A`. Um commit desses teria dezenas de
+  milhares de linhas e esconderia alteracao verdadeira no meio.
+- Sempre `git add <caminho/do/arquivo>`, um a um.
+- Para ver o que realmente mudou: `git diff --ignore-cr-at-eol`.
+
+Normalizar o fim de linha de vez e uma tarefa propria, de alto impacto, que
+precisa ser combinada com quem mais mexe no repositorio.
 
 ### 4. Versionar
 
