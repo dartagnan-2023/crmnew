@@ -98,6 +98,32 @@ Metade do problema era de tela, não de regra:
   20: vai faltar"), o que transforma o acaso em decisão informada.
 - **Preço dinâmico** de erguer na própria bandeja, e o motivo quando a ação está travada.
 
+## Cadência: os doze anos deixam de ser iguais
+
+O primeiro desenho tinha doze turnos de forma idêntica — escolher 1 de 6, ler, repetir —
+sem ato, escalada nem clímax, e com os eventos acontecendo *com* o jogador em vez de
+exigirem resposta. Três correções:
+
+**A narração parou de travar a jogada.** `jogarAno` fazia `await narrar(...)` antes de
+liberar a bandeja: doze esperas obrigatórias no meio do jogo. Agora a prosa escreve
+sozinha enquanto o jogador joga o ano seguinte, e só o último ano espera (porque depois
+dele a tela troca). Medido no navegador com um cronista propositalmente lento de 2,5 s
+por ano: **12 anos em 2,7 s**, contra os 30 s+ que a versão anterior imporia.
+
+**Quatro anos viram dilemas** (anos 3, 6, 9 e 11). A bandeja some e uma casa rival cobra
+uma resposta, com três saídas próprias daquela situação — vender campos à Casa Corvo,
+pagar ou não a parte no muro da Casa Ferro, responder a uma acusação da Casa Espiga. A
+resposta substitui a ação normal do ano e é o que a Casa Vinha espelha no ano seguinte.
+São seis dilemas no total, quatro por partida, escolhidos por ato sem repetir. O sorteio
+é determinístico e não consome o gerador, então um save/restore devolve o mesmo dilema.
+
+**Três atos com escalada.** No ato 1 (anos 1–4) não há invasão nem peste — só chuvas,
+colheita e as brigas internas. No ato 2 elas entram; no ato 3 ficam mais prováveis. E o
+**ano 12 é sempre o cerco**: um exército senta diante do muro e onze anos de muralha
+cobram o preço de uma vez — se ela aguentar, todas as casas ganham renome e a vila fecha
+unida; se não, é a maior perda da partida. É o que dá sentido retroativo a ter erguido
+pedra.
+
 ## As quatro casas rivais
 
 Políticas fixas e legíveis de propósito — o jogador precisa conseguir prever quem é

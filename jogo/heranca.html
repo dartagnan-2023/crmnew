@@ -343,6 +343,51 @@ button[disabled]{cursor:not-allowed}
 }
 .acao[disabled] .preco{color:var(--ember)}
 
+/* o dilema toma a bandeja: o ano muda de forma, não só de conteúdo */
+.dilema{
+  display:flex;flex-direction:column;gap:12px;
+  padding:15px 16px 16px;
+  background:linear-gradient(180deg,#20180E,#1A1C26 70%);
+  border-top:2px solid var(--gilt);
+}
+.dilema .quem-cobra{
+  font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--gilt);
+}
+.dilema h3{
+  margin:0;font-family:var(--display);font-weight:700;font-size:22px;
+  letter-spacing:-.02em;line-height:1.05;text-wrap:balance;
+}
+.dilema p{margin:0;font-size:15.5px;line-height:1.55;color:#D6CFBE}
+.dilema .opcoes{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+.op{
+  background:var(--ink-2);border:1px solid var(--line-solid);border-left:3px solid var(--verdigris-deep);
+  text-align:left;padding:11px 13px;border-radius:2px;
+  display:flex;flex-direction:column;gap:3px;
+  transition:border-color .14s ease,background .14s ease;
+}
+.op:hover{background:var(--ink-3);border-left-color:var(--gilt)}
+.op .rot{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:-.01em}
+.op .custo{font-family:var(--mono);font-size:10px;letter-spacing:.03em;color:var(--vellum-dim)}
+
+/* virada de ato: um respiro que dá forma aos doze anos */
+.selo-ato{
+  display:flex;flex-direction:column;gap:5px;
+  padding:15px 0 3px;border-top:1px solid var(--line-solid);
+  animation:surgir .5s ease both;
+}
+.selo-ato .num{
+  font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--gilt);
+}
+.selo-ato .nome{
+  font-family:var(--display);font-weight:700;font-size:27px;letter-spacing:-.025em;line-height:1;
+}
+.selo-ato .linha{font-size:15px;color:var(--vellum-dim);line-height:1.5;max-width:32em}
+
+.entrada.crise{border-left:2px solid var(--ember);padding-left:12px;margin-left:-14px}
+.entrada.triunfo{border-left:2px solid var(--verdigris);padding-left:12px;margin-left:-14px}
+
 /* ---------- your house + tray ---------- */
 .rodape{border-top:1px solid var(--line-solid);background:var(--ink-2)}
 
@@ -461,6 +506,7 @@ button[disabled]{cursor:not-allowed}
         <div class="pilha renome"><b id="meu-renome">0</b><span>renome</span></div>
       </div>
       <div class="bandeja" id="bandeja"></div>
+      <div class="dilema" id="dilema" hidden></div>
     </div>
   </section>
 
@@ -632,6 +678,108 @@ button[disabled]{cursor:not-allowed}
       } }
   ];
 
+  /* Três atos. A vila é generosa no começo, perde a paciência no meio e
+     cobra no fim — sem isso o ano 12 é indistinguível do ano 2. */
+  function ato(ano){ return ano <= 4 ? 1 : ano <= 8 ? 2 : 3; }
+  var ATOS = {
+    1:{ nome:"Fundação",
+        linha:"Os primeiros anos. A terra é generosa e ninguém ainda tem do que se queixar." },
+    2:{ nome:"Provação",
+        linha:"O vale ficou conhecido. Vem gente de fora, e nem toda ela pede licença." },
+    3:{ nome:"Ajuste de contas",
+        linha:"O que cada casa fez já está escrito. Falta o inverno cobrar." }
+  };
+
+  /* DILEMAS — em quatro dos doze anos a vila interrompe e cobra uma resposta.
+     São eles que quebram a uniformidade dos turnos e põem as outras casas
+     falando com você, em vez de só aparecerem numa lista. */
+  var ANOS_DE_DILEMA = [3, 6, 9, 11];
+
+  var DILEMAS = [
+    { id:"oferta-corvo", ato:1, titulo:"A oferta da Casa Corvo",
+      quando:function(s){ return s.casas[0].terras >= 3; },
+      texto:"A Casa Corvo põe vinte e seis moedas na mesa por dois dos seus campos. Diz que é um favor; diz também que não repete a oferta.",
+      opcoes:[
+        { rot:"Vender os dois campos", equiv:"comerciar", resumo:"vendeu dois campos à Casa Corvo",
+          deltas:{ terras:-2, ouro:26 } },
+        { rot:"Recusar e continuar plantando", equiv:"semear", resumo:"recusou a oferta da Casa Corvo",
+          deltas:{ obras:1, concordia:3 } },
+        { rot:"Exigir o dobro", equiv:"comerciar", resumo:"exigiu o dobro da Casa Corvo e levou",
+          deltas:{ terras:-2, ouro:44, concordia:-8 } }
+      ] },
+
+    { id:"forasteiros", ato:1, titulo:"Os forasteiros à porta",
+      texto:"Trinta pessoas chegaram do norte com o que carregavam nas costas. Estão à porta da vila e olham para a sua casa, que é a mais perto do portão.",
+      opcoes:[
+        { rot:"Acolher quem couber", equiv:"acolher", resumo:"acolheu os forasteiros do norte",
+          deltas:{ bracos:2, celeiro:-8, concordia:10 } },
+        { rot:"Mandar seguir caminho", equiv:"semear", resumo:"mandou os forasteiros seguirem caminho",
+          deltas:{ concordia:-9, celeiro:4 } },
+        { rot:"Deixar a vila decidir", equiv:"acolher", resumo:"levou os forasteiros à decisão da vila",
+          deltas:{ bracos:1, celeiro:-4, concordia:5 } }
+      ] },
+
+    { id:"pedido-ferro", ato:2, titulo:"O pedido da Casa Ferro",
+      texto:"A Casa Ferro quer oito moedas de cada casa para dobrar o muro antes do inverno. Diz que viu fogueiras a dois dias daqui.",
+      opcoes:[
+        { rot:"Pagar a parte da sua casa", equiv:"erguer", resumo:"pagou a sua parte no muro da Casa Ferro",
+          deltas:{ ouro:-8, muralha:20, concordia:7, obras:2 } },
+        { rot:"Recusar: que ergam sozinhos", equiv:"semear", resumo:"recusou pagar o muro da Casa Ferro",
+          deltas:{ concordia:-11 } },
+        { rot:"Pagar e exigir a obra em seu nome", equiv:"erguer", resumo:"pagou o muro e exigiu que levasse o seu nome",
+          deltas:{ ouro:-8, muralha:20, obras:5, concordia:-5 } }
+      ] },
+
+    { id:"acusacao", ato:2, titulo:"A acusação da Casa Espiga",
+      texto:"A Casa Espiga disse na frente de todos que a sua casa anda tirando do celeiro comum mais do que põe. Metade da vila ficou calada, que é pior do que concordar.",
+      opcoes:[
+        { rot:"Negar e seguir", equiv:"semear", resumo:"negou a acusação da Casa Espiga",
+          deltas:{ concordia:-6 } },
+        { rot:"Abrir o seu celeiro à vila", equiv:"semear", resumo:"abriu o próprio celeiro para desmentir a acusação",
+          deltas:{ ouro:-10, celeiro:14, concordia:12, obras:2 } },
+        { rot:"Acusar a Espiga de volta", equiv:"cercar", resumo:"devolveu a acusação à Casa Espiga",
+          deltas:{ concordia:-15, ouro:6 } }
+      ] },
+
+    { id:"mercador", ato:3, titulo:"O mercador de armas",
+      texto:"Um homem de fora abriu uma carroça de ferro no meio da praça. Vende caro e não fia. Diz que quem comprar dorme melhor.",
+      opcoes:[
+        { rot:"Comprar para a muralha", equiv:"erguer", resumo:"comprou ferro para a muralha",
+          deltas:{ ouro:-20, muralha:26, obras:3, concordia:5 } },
+        { rot:"Deixar a carroça passar", equiv:"semear", resumo:"deixou o mercador de armas seguir",
+          deltas:{ ouro:3 } },
+        { rot:"Comprar só para a sua casa", equiv:"cercar", resumo:"comprou ferro só para a própria casa",
+          deltas:{ ouro:-20, bracos:2, obras:1, concordia:-10 } }
+      ] },
+
+    { id:"ultimo-grao", ato:3, titulo:"O último grão",
+      quando:function(s){ return s.vila.celeiro < 45; },
+      texto:"O celeiro não passa do inverno e todo mundo já fez essa conta. A Casa Corvo tem grão guardado e oferece pelo preço de quem sabe que você não tem escolha.",
+      opcoes:[
+        { rot:"Comprar pelo preço que ele pede", equiv:"comerciar", resumo:"comprou grão caro da Casa Corvo",
+          deltas:{ ouro:-18, celeiro:32 } },
+        { rot:"Não pagar: que a vila se vire", equiv:"semear", resumo:"recusou pagar o grão e deixou a vila se virar",
+          deltas:{ concordia:-12, ouro:2 } },
+        { rot:"Ratear a compra entre as casas", equiv:"acolher", resumo:"organizou a compra do grão entre as casas",
+          deltas:{ ouro:-8, celeiro:20, concordia:9, obras:2 } }
+      ] }
+  ];
+
+  /* Determinístico: não consome o gerador, então um save/restore no meio
+     do dilema devolve exatamente o mesmo dilema. */
+  function dilemaAtual(s){
+    if (ANOS_DE_DILEMA.indexOf(s.ano) < 0) return null;
+    var usados = s.dilemasUsados || [];
+    var doAto = DILEMAS.filter(function(d){
+      return d.ato === ato(s.ano) && usados.indexOf(d.id) < 0 && (!d.quando || d.quando(s));
+    });
+    var pool = doAto.length ? doAto : DILEMAS.filter(function(d){
+      return usados.indexOf(d.id) < 0 && (!d.quando || d.quando(s));
+    });
+    if (!pool.length) return null;
+    return pool[(s.seed + s.ano * 7) % pool.length];
+  }
+
   var S = null;
 
   function novoJogo(nomeVila, nomeCasa){
@@ -647,6 +795,7 @@ button[disabled]{cursor:not-allowed}
       vila:{ celeiro:40, muralha:20, concordia:60 }, cismaRecente:false,
       casas:casas,
       ultimaDoJogador:null,
+      dilemasUsados:[],
       historico:[]
     };
   }
@@ -661,17 +810,31 @@ button[disabled]{cursor:not-allowed}
     var antes = { celeiro:v.celeiro, muralha:v.muralha, concordia:v.concordia, almas:almas(s) };
     var escolhas = [];
 
+    // A resposta a um dilema entra no lugar da ação normal daquele ano.
+    var resposta = (acaoDoJogador && typeof acaoDoJogador === "object") ? acaoDoJogador : null;
+    var acaoBase = resposta ? resposta.equiv : acaoDoJogador;
+
     var meuGanho = null;
     s.casas.forEach(function(c){
-      var a = c.eu ? acaoDoJogador : c.pol.decide(c, v, s.ano, s.ultimaDoJogador);
-      if (ACOES[a].custo && !ACOES[a].custo(c, v)) a = "semear";
-      var d = ACOES[a].deltas(c, v);
+      var a, d, rotulo, resumo;
+      if (c.eu && resposta){
+        d = resposta.deltas; a = resposta.equiv;
+        rotulo = resposta.rot; resumo = resposta.resumo;
+      } else {
+        a = c.eu ? acaoDoJogador : c.pol.decide(c, v, s.ano, s.ultimaDoJogador);
+        if (ACOES[a].custo && !ACOES[a].custo(c, v)) a = "semear";
+        d = ACOES[a].deltas(c, v);
+        rotulo = ACOES[a].verbo; resumo = ACOES[a].resumo;
+      }
       if (c.eu) meuGanho = d;
       aplicarDeltas(c, v, d);
       c.ultimaAcao = a;
-      escolhas.push({ casa:c.nome, eu:c.eu, acao:a, resumo:ACOES[a].resumo });
+      escolhas.push({ casa:c.nome, eu:c.eu, acao:a, rotulo:rotulo, resumo:resumo });
     });
-    s.ultimaDoJogador = acaoDoJogador;
+    s.ultimaDoJogador = acaoBase;
+    if (resposta){
+      s.dilemasUsados = (s.dilemasUsados || []).concat([resposta.dilemaId]);
+    }
 
     // Consumo: cada braço come um. É aqui que a população vira pressão.
     var bocas = almas(s);
@@ -724,7 +887,29 @@ button[disabled]{cursor:not-allowed}
               ? "A fartura de "+rico.nome+" ficou grande demais para os olhos da vila. As outras casas a saquearam"
               : "A concórdia ruiu. As outras casas saquearam "+rico.nome)
              +" em "+saque+" de ouro e dividiram entre si."+cerca };
-    } else if (r < 0.15 + s.ano*0.04){
+    } else if (s.ano >= ANOS){
+      // O CERCO: o clímax. Onze anos de muralha (ou a falta dela) cobram aqui.
+      s.cismaRecente = false;
+      var forca = clamp((70 - v.muralha)/70, 0, 1);
+      if (forca <= 0.12){
+        s.casas.forEach(function(c){ c.obras = (c.obras || 0) + 3; });
+        v.concordia += 12;
+        evento = { chave:"cerco-quebrado", titulo:"O cerco quebrado", tom:"boa",
+          fato:"Um exército inteiro sentou diante do muro por um mês e foi embora sem entrar. A muralha aguentou, e a vila inteira soube a quem devia." };
+      } else {
+        var mortos = 0, roubado = 0;
+        s.casas.forEach(function(c){
+          var m = Math.round(c.bracos * 0.45 * forca);
+          var o = Math.round(c.ouro * 0.5 * forca);
+          c.bracos = Math.max(0, c.bracos - m); c.ouro = Math.max(0, c.ouro - o);
+          mortos += m; roubado += o;
+        });
+        v.muralha = Math.max(0, v.muralha - 40);
+        v.concordia -= 8;
+        evento = { chave:"cerco", titulo:"O cerco", tom:"ruim",
+          fato:"Um exército sentou diante do muro e o muro não aguentou: "+mortos+" mortos e "+roubado+" de ouro levado." };
+      }
+    } else if (ato(s.ano) > 1 && r < (ato(s.ano) === 2 ? 0.20 : 0.32)){
       s.cismaRecente = false;
       var sev = clamp((55 - v.muralha)/55, 0, 1);
       if (sev <= 0.05){
@@ -744,7 +929,7 @@ button[disabled]{cursor:not-allowed}
         evento = { chave:"invasao", titulo:"Invasão", tom:"ruim",
           fato:"Bandos armados romperam a muralha: "+perdidos+" mortos e "+ouroPerdido+" de ouro levado." };
       }
-    } else if (r < 0.30 + (antes.almas > 25 ? 0.12 : 0) + (v.concordia < 40 ? 0.08 : 0)){
+    } else if (ato(s.ano) > 1 && r < (ato(s.ano) === 2 ? 0.38 : 0.54) + (antes.almas > 25 ? 0.10 : 0) + (v.concordia < 40 ? 0.08 : 0)){
       s.cismaRecente = false;
       var vitimas = 0;
       s.casas.forEach(function(c){
@@ -759,6 +944,11 @@ button[disabled]{cursor:not-allowed}
       v.celeiro += 20; v.concordia += 5;
       evento = { chave:"farta", titulo:"Colheita farta", tom:"boa",
         fato:"A colheita veio dobrada e o celeiro transbordou." };
+    } else if (ato(s.ano) === 1 && r < 0.55){
+      s.cismaRecente = false;
+      v.celeiro += 12;
+      evento = { chave:"chuvas", titulo:"Ano de chuvas", tom:"boa",
+        fato:"Choveu na hora certa e os campos deram mais do que se esperava." };
     }
 
     if (evento.chave === "quieto") v.concordia += 3;
@@ -773,7 +963,8 @@ button[disabled]{cursor:not-allowed}
     if (depois.almas <= 0){ s.colapso = true; s.fim = true; }
 
     var boletim = {
-      ano:s.ano, escolhas:escolhas, fome:fome, evento:evento, marcos:marcos,
+      ano:s.ano, ato:ato(s.ano), escolhas:escolhas, fome:fome, evento:evento, marcos:marcos,
+      dilema:resposta ? { titulo:resposta.dilemaTitulo, escolhido:resposta.rot } : null,
       meuGanho:meuGanho, antes:antes, depois:depois, bocas:bocas
     };
     s.historico.push(boletim);
@@ -791,7 +982,8 @@ button[disabled]{cursor:not-allowed}
   /* Só dados — nada de função, nada de referência cruzada. */
   function serializar(s){
     return {
-      versao:2, vilaNome:s.vilaNome, seed:s.seed, rngN:s.rngN, ano:s.ano,
+      versao:3, vilaNome:s.vilaNome, seed:s.seed, rngN:s.rngN, ano:s.ano,
+      dilemasUsados:(s.dilemasUsados || []).slice(),
       fim:!!s.fim, colapso:!!s.colapso, cismaRecente:!!s.cismaRecente,
       ultimaDoJogador:s.ultimaDoJogador || null,
       vila:{ celeiro:s.vila.celeiro, muralha:s.vila.muralha, concordia:s.vila.concordia },
@@ -819,6 +1011,7 @@ button[disabled]{cursor:not-allowed}
         return casa;
       }),
       ultimaDoJogador:d.ultimaDoJogador,
+      dilemasUsados:(d.dilemasUsados || []).slice(),
       historico:d.historico || [],
       epilogo:d.epilogo || null
     };
@@ -834,6 +1027,7 @@ button[disabled]{cursor:not-allowed}
   function fatosDoAno(b, s){
     var l = [];
     l.push("ANO " + b.ano + " de " + ANOS + ", na vila de " + s.vilaNome + ".");
+    if (b.dilema) l.push("A VILA COBROU UMA RESPOSTA: " + b.dilema.titulo + ". A casa do narrador respondeu: " + b.dilema.escolhido + ".");
     l.push("O que cada casa fez:");
     b.escolhas.forEach(function(e){
       l.push("- " + e.casa + (e.eu ? " (o narrador serve esta casa)" : "") + ": " + e.resumo + ".");
@@ -1121,6 +1315,47 @@ button[disabled]{cursor:not-allowed}
     });
   }
 
+  var elDilema = $("dilema");
+
+  function resumoDeltas(d){
+    return Object.keys(ROTULO_GANHO).filter(function(k){ return d[k]; }).map(function(k){
+      var v = d[k];
+      return (v > 0 ? "+" : "") + v + " " + ROTULO_GANHO[k].txt;
+    }).join(" · ") || "sem custo";
+  }
+
+  /* Em ano de dilema a bandeja some e a vila fala com você. */
+  function montarTurno(){
+    var d = S.fim ? null : dilemaAtual(S);
+    if (!d){
+      elDilema.hidden = true;
+      elBandeja.hidden = false;
+      atualizarBandeja();
+      return;
+    }
+    elBandeja.hidden = true;
+    elDilema.hidden = false;
+    elDilema.innerHTML =
+      '<span class="quem-cobra">A vila cobra uma resposta</span>' +
+      '<h3></h3><p></p><div class="opcoes"></div>';
+    elDilema.querySelector("h3").textContent = d.titulo;
+    elDilema.querySelector("p").textContent = d.texto;
+
+    var caixa = elDilema.querySelector(".opcoes");
+    d.opcoes.forEach(function(o){
+      var b = document.createElement("button");
+      b.className = "op";
+      b.innerHTML = '<span class="rot"></span><span class="custo"></span>';
+      b.querySelector(".rot").textContent = o.rot;
+      b.querySelector(".custo").textContent = resumoDeltas(o.deltas);
+      b.addEventListener("click", function(){
+        jogarAno({ deltas:o.deltas, equiv:o.equiv, resumo:o.resumo, rot:o.rot,
+                   dilemaId:d.id, dilemaTitulo:d.titulo });
+      });
+      caixa.appendChild(b);
+    });
+  }
+
   function atualizarBandeja(){
     elBandeja.querySelectorAll(".acao").forEach(function(b){
       var a = ACOES[b.dataset.acao];
@@ -1181,14 +1416,28 @@ button[disabled]{cursor:not-allowed}
     }).join("");
   }
 
-  function entradaDoAno(b){
+  function seloDeAto(n){
+    var a = ATOS[n];
     var d = document.createElement("div");
-    d.className = "entrada destaque";
+    d.className = "selo-ato";
+    d.innerHTML = '<span class="num">Ato ' + n + ' de 3</span>' +
+                  '<span class="nome"></span><span class="linha"></span>';
+    d.querySelector(".nome").textContent = a.nome;
+    d.querySelector(".linha").textContent = a.linha;
+    elCronica.appendChild(d);
+  }
+
+  function entradaDoAno(b){
+    if (b.ano === 1 || ato(b.ano) !== ato(b.ano - 1)) seloDeAto(ato(b.ano));
+    var d = document.createElement("div");
+    d.className = "entrada destaque" +
+      (b.evento.tom === "ruim" || b.fome ? " crise" : "") +
+      (b.evento.tom === "boa" && !b.fome ? " triunfo" : "");
 
     var linhas = b.escolhas.map(function(e){
+      var rot = e.rotulo || ACOES[e.acao].verbo;
       return '<div class="linha-casa'+(e.eu?' eu':'')+'">' +
-               '<span class="quem">'+e.casa+'</span>' +
-               '<span class="fez">'+ACOES[e.acao].verbo+'</span>' +
+               '<span class="quem"></span><span class="fez"></span>' +
              '</div>';
     }).join("");
 
@@ -1205,6 +1454,11 @@ button[disabled]{cursor:not-allowed}
       (marcas ? '<div style="display:flex;flex-wrap:wrap;gap:7px">'+marcas+'</div>' : '') +
       '<p class="texto-cronica"></p>';
 
+    d.querySelectorAll(".linha-casa").forEach(function(el, i){
+      var e = b.escolhas[i];
+      el.querySelector(".quem").textContent = e.casa;
+      el.querySelector(".fez").textContent = e.rotulo || ACOES[e.acao].verbo;
+    });
     elCronica.appendChild(d);
     d.scrollIntoView({ block:"start" });
     return d.querySelector(".texto-cronica");
@@ -1237,16 +1491,21 @@ button[disabled]{cursor:not-allowed}
     var b = resolverAno(S, acao);
     var alvo = entradaDoAno(b);
     pintarEstado(true, b.meuGanho);
+    var acabou = S.fim;
     await guardar(); // o ano ja esta salvo antes de a prosa chegar
 
-    await narrar(b, S, alvo);
-    b.narrativa = alvo.textContent;
-    await guardar();
+    // A prosa escreve sozinha enquanto você joga o ano seguinte. Esperar por ela
+    // a cada turno era o que quebrava a cadência — só o último ano espera, porque
+    // depois dele a tela troca.
+    var prosa = narrar(b, S, alvo).then(function(){
+      b.narrativa = alvo.textContent;
+      return guardar();
+    });
 
     ocupado = false;
-    if (S.fim) { encerrar(); return; }
+    if (acabou){ await prosa; encerrar(); return; }
     elBandeja.classList.remove("travada");
-    atualizarBandeja();
+    montarTurno();
   }
 
   async function encerrar(){
@@ -1362,8 +1621,8 @@ button[disabled]{cursor:not-allowed}
     montarMedidores();
     montarBandeja();
     pintarEstado(false);
-    atualizarBandeja();
     elBandeja.classList.remove("travada");
+    montarTurno();
   }
 
   async function criarCasa(){
