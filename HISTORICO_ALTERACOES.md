@@ -15,6 +15,35 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-08-31 — Claude (via Cowork) — StatCard em Deep Ocean
+
+**O quê:** O componente `StatCard` (linha ~438) deixou de usar gradientes saturados e passou a card branco com borda fina, como o `DESIGN.md` especifica e como o protótipo aprovado mostra.
+
+Antes: 5 gradientes (`from-slate-900 to-slate-700`, `from-brand-600 to-cyan-500`, `from-emerald-600 to-teal-500`, `from-amber-500 to-orange-500`, `from-rose-600 to-pink-500`), todos com texto branco.
+Agora: `bg-surface-card border border-line shadow-card`, valor em `text-ink`, e o **código de cor migrado do fundo para o rótulo**.
+
+**Por quê:** Esses gradientes coloriam o Dashboard inteiro (24 cards) e eram o que restava fora da identidade Deep Ocean. Tirar a cor do fundo e deixá-la só no rótulo preserva a distinção entre grupos de métrica sem transformar a tela num vitral — e devolve legibilidade ao número, que é o que importa num painel.
+
+**Tons dos rótulos, conferidos em contraste sobre branco** (mínimo 4,5 para texto pequeno):
+
+| Grupo | Cor | Contraste |
+|---|---|---|
+| contagens | `#3f4850` | 9,32 |
+| taxas | `#006194` | 6,69 |
+| valor convertido | `#0b6b45` | 6,56 |
+| pipeline | `#ac6200` | 4,67 |
+| investimento | `#ba1a1a` | 6,46 |
+
+Valor em `#181c20` sobre branco: 17,13.
+
+**Impacto:** Só apresentação. A API do componente (`label`, `value`, `helper`, `tone`) não mudou, então nenhuma chamada precisou ser tocada — 24 usos seguem funcionando.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** `npm run build` exit 0; os 3 tons novos presentes no CSS e as 4 classes de gradiente antigas ausentes do bundle (CSS caiu de 6,2 para 6,04 kB).
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — Cabeçalho e botão primário em Deep Ocean
 
 **O quê:** Substituídos os gradientes cravados à mão que definiam a cor do topo do sistema. Só apresentação.

@@ -432,19 +432,24 @@ const UI_STAT = 'mt-3 text-3xl font-bold text-ink';
 const UI_TD = 'py-2 px-2';
 const UI_GRID2 = 'grid grid-cols-1 md:grid-cols-2 gap-3';
 
+// Deep Ocean: card branco com borda fina, como manda o DESIGN.md.
+// O codigo de cor sai do fundo e vai para o rotulo, que continua
+// distinguindo os grupos de metrica sem transformar a tela num vitral.
+// Os 5 tons foram conferidos em contraste sobre branco (pior caso 4,67:1,
+// acima do minimo 4,5 para texto pequeno).
 const StatCard = ({ label, value, helper, tone = 'slate' }) => {
   const toneClasses = {
-    slate: 'from-slate-900 to-slate-700 text-white',
-    blue: 'from-brand-600 to-cyan-500 text-white',
-    emerald: 'from-emerald-600 to-teal-500 text-white',
-    amber: 'from-amber-500 to-orange-500 text-white',
-    rose: 'from-rose-600 to-pink-500 text-white',
+    slate: 'text-ink-soft',
+    blue: 'text-brand-600',
+    emerald: 'text-[#0b6b45]',
+    amber: 'text-[#ac6200]',
+    rose: 'text-[#ba1a1a]',
   };
   return (
-    <div className={`rounded-2xl bg-gradient-to-br ${toneClasses[tone] || toneClasses.slate} p-4 shadow-lg`}>
-      <p className="text-[11px] uppercase tracking-[0.18em] opacity-80">{label}</p>
-      <p className="mt-3 text-3xl font-bold">{value}</p>
-      {helper && <p className="mt-2 text-xs opacity-85">{helper}</p>}
+    <div className="rounded-2xl bg-surface-card border border-line p-4 shadow-card">
+      <p className={`text-[11px] uppercase tracking-[0.18em] font-bold ${toneClasses[tone] || toneClasses.slate}`}>{label}</p>
+      <p className="mt-3 text-3xl font-bold text-ink">{value}</p>
+      {helper && <p className="mt-2 text-xs text-ink-soft">{helper}</p>}
     </div>
   );
 };
