@@ -15,6 +15,36 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-08-31 — Claude (via Cowork) — Estados semânticos (agenda, SLA, temperatura, pílulas)
+
+**O quê:** Criados 4 estados semânticos no `tailwind.config.js` e migrados para eles todos os pastéis do Tailwind espalhados pelo `App.js`. **44 substituições**, zero `bg-*-50/100` restante.
+
+Cada estado é um trio fundo / borda / tinta:
+
+| Estado | Fundo | Borda | Tinta | Onde aparece |
+|---|---|---|---|---|
+| `info` | `#d3e6f5` | `#9cc6e6` | `#004b73` | temperatura fria, badge de engajamento |
+| `ok` | `#cfe9da` | `#93cdb0` | `#0b6b45` | SLA normal, empresa preenchida, integrações ativas |
+| `warn` | `#ffe3c4` | `#f0c393` | `#6b3b00` | temperatura morna, SLA em alerta, agenda de hoje, follow-up pendente |
+| `risk` | `#ffd9d4` | `#f2b3ab` | `#93000a` | temperatura quente, SLA estourado, agenda vencida, erros |
+
+**Por quê:** Esses tons carregavam significado (vencido, pendente, ganho), então não podiam simplesmente virar branco. Mas eram cores cruas do Tailwind, sem relação com o Deep Ocean. Agora o significado fica preservado e a cor passa a sair do sistema.
+
+**Critério de escolha, medido nos dois eixos:**
+
+1. Texto sobre o fundo tintado: mínimo 4,5:1 — obtido entre **5,10 e 7,57**.
+2. Fundo tintado contra a superfície da página (`#f7f9ff`): mínimo 1,15:1 para o estado ser percebido — obtido entre **1,17 e 1,24**.
+
+O segundo critério pegou um erro: a primeira paleta que montei tinha texto legível (5,71 a 8,60) mas fundos com apenas 1,03–1,09 de diferença da página — as linhas apareceriam praticamente brancas e o estado sumiria. Os tons foram escurecidos e remedidos.
+
+**Impacto:** Só apresentação. Nenhuma regra de estado mudou — o que era vencido continua vencido.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** `npm run build` exit 0; as 4 famílias geradas no CSS com os RGB corretos; nenhuma classe `bg-{emerald,cyan,violet,rose,amber,sky,red}-{50,100}` no bundle. CSS caiu de 5,82 para 5,67 kB.
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — Painel de estatísticas da tela principal
 
 **O quê:** Os cards do painel "Estatísticas" (aba CRM) deixaram de ter fundo pastel e passaram ao mesmo padrão do `StatCard`: branco, borda `line`, sombra `card`, rótulo colorido e valor em `text-ink`.

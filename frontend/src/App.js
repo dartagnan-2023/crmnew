@@ -528,14 +528,14 @@ const LeadTemperatureBadge = ({ value }) => {
   const label = LEAD_TEMPERATURE_OPTIONS.find((item) => item.value === normalized)?.label || 'Sem temperatura';
   const targetLabel = SLA_TARGET_LABELS[normalized] || '-';
   const toneClasses = {
-    frio: 'border-sky-200 bg-sky-50/80 text-sky-900',
-    morno: 'border-amber-200 bg-amber-50/80 text-amber-900',
-    quente: 'border-rose-200 bg-rose-50/80 text-rose-900',
+    frio: 'border-info-line bg-info text-info-ink',
+    morno: 'border-warn-line bg-warn text-warn-ink',
+    quente: 'border-risk-line bg-risk text-risk-ink',
   };
   const dotClasses = {
-    frio: 'bg-sky-500',
-    morno: 'bg-amber-500',
-    quente: 'bg-rose-500',
+    frio: 'bg-info-ink',
+    morno: 'bg-warn-ink',
+    quente: 'bg-risk-ink',
   };
 
   return (
@@ -553,14 +553,14 @@ const LeadSlaBadge = ({ value, remainingMinutes }) => {
   const normalized = normalizeOptionValue(value);
   const label = SLA_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'No prazo';
   const toneClasses = {
-    normal: 'border-emerald-200 bg-emerald-50/80 text-emerald-900',
-    warning: 'border-amber-200 bg-amber-50/80 text-amber-900',
-    overdue: 'border-rose-200 bg-rose-50/80 text-rose-900',
+    normal: 'border-ok-line bg-ok text-ok-ink',
+    warning: 'border-warn-line bg-warn text-warn-ink',
+    overdue: 'border-risk-line bg-risk text-risk-ink',
   };
   const dotClasses = {
-    normal: 'bg-emerald-500',
-    warning: 'bg-amber-500',
-    overdue: 'bg-rose-500',
+    normal: 'bg-ok-ink',
+    warning: 'bg-warn-ink',
+    overdue: 'bg-risk-ink',
   };
   const helper =
     typeof remainingMinutes === 'number'
@@ -602,12 +602,12 @@ const LeadEmailEngagementBadges = ({ lead }) => {
         </span>
       ) : null}
       {!engagement.hasClick && engagement.hasOpen ? (
-        <span className="px-2 py-[2px] rounded-full bg-violet-50 text-violet-700 border border-violet-100 text-[10px] font-semibold">
+        <span className="px-2 py-[2px] rounded-full bg-info text-info-ink border border-info-line text-[10px] font-semibold">
           Abriu email
         </span>
       ) : null}
       {engagement.unsubscribed ? (
-        <span className="px-2 py-[2px] rounded-full bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-semibold">
+        <span className="px-2 py-[2px] rounded-full bg-risk text-risk-ink border border-risk-line text-[10px] font-semibold">
           Descadastrado
         </span>
       ) : null}
@@ -3939,7 +3939,7 @@ const App = () => {
             Leads - BHS Eletronica
           </h1>
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4">
+            <div className="bg-risk border border-risk-line text-risk-ink px-4 py-2 rounded mb-4">
               {error}
             </div>
           )}
@@ -4157,7 +4157,7 @@ const App = () => {
                 )}
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2.5 text-sm bg-rose-500 text-white rounded-xl shadow hover:bg-rose-600 transition"
+                  className="px-4 py-2.5 text-sm bg-risk-ink text-white rounded-xl shadow hover:bg-[#7a0008] transition"
                 >
               Sair
             </button>
@@ -5055,7 +5055,7 @@ const App = () => {
               <span className="text-[11px] bg-white/10 px-3 py-1 rounded-full border border-white/20">
                 Total: {localStats.total || 0}
               </span>
-              <span className="text-[11px] bg-emerald-400/20 text-emerald-100 px-3 py-1 rounded-full border border-emerald-200/20">
+              <span className="text-[11px] bg-emerald-400/20 text-emerald-100 px-3 py-1 rounded-full border border-ok-line/20">
                 Novos: {localStats.novos || 0}
               </span>
               <span className="text-[11px] bg-cyan-400/20 text-cyan-100 px-3 py-1 rounded-full border border-cyan-200/20">
@@ -5126,8 +5126,8 @@ const App = () => {
           <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-4 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
             <p className="text-xs text-slate-500 mb-2">Agenda</p>
             <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
-              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
+              <span className="px-2 py-1 rounded-full bg-risk text-risk-ink">Vencidos: {agendaStats.overdue}</span>
+              <span className="px-2 py-1 rounded-full bg-warn text-warn-ink">Hoje: {agendaStats.today}</span>
               <span className="px-2 py-1 rounded-full bg-brand-100 text-brand-700">Próx. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
@@ -5172,9 +5172,9 @@ const App = () => {
                   const isToday = day === today;
                   const isOverdue = day < today;
                   if (isOverdue) {
-                    rowClasses += 'border-red-200 bg-red-50 hover:bg-red-100';
+                    rowClasses += 'border-risk-line bg-risk hover:bg-risk-line/60';
                   } else if (isToday) {
-                    rowClasses += 'border-amber-200 bg-amber-50 hover:bg-amber-100';
+                    rowClasses += 'border-warn-line bg-warn hover:bg-warn-line/60';
                   } else {
                     rowClasses += 'border-slate-200 hover:bg-slate-50';
                   }
@@ -5211,12 +5211,12 @@ const App = () => {
                         {lead.followup_status && (
                           <p className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                             lead.followup_status === 'pending'
-                              ? 'bg-amber-100 text-amber-700'
+                              ? 'bg-warn text-warn-ink'
                               : lead.followup_status === 'done'
-                                ? 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-ok text-ok-ink'
                                 : lead.followup_status === 'dismissed'
                                   ? 'bg-slate-100 text-slate-600'
-                                  : 'bg-red-100 text-red-700'
+                                  : 'bg-risk text-risk-ink'
                           }`}>
                             {lead.followup_status}
                           </p>
@@ -5265,7 +5265,7 @@ const App = () => {
               <h2 className="text-lg font-semibold text-slate-900">
                 Follow-up (10+ dias em Novo)
               </h2>
-              <span className="px-3 py-1 text-xs rounded-full bg-amber-100 text-amber-700">
+              <span className="px-3 py-1 text-xs rounded-full bg-warn text-warn-ink">
                 {followUpLeads.length} pendente(s)
               </span>
             </div>
@@ -5276,7 +5276,7 @@ const App = () => {
               {followUpLeads.map((lead) => (
                 <div
                   key={lead.id}
-                  className="flex items-center justify-between px-3 py-2 border rounded-lg text-sm cursor-pointer border-amber-200 bg-amber-50 hover:bg-amber-100"
+                  className="flex items-center justify-between px-3 py-2 border rounded-lg text-sm cursor-pointer border-warn-line bg-warn hover:bg-warn-line/60"
                   onClick={() => openEditLeadModal(lead)}
                 >
                   <div>
@@ -5601,7 +5601,7 @@ const App = () => {
                       const hasCompany = !!lead.company;
                       const rowClass =
                         'border-b last:border-none hover:bg-slate-50 ' +
-                        (hasCompany ? 'bg-emerald-50/70' : '');
+                        (hasCompany ? 'bg-ok/60' : '');
                       const segmentLabel =
                         SEGMENT_OPTIONS.find((s) => s.value === (lead.segment || ''))?.label || null;
                       return (
@@ -5619,7 +5619,7 @@ const App = () => {
                             <div className="flex items-center gap-1">
                               {lead.name}
                               {hasCompany && (
-                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-ok text-ok-ink border border-ok-line">
                                   Empresa
                                 </span>
                               )}
@@ -5735,7 +5735,7 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-brand-200 ${lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
+                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-brand-200 ${lead.company ? 'border-ok-line bg-ok' : 'border-slate-200 bg-white'
                             }`}
                           onClick={() => openEditLeadModal(lead)}
                           draggable
@@ -5753,7 +5753,7 @@ const App = () => {
                           </div>
                           <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-600 mt-1">
                             {lead.company && (
-                              <span className="px-2 py-[2px] rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              <span className="px-2 py-[2px] rounded-full bg-ok text-ok-ink border border-ok-line">
                                 {lead.company}
                               </span>
                             )}
@@ -5855,7 +5855,7 @@ const App = () => {
                     <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
                       Cliques: {leadForm.email_click_count || 0}
                     </span>
-                    <span className={`px-2 py-1 rounded-full ${leadForm.email_unsubscribed ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    <span className={`px-2 py-1 rounded-full ${leadForm.email_unsubscribed ? 'bg-risk text-risk-ink' : 'bg-ok text-ok-ink'}`}>
                       {leadForm.email_unsubscribed ? 'Descadastrado' : 'Ativo'}
                     </span>
                   </div>
@@ -7079,7 +7079,7 @@ const App = () => {
                       Configure a URL base da API e a chave de acesso. O CRM usa essa conexão para sincronizar aberturas, cliques e descadastros.
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px]">
-                      <span className={`px-2 py-1 rounded-full ${mailrelaySettings.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className={`px-2 py-1 rounded-full ${mailrelaySettings.configured ? 'bg-ok text-ok-ink' : 'bg-warn text-warn-ink'}`}>
                         {mailrelaySettings.configured ? 'Configurado' : 'Não configurado'}
                       </span>
                       <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
@@ -7118,7 +7118,7 @@ const App = () => {
                         </div>
                       </div>
                       {Array.isArray(mailrelaySettings.last_sync.unmatched_emails_sample) && mailrelaySettings.last_sync.unmatched_emails_sample.length > 0 && (
-                        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                        <div className="rounded-lg bg-warn border border-warn-line px-3 py-2">
                           <p className="font-semibold text-amber-800 mb-1">Exemplos sem match no CRM</p>
                           <div className="flex flex-wrap gap-1">
                             {mailrelaySettings.last_sync.unmatched_emails_sample.map((email) => (
@@ -7188,7 +7188,7 @@ const App = () => {
                       Configure a URL base da API e a chave x-api-key para agendar os lembretes de follow-up no OmniChat.
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px]">
-                      <span className={`px-2 py-1 rounded-full ${omnichatSettings.configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span className={`px-2 py-1 rounded-full ${omnichatSettings.configured ? 'bg-ok text-ok-ink' : 'bg-warn text-warn-ink'}`}>
                         {omnichatSettings.configured ? 'Configurado' : 'Não configurado'}
                       </span>
                       <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
