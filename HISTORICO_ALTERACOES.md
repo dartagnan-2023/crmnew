@@ -15,6 +15,31 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-01 — Claude (via Cowork) — Campo "Representante" nos orçamentos
+
+**O quê:** Novo campo `representante` no orçamento. Opcional, preenchido à mão pelo orçamentista, com autocompletar dos valores já usados.
+
+- `backend/server.js`: coluna `representante` em `SHEETS_CONFIG.budgets` (29ª); aceita em `POST /api/budgets` e `PUT /api/budgets/:id`; exposto no `hydrateBudget`; filtro `?representante=` e inclusão na busca textual da listagem.
+- `frontend/src/App.js`: campo no formulário com `<datalist>`, coluna na tabela, filtro dedicado na barra, e inclusão na busca textual.
+
+**Por quê:** Quando o negócio vem por representante externo, a empresa precisa registrar quem foi, para tirar métrica depois.
+
+**Decisão de preenchimento:** texto livre **com autocompletar** dos representantes já registrados, em vez de lista fechada com tela de cadastro. Evita que "João Silva", "joao silva" e "J. Silva" virem três representantes na contagem, sem o custo de manter um cadastro.
+
+**⚠️ A armadilha da importação, e como foi evitada.** Os orçamentos vêm de importação do ERP, e o import faz `{ ...budgets[existingIdx], ...payload }`. Se `representante` entrasse no `payload`, **toda reimportação apagaria o valor digitado**, porque a planilha do ERP não tem essa coluna. O campo foi deixado **de fora do payload de propósito**, com comentário no código explicando. Assim o espalhamento preserva o valor manual.
+
+**⚠️ Segundo bug pego antes de subir:** `openEditBudgetModal` montava o formulário sem `representante`. Abrir um orçamento existente e salvar apagaria o valor. Corrigido.
+
+**Migração da planilha:** automática. `ensureHeaders()` detecta o cabeçalho faltando no restart e reescreve a planilha `budgets` com a coluna nova, preservando os 384 registros (valor vazio nos existentes).
+
+**Não entregue:** exportação para planilha. Verificado que **não existe exportação de orçamentos** no sistema — só a de contatos (leads). Adicionar a coluna exigiria criar a exportação inteira, que é feature própria.
+
+**Rollback:** `git revert <commit>`. A coluna permanece na planilha, vazia e sem uso — inofensiva.
+
+**Validação:** `node --check` OK no backend; `npm run build` exit 0, mesmos 4 warnings pré-existentes; confirmado que `representante` NÃO consta no payload de importação.
+
+---
+
 ## 2026-09-01 — Claude (via Cowork) — Gravacao por linha em vez de reescrita total
 
 **O quê:** Novo `saveSheetRow(sheetName, rowIndex, item)` que grava **uma linha** da planilha. Aplicado nas 4 rotas que alteram um único lead:

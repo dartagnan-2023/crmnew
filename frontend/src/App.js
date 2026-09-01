@@ -731,6 +731,7 @@ const emptyLead = {
 
 const emptyBudget = {
   external_id: '',
+  representante: '',
   lead_id: '',
   client_name: '',
   company: '',
@@ -832,6 +833,7 @@ const App = () => {
   const [budgetOwnerFilter, setBudgetOwnerFilter] = useState('all');
   const [budgetEstimatorFilter, setBudgetEstimatorFilter] = useState('all');
   const [budgetLossReasonFilter, setBudgetLossReasonFilter] = useState('all');
+  const [budgetRepresentanteFilter, setBudgetRepresentanteFilter] = useState('');
   const [budgetSearch, setBudgetSearch] = useState('');
   const budgetImportInputRef = useRef(null);
   const [showAdSpendModal, setShowAdSpendModal] = useState(false);
@@ -2325,6 +2327,17 @@ const App = () => {
     return Array.from(bucket.values()).sort((a, b) => new Date(b.lastEventAt || 0).getTime() - new Date(a.lastEventAt || 0).getTime());
   }, [emktFilteredEvents, leads]);
 
+  // Representantes ja registrados, para sugerir no autocompletar.
+  // Evita que a mesma pessoa vire varias grafias e suje a metrica.
+  const representanteOptions = useMemo(() => {
+    const set = new Map();
+    budgets.forEach((b) => {
+      const nome = String(b.representante || '').trim();
+      if (nome) set.set(nome.toLowerCase(), nome);
+    });
+    return [...set.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [budgets]);
+
   const budgetFilteredItems = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -2365,6 +2378,11 @@ const App = () => {
       ) {
         return false;
       }
+      if (budgetRepresentanteFilter.trim()) {
+        const alvo = budgetRepresentanteFilter.trim().toLowerCase();
+        if (!String(budget.representante || '').toLowerCase().includes(alvo)) return false;
+      }
+
       if (budgetSearch.trim()) {
         const term = budgetSearch.toLowerCase();
         const haystack = [
@@ -2372,6 +2390,7 @@ const App = () => {
           budget.company,
           budget.owner_name,
           budget.estimator_name,
+          budget.representante,
           budget.campaign,
           budget.channel_name,
           budget.notes,
@@ -2392,6 +2411,7 @@ const App = () => {
     budgetEstimatorFilter,
     budgetLossReasonFilter,
     budgetSearch,
+    budgetRepresentanteFilter,
   ]);
 
   const budgetStats = useMemo(() => buildBudgetStatsSummary(budgetFilteredItems), [budgetFilteredItems]);
@@ -3017,6 +3037,7 @@ const App = () => {
       channel_name: budget.channel_name || '',
       campaign: budget.campaign || '',
       notes: budget.notes || '',
+      representante: budget.representante || '',
     });
     setShowBudgetModal(true);
   };
@@ -4908,11 +4929,24 @@ const App = () => {
                   </select>
                   <input
                     type="text"
+                    list="lista-representantes"
+                    value={budgetRepresentanteFilter}
+                    onChange={(e) => setBudgetRepresentanteFilter(e.target.value)}
+                    className={UI_INPUT_PILL}
+                    placeholder="Filtrar representante"
+                  />
+                  <input
+                    type="text"
                     value={budgetSearch}
                     onChange={(e) => setBudgetSearch(e.target.value)}
                     className={UI_INPUT_PILL}
                     placeholder="Buscar cliente, empresa, campanha..."
                   />
+                  <datalist id="lista-representantes">
+                    {representanteOptions.map((nome) => (
+                      <option key={nome} value={nome} />
+                    ))}
+                  </datalist>
                 </div>
 
                 {budgetPeriod === 'custom' && (
@@ -4998,6 +5032,7 @@ const App = () => {
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Vendedor</th>
                     <th className="py-2 pr-3">Orçamentista</th>
+                    <th className="py-2 pr-3">Representante</th>
                     <th className="py-2 pr-3">Valor Orçado</th>
                     <th className="py-2 pr-3">Valor Fechado</th>
                     <th className="py-2 pr-3">Solicitado</th>
@@ -5013,6 +5048,7 @@ const App = () => {
                       <td className="py-3 pr-3 text-slate-600">{BUDGET_STATUS_OPTIONS.find((item) => item.value === budget.status)?.label || budget.status}</td>
                       <td className="py-3 pr-3 text-slate-600">{budget.owner_name || '-'}</td>
                       <td className="py-3 pr-3 text-slate-600">{budget.estimator_name || '-'}</td>
+                      <td className="py-3 pr-3 text-slate-600">{budget.representante || '-'}</td>
                       <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.budget_value || 0)}</td>
                       <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.closed_value || 0)}</td>
                       <td className="py-3 pr-3 text-slate-600">{formatDateBR(budget.requested_at)}</td>
@@ -5027,7 +5063,7 @@ const App = () => {
                   ))}
                   {!budgetFilteredItems.length && (
                     <tr>
-                      <td colSpan="10" className="py-8 text-center text-slate-400">Nenhum orçamento encontrado.</td>
+                      <td colSpan="11" className="py-8 text-center text-slate-400">Nenhum orçamento encontrado.</td>
                     </tr>
                   )}
                 </tbody>
@@ -6667,6 +6703,23 @@ const App = () => {
                     <label className={UI_LABEL}>Campanha</label>
                     <input type="text" value={budgetForm.campaign || ''} onChange={(e) => setBudgetForm({ ...budgetForm, campaign: e.target.value })} className={UI_INPUT} />
                   </div>
+                </div>
+                <div>
+                  <label className={UI_LABEL}>Representante</label>
+                  <input
+                    type="text"
+                    list="lista-representantes-form"
+                    value={budgetForm.representante || ''}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, representante: e.target.value })}
+                    className={UI_INPUT}
+                    placeholder="Deixe em branco se não houver"
+                  />
+                  <datalist id="lista-representantes-form">
+                    {representanteOptions.map((nome) => (
+                      <option key={nome} value={nome} />
+                    ))}
+                  </datalist>
+                  <span className="text-[11px] text-ink-soft">Sugere os representantes já registrados. Escolher da lista mantém a grafia igual e as métricas confiáveis.</span>
                 </div>
                 <div>
                   <label className={UI_LABEL}>Observações</label>

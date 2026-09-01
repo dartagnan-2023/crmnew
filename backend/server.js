@@ -555,6 +555,8 @@ const SHEETS_CONFIG = {
     'channel_name',
     'campaign',
     'notes',
+    // Representante externo. Preenchido a mao pelo orcamentista; NAO vem do ERP.
+    'representante',
   ],
   ad_spend: [
     'id',
@@ -3218,6 +3220,7 @@ const mcpNormalizeBudget = (budget) => ({
   status_raw: budget.raw_status || budget.status || '',
   motivo_perda: budget.loss_reason || budget.raw_loss_reason || '',
   responsavel: budget.owner_name || budget.estimator_name || '',
+  representante: String(budget.representante || '').trim(),
   owner_id: String(budget.owner_id || budget.estimator_id || ''),
   canal: budget.channel_name || '',
   qtd_itens: 0,
@@ -3247,6 +3250,7 @@ const mcpFilterBudgets = (budgets, query) => {
   const q = String(query.q || '').trim().toLowerCase();
   const ownerId = String(query.ownerId || '').trim();
   const responsavel = String(query.responsavel || '').trim().toLowerCase();
+  const representante = String(query.representante || '').trim().toLowerCase();
   const channel = String(query.channel || '').trim().toLowerCase();
 
   const filtered = budgets.filter((budget) => {
@@ -3262,6 +3266,7 @@ const mcpFilterBudgets = (budgets, query) => {
     if (statusFilter.length && !statusFilter.includes(normalizeName(budget.status))) return false;
     if (ownerId && String(budget.owner_id || '') !== ownerId) return false;
     if (responsavel && !normalizeName(budget.responsavel).includes(normalizeName(responsavel))) return false;
+    if (representante && !normalizeName(budget.representante).includes(normalizeName(representante))) return false;
     if (channel && !normalizeName(budget.canal).includes(normalizeName(channel))) return false;
     if (updatedSince && new Date(budget.updated_at || '') < updatedSince) return false;
     if (withoutInteractionSince) {
@@ -3276,6 +3281,7 @@ const mcpFilterBudgets = (budgets, query) => {
         budget.client_name,
         budget.company,
         budget.responsavel,
+        budget.representante,
         budget.canal,
         budget.status_raw,
         budget.motivo_perda,
@@ -3302,6 +3308,7 @@ const mcpFilterBudgets = (budgets, query) => {
       status: statusFilter,
       ownerId: ownerId || null,
       responsavel: responsavel || null,
+      representante: representante || null,
       channel: channel || null,
       sem_interacao_desde: query.sem_interacao_desde || null,
       updated_since: query.updated_since || null,
@@ -4337,6 +4344,7 @@ app.post('/api/budgets', authMiddleware, async (req, res) => {
     channel_name = '',
     campaign = '',
     notes = '',
+    representante = '',
   } = req.body || {};
 
   if (!client_name && !company) {
@@ -4378,6 +4386,7 @@ app.post('/api/budgets', authMiddleware, async (req, res) => {
       channel_name: channel_name || '',
       campaign: campaign || '',
       notes: notes || '',
+      representante: String(representante || '').trim(),
     };
     budgets.push(budget);
     await saveTable('budgets', budgets);
@@ -4418,6 +4427,7 @@ app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
     channel_name,
     campaign,
     notes,
+    representante,
   } = req.body || {};
 
   return withTableLock('budgets', async () => {
@@ -4450,6 +4460,7 @@ app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
     if (channel_name !== undefined) budgets[idx].channel_name = channel_name || '';
     if (campaign !== undefined) budgets[idx].campaign = campaign || '';
     if (notes !== undefined) budgets[idx].notes = notes || '';
+    if (representante !== undefined) budgets[idx].representante = String(representante || '').trim();
     budgets[idx].updated_at = new Date().toISOString();
 
     await saveTable('budgets', budgets);
@@ -4526,6 +4537,11 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
         channel_name: rawItem.channel_name || '',
         campaign: rawItem.campaign || '',
         notes: rawItem.notes || '',
+        // ATENCAO: `representante` fica DE FORA de proposito.
+        // O payload sobrescreve o registro existente logo abaixo
+        // ({ ...budgets[existingIdx], ...payload }). Como o ERP nao envia essa
+        // coluna, inclui-la aqui apagaria silenciosamente o que o orcamentista
+        // digitou, a cada reimportacao. Deixando fora, o valor manual sobrevive.
       };
 
       const existingIdx = budgets.findIndex((budget) => String(budget.external_id || '').trim() === externalId);
