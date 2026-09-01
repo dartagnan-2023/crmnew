@@ -15,6 +15,40 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-01 — Claude (via Cowork) — Gravacao por linha em vez de reescrita total
+
+**O quê:** Novo `saveSheetRow(sheetName, rowIndex, item)` que grava **uma linha** da planilha. Aplicado nas 4 rotas que alteram um único lead:
+
+- `PUT /api/leads/:id` — edição de lead
+- `POST /api/leads/:id/interactions` — registrar interação
+- `PUT /api/leads/:id/interactions/:interactionId`
+- `DELETE /api/leads/:id/interactions/:interactionId`
+
+**Por quê:** `writeSheet` reenvia a planilha inteira a cada alteração. Com 2.260 leads e 44 colunas, mudar um campo enviava **99.440 células** e 5 chamadas de API. Era a causa do spinner demorado e dos HTTP 429 (cota do Google Sheets).
+
+Medido: **99.440 células → 44** (2.260× menos) e **5 chamadas → 2**.
+
+**A reescrita total não protegia nenhuma funcionalidade.** Ela existe porque uma função só resolvia todos os casos — criar, editar, excluir e recalcular. Foi conveniência de implementação, não requisito.
+
+**Onde a reescrita total FOI mantida, porque ali ela é necessária:**
+
+- `DELETE /api/leads/:id` — remover linha desloca todas as seguintes
+- recálculo em massa de SLA — altera todos os leads
+- criação de lead — acrescenta linha
+- demais 12 pontos de `saveTable('leads')`
+
+**Segurança — o ponto crítico.** Gravar por índice erra o alvo se a ordem da planilha mudar entre a leitura e a escrita. Antes de gravar, a função lê a célula de id da linha alvo e compara com o registro esperado. Qualquer divergência → devolve `false` **sem gravar nada**, e o chamador cai no gravador completo de sempre. O mesmo vale para erro de API, item sem id ou índice inválido.
+
+Confirmado que não há concorrência externa: o script de backup usa escopo `spreadsheets.readonly`, e o PM2 roda instância única.
+
+**Impacto:** Nenhuma funcionalidade perdida. Comportamento idêntico do ponto de vista do usuário, apenas mais rápido. Em qualquer anomalia, o caminho antigo assume.
+
+**Rollback:** `git revert <commit>`. Sem migração de dados.
+
+**Validação:** `node --check` OK. 16 asserções em teste isolado das funções, todas passando: conversão de coluna (0→A, 25→Z, 26→AA, 43→AR), faixa de gravação correta (`leads!A7:AR7`), 44 colunas enviadas, cache limpo, e as 5 proteções (id divergente, linha vazia, erro de API, item sem id, índice inválido) confirmadas como **não gravando nada**.
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — Editor de lead: modal vira drawer
 
 **O quê:** O editor de lead deixou de ser um modal centralizado e passou a ser um drawer que entra pela direita, como o `DESIGN.md` especifica.

@@ -991,6 +991,63 @@ const saveTable = async (name, items) => {
   await writeSheet(name, headers, items);
 };
 
+// Converte indice de coluna em letra: 0 -> A, 25 -> Z, 26 -> AA.
+const columnLetter = (index) => {
+  let n = index + 1;
+  let out = '';
+  while (n > 0) {
+    const rest = (n - 1) % 26;
+    out = String.fromCharCode(65 + rest) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out;
+};
+
+// Grava UMA linha em vez de reescrever a planilha inteira.
+//
+// Por que existe: `writeSheet` reenvia todas as linhas a cada alteracao. Com
+// 2.260 leads e 44 colunas isso significa ~99.440 celulas para mudar um campo,
+// mais 5 chamadas de API. E a causa do spinner demorado e dos HTTP 429.
+//
+// Seguranca: antes de gravar, confere se a coluna de id da linha alvo ainda
+// corresponde ao registro esperado. Se nao corresponder (planilha editada a
+// mao, ordem alterada), devolve false SEM GRAVAR NADA e o chamador cai no
+// caminho antigo. Assim nunca sobrescreve o registro errado.
+const saveSheetRow = async (sheetName, rowIndex, item) => {
+  try {
+    const headers = SHEETS_CONFIG[sheetName];
+    if (!headers || !headers.length) return false;
+    if (!Number.isInteger(rowIndex) || rowIndex < 0) return false;
+
+    const idHeader = headers[0];
+    const expectedId = String(item?.[idHeader] ?? '').trim();
+    if (!expectedId) return false;
+
+    const rowNumber = rowIndex + 2; // linha 1 e o cabecalho
+    const check = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${sheetName}!A${rowNumber}:A${rowNumber}`,
+    });
+    const actualId = String(check.data.values?.[0]?.[0] ?? '').trim();
+    if (actualId !== expectedId) {
+      console.warn(`[saveSheetRow] linha ${rowNumber} de ${sheetName} tem id "${actualId}", esperado "${expectedId}". Caindo no gravador completo.`);
+      return false;
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${sheetName}!A${rowNumber}:${columnLetter(headers.length - 1)}${rowNumber}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers.map((h) => item[h] ?? '')] },
+    });
+    delete cache[sheetName];
+    return true;
+  } catch (err) {
+    console.warn('[saveSheetRow] falhou, usando o gravador completo:', err.message);
+    return false;
+  }
+};
+
 const getSettingValue = (items, key) =>
   String(items.find((item) => String(item.key || '').trim() === key)?.value || '').trim();
 
@@ -3681,7 +3738,9 @@ app.post('/api/leads/:id/interactions', authMiddleware, async (req, res) => {
     currentLead.last_activity_at = interactionAt;
     currentLead.updated_at = nowIso;
     leads[idx] = currentLead;
-    await saveTable('leads', leads);
+    if (!(await saveSheetRow('leads', idx, leads[idx]))) {
+      await saveTable('leads', leads);
+    }
 
     const [hydratedLead] = hydrateLeads([currentLead], channels, interactions);
     return res.json({
@@ -3745,7 +3804,9 @@ app.put('/api/leads/:id/interactions/:interactionId', authMiddleware, async (req
     };
 
     await saveTable(SHEET_LEAD_INTERACTIONS, interactions);
-    await saveTable('leads', leads);
+    if (!(await saveSheetRow('leads', leadIdx, leads[leadIdx]))) {
+      await saveTable('leads', leads);
+    }
 
     const [hydratedLead] = hydrateLeads([leads[leadIdx]], channels, interactions);
     return res.json({
@@ -3799,7 +3860,9 @@ app.delete('/api/leads/:id/interactions/:interactionId', authMiddleware, async (
     };
 
     await saveTable(SHEET_LEAD_INTERACTIONS, interactions);
-    await saveTable('leads', leads);
+    if (!(await saveSheetRow('leads', leadIdx, leads[leadIdx]))) {
+      await saveTable('leads', leads);
+    }
 
     const [hydratedLead] = hydrateLeads([leads[leadIdx]], channels, interactions);
     return res.json({
@@ -4176,7 +4239,9 @@ app.put('/api/leads/:id', authMiddleware, async (req, res) => {
       manualTouch: hasOtherChanges,
     });
 
-    await saveTable('leads', leads);
+    if (!(await saveSheetRow('leads', idx, leads[idx]))) {
+      await saveTable('leads', leads);
+    }
     const followupSync = await syncFollowupSchedules({ source: 'lead-update', leadId: req.params.id });
     const [
       { items: leadsAfter },
