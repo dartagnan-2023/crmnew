@@ -5071,50 +5071,50 @@ const App = () => {
           </button>
           {showStats && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                <p className={UI_META}>Total de Leads</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.total || 0}</p>
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-soft">Total de Leads</p>
+                <p className="text-xl font-bold text-ink">{localStats.total || 0}</p>
               </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(5,150,105,0.35)]">
-                <p className={UI_META}>Novos</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.novos || 0}</p>
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Novos</p>
+                <p className="text-xl font-bold text-ink">{localStats.novos || 0}</p>
               </div>
-              <div className="rounded-2xl border border-cyan-200 bg-cyan-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(8,145,178,0.35)]">
-                <p className={UI_META}>Em contato</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Em contato</p>
+                <p className="text-xl font-bold text-ink">{localStats.emContato || 0}</p>
               </div>
-              <div className="rounded-2xl border border-brand-200 bg-brand-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(37,99,235,0.35)]">
-                <p className={UI_META}>Taxa de Conversão</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Taxa de Conversão</p>
+                <p className="text-xl font-bold text-ink">{localStats.taxaConversao || 0}%</p>
               </div>
-              <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(124,58,237,0.35)]">
-                <p className={UI_META}>Valor Convertido</p>
-                <p className="text-xl font-bold text-slate-900">
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#0b6b45]">Valor Convertido</p>
+                <p className="text-xl font-bold text-ink">
                   R$ {(localStats.valorTotal || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(225,29,72,0.3)]">
-                <p className={UI_META}>Perdidos</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
-                <p className="text-[11px] text-slate-500 mt-1">
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#ba1a1a]">Perdidos</p>
+                <p className="text-xl font-bold text-ink">{localStats.perdidos || 0}</p>
+                <p className="text-[11px] text-ink-soft mt-1">
                   Valor perdido: R$ {(localStats.valorPerdido || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(245,158,11,0.35)]">
-                <p className={UI_META}>Em negociação</p>
-                <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
-                <p className="text-[11px] text-slate-500 mt-1">
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#ac6200]">Em negociação</p>
+                <p className="text-xl font-bold text-ink">{localStats.qtdNegociacao || 0}</p>
+                <p className="text-[11px] text-ink-soft mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                <p className={UI_META}>Empresas (company preenchido)</p>
-                <p className="text-xl font-bold text-slate-900">{statsSegments.empresas || 0}</p>
+              <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-soft">Empresas (company preenchido)</p>
+                <p className="text-xl font-bold text-ink">{statsSegments.empresas || 0}</p>
               </div>
               {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
-                <div key={opt.value} className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                  <p className={UI_META}>{opt.label}</p>
-                  <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
+                <div key={opt.value} className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-soft">{opt.label}</p>
+                  <p className="text-xl font-bold text-ink">{statsSegments.bySegment[opt.value] || 0}</p>
                 </div>
               ))}
             </div>

@@ -15,6 +15,30 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-08-31 — Claude (via Cowork) — Painel de estatísticas da tela principal
+
+**O quê:** Os cards do painel "Estatísticas" (aba CRM) deixaram de ter fundo pastel e passaram ao mesmo padrão do `StatCard`: branco, borda `line`, sombra `card`, rótulo colorido e valor em `text-ink`.
+
+Antes: menta, ciano, azul, lavanda, rosa e amarelo, cada um com uma sombra colorida própria (`shadow-[0_12px_36px_-20px_rgba(...)]` em 6 variações).
+
+**Por quê:** Era o que sobrava de arco-íris na tela principal, e destoava do resto já migrado. Reportado pelo usuário com print.
+
+**Mapeamento de tom nos rótulos** (mesmos 5 do `StatCard`, já conferidos em contraste):
+
+- neutro `#3f4850` — Total de Leads, Empresas, cards de segmento
+- azul `#006194` — Novos, Em contato, Taxa de Conversão
+- verde `#0b6b45` — Valor Convertido
+- vermelho `#ba1a1a` — Perdidos
+- âmbar `#ac6200` — Em negociação
+
+**Impacto:** Só apresentação. Os pastéis que restam no bundle pertencem às linhas da agenda e do follow-up, onde a cor indica estado (vencido, pendente) — não foram tocados.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** `npm run build` exit 0; `bg-cyan-50/80`, `bg-violet-50/80` e `bg-brand-50/80` ausentes do CSS. Bundle de CSS caiu de 6,04 para 5,82 kB.
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — StatCard em Deep Ocean
 
 **O quê:** O componente `StatCard` (linha ~438) deixou de usar gradientes saturados e passou a card branco com borda fina, como o `DESIGN.md` especifica e como o protótipo aprovado mostra.
