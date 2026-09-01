@@ -15,6 +15,24 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-08-31 — Claude (via Cowork) — Cabeçalho e botão primário em Deep Ocean
+
+**O quê:** Substituídos os gradientes cravados à mão que definiam a cor do topo do sistema. Só apresentação.
+
+- Cabeçalho: era `linear-gradient(135deg, rgba(15,23,42,.98), rgba(30,41,59,.96), rgba(8,145,178,.88))` — azul-ardósia com ciano. Agora `#002c45 → #004b73 → #006194`, derivado de `brand-900/700/600`.
+- Barra de estatísticas: mesma família, `#002c45 → #005886`. Trocada junto porque fica encostada no cabeçalho e destoaria.
+- Botão "Novo Lead": era `linear-gradient(135deg, #2563eb, #0891b2)` com `rounded-xl`. Agora `bg-brand-600` sólido, `rounded-full`, como o DESIGN.md especifica para ação primária.
+
+**Por quê:** A Fase 1 remapeou 62 utilitários `blue-*` para `brand-*`, mas não alcançou valores arbitrários (`bg-[linear-gradient(...)]`). Eram justamente esses que pintavam os elementos mais visíveis da tela, o que fez a Fase 1 passar quase despercebida.
+
+**Impacto:** Nenhuma lógica tocada. Restam os gradientes por `tone` do `StatCard` e 370 utilitários `slate`/`gray`.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** `npm run build` exit 0; `#002c45` presente 7x no CSS compilado.
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — Fase 1 do redesenho: tokens Deep Ocean
 
 **O quê:** Aplicação da identidade visual `deep_ocean_professional` na camada de tokens. **Nenhum elemento mudou de lugar** — só cor, sombra e a extração das classes repetidas.

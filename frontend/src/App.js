@@ -4081,7 +4081,7 @@ const App = () => {
           </div>
         )}
 
-        <header className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(30,41,59,0.96)_42%,_rgba(8,145,178,0.88)_100%)] p-5 md:p-6 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)]">
+        <header className="relative overflow-hidden rounded-[28px] border border-brand-900/30 bg-[linear-gradient(135deg,_#002c45_0%,_#004b73_55%,_#006194_100%)] p-5 md:p-6 shadow-[0_24px_80px_-28px_rgba(0,44,69,0.45)]">
           <div className="absolute -top-20 right-0 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl" />
           <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-emerald-300/10 blur-3xl" />
           <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -5035,7 +5035,7 @@ const App = () => {
         <section className="mb-3">
           <button
             onClick={() => setShowStats((prev) => !prev)}
-            className="w-full flex items-center justify-between px-5 py-4 bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(30,64,175,0.92)_100%)] text-white rounded-[24px] text-sm shadow-[0_18px_40px_-20px_rgba(15,23,42,0.65)] hover:shadow-[0_24px_46px_-20px_rgba(15,23,42,0.7)] transition group"
+            className="w-full flex items-center justify-between px-5 py-4 bg-[linear-gradient(135deg,_#002c45_0%,_#005886_100%)] text-white rounded-[24px] text-sm shadow-[0_18px_40px_-20px_rgba(0,44,69,0.55)] hover:shadow-[0_24px_46px_-20px_rgba(0,44,69,0.6)] transition group"
           >
             <div className="flex items-center gap-2">
               <span className="text-lg" aria-hidden>
@@ -5336,7 +5336,7 @@ const App = () => {
               </button>
               <button
                 onClick={openNewLeadModal}
-                className="px-4 py-2 bg-[linear-gradient(135deg,_#2563eb,_#0891b2)] text-white rounded-xl text-sm shadow"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-full text-sm font-semibold shadow-card transition-colors"
               >
                 Novo Lead
               </button>
