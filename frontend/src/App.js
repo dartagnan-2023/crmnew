@@ -413,10 +413,29 @@ const buildExcelWorkbook = (sheets) => {
   </Workbook>`;
 };
 
+// ---------------------------------------------------------------------------
+// Tokens de estilo — Deep Ocean Professional.
+// Estas constantes concentram as classes mais repetidas da interface.
+// Mudar a aparencia do sistema passa a ser editar aqui, em vez de cacar
+// centenas de strings soltas no JSX.
+// ---------------------------------------------------------------------------
+const UI_CARD = 'bg-surface-card rounded-2xl shadow-card p-5 border border-line';
+const UI_LABEL = 'block text-xs font-semibold text-ink-soft mb-1';
+const UI_INPUT = 'w-full px-3 py-2 border border-line rounded-lg text-sm';
+const UI_INPUT_BG = 'w-full px-3 py-2 border border-line rounded-lg text-sm bg-surface-card';
+const UI_INPUT_PILL = 'px-3 py-2 border border-line rounded-xl text-sm bg-surface-card';
+const UI_EYEBROW = 'text-xs uppercase tracking-[0.18em] text-ink-faint font-bold';
+const UI_H2 = 'text-lg font-bold text-ink mb-4';
+const UI_STRONG = 'font-semibold text-ink';
+const UI_META = 'text-[11px] text-ink-soft';
+const UI_STAT = 'mt-3 text-3xl font-bold text-ink';
+const UI_TD = 'py-2 px-2';
+const UI_GRID2 = 'grid grid-cols-1 md:grid-cols-2 gap-3';
+
 const StatCard = ({ label, value, helper, tone = 'slate' }) => {
   const toneClasses = {
     slate: 'from-slate-900 to-slate-700 text-white',
-    blue: 'from-blue-600 to-cyan-500 text-white',
+    blue: 'from-brand-600 to-cyan-500 text-white',
     emerald: 'from-emerald-600 to-teal-500 text-white',
     amber: 'from-amber-500 to-orange-500 text-white',
     rose: 'from-rose-600 to-pink-500 text-white',
@@ -442,7 +461,7 @@ const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados', forma
         <div key={item.label} className="space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-600 gap-3">
             <span className="font-medium truncate">{item.label}</span>
-            <span className="font-semibold text-slate-800">{formatValue(item.value)}</span>
+            <span className={UI_STRONG}>{formatValue(item.value)}</span>
           </div>
           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -573,7 +592,7 @@ const LeadEmailEngagementBadges = ({ lead }) => {
   return (
     <>
       {engagement.hasClick ? (
-        <span className="px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-semibold">
+        <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100 text-[10px] font-semibold">
           Clicou email
         </span>
       ) : null}
@@ -3923,7 +3942,7 @@ const App = () => {
             <button
               onClick={() => setAuthMode('login')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'login'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-brand-600 text-white'
                 : 'bg-slate-100 text-slate-700'
                 }`}
             >
@@ -3932,7 +3951,7 @@ const App = () => {
             <button
               onClick={() => setAuthMode('register')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'register'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-brand-600 text-white'
                 : 'bg-slate-100 text-slate-700'
                 }`}
             >
@@ -4020,7 +4039,7 @@ const App = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-80"
+              className="w-full py-2 bg-brand-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 disabled:opacity-80"
             >
               {loading && (
                 <span
@@ -4031,7 +4050,7 @@ const App = () => {
               <span>{loading ? 'Aguarde' : authMode === 'login' ? 'Entrar' : 'Criar conta'}</span>
             </button>
             {authHint && (
-              <p className="mt-2 text-xs text-blue-700 text-center">{authHint}</p>
+              <p className="mt-2 text-xs text-brand-700 text-center">{authHint}</p>
             )}
           </form>
         </div>
@@ -4040,7 +4059,7 @@ const App = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.10),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.10),_transparent_24%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_45%,_#f8fafc_100%)]">
+    <div className="min-h-screen bg-surface">
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         {toast && (
           <div
@@ -4056,7 +4075,7 @@ const App = () => {
         {loadingData && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40">
             <div className="bg-white rounded-xl shadow-lg px-6 py-4 text-sm text-slate-700 flex items-center gap-3">
-              <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+              <div className="w-4 h-4 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
               <span>Carregando dados...</span>
             </div>
           </div>
@@ -4168,7 +4187,7 @@ const App = () => {
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros da dashboard</p>
+                    <p className={UI_EYEBROW}>Filtros da dashboard</p>
                     <p className="text-sm text-slate-500">Esses filtros são independentes dos filtros operacionais do CRM.</p>
                   </div>
                   <button
@@ -4191,7 +4210,7 @@ const App = () => {
                   <select
                     value={dashboardPeriod}
                     onChange={(e) => setDashboardPeriod(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   >
                     <option value="30d">Últimos 30 dias</option>
                     <option value="90d">Últimos 90 dias</option>
@@ -4203,7 +4222,7 @@ const App = () => {
                   <select
                     value={dashboardOwnerFilter}
                     onChange={(e) => setDashboardOwnerFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   >
                     <option value="all">Todos os responsáveis</option>
                     {users.map((u) => (
@@ -4215,7 +4234,7 @@ const App = () => {
                   <select
                     value={dashboardSegmentFilter}
                     onChange={(e) => setDashboardSegmentFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   >
                     <option value="all">Todos os perfis</option>
                     {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
@@ -4227,7 +4246,7 @@ const App = () => {
                   <select
                     value={dashboardChannelFilter}
                     onChange={(e) => setDashboardChannelFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   >
                     <option value="all">Todos os canais</option>
                     {channels.map((c) => (
@@ -4240,13 +4259,13 @@ const App = () => {
                     type="text"
                     value={dashboardCampaignFilter}
                     onChange={(e) => setDashboardCampaignFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                     placeholder="Filtrar campanha..."
                   />
                   <select
                     value={dashboardFollowUpFilter}
                     onChange={(e) => setDashboardFollowUpFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   >
                     <option value="all">Toda agenda</option>
                     <option value="overdue">Follow-up vencido</option>
@@ -4254,7 +4273,7 @@ const App = () => {
                 </div>
                 {dashboardPeriod === 'custom' && (
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
                       <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
                       <input
                         type="date"
@@ -4263,7 +4282,7 @@ const App = () => {
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
                       />
                     </div>
-                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
                       <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
                       <input
                         type="date"
@@ -4299,22 +4318,22 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Prospects</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.prospects || 0}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Prospects</p>
+                <p className={UI_STAT}>{dashboardData.prospects || 0}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Clientes</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.customers || 0}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Clientes</p>
+                <p className={UI_STAT}>{dashboardData.customers || 0}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Perdidos</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardLocalStats.perdidos || 0}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Perdidos</p>
+                <p className={UI_STAT}>{dashboardLocalStats.perdidos || 0}</p>
                 <p className="mt-2 text-xs text-slate-500">{formatCurrencyBR(dashboardLocalStats.valorPerdido || 0)} perdidos</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Follow-up vencido</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{dashboardData.overdueFollowups || 0}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Follow-up vencido</p>
+                <p className={UI_STAT}>{dashboardData.overdueFollowups || 0}</p>
               </div>
             </div>
 
@@ -4326,52 +4345,52 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">CPL</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.cpl || 0)}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>CPL</p>
+                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.cpl || 0)}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Orçamento estimado</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Orçamento estimado</p>
+                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Estimado por lead</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Estimado por lead</p>
+                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}</p>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Fechado por lead</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">{formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}</p>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Fechado por lead</p>
+                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className={UI_CARD}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
+                    <p className={UI_EYEBROW}>Marketing</p>
                     <h3 className="text-lg font-bold text-slate-900">Entradas por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={dashboardData.monthlyEvolution} color="#0f766e" />
               </div>
 
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do valor convertido</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Evolução do valor convertido</h3>
                 <MiniLineChart data={dashboardData.convertedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
               </div>
 
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Evolução do pipeline ativo</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Evolução do pipeline ativo</h3>
                 <MiniLineChart data={dashboardData.pipelineEvolution} color="#f97316" formatValue={formatCurrencyBR} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Investimento x Leads</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Marketing</p>
+                <h3 className={UI_H2}>Investimento x Leads</h3>
                 <MiniLineChart
                   data={dashboardMediaData.spendVsLeads.map((item) => ({ label: item.label, value: item.spend }))}
                   color="#e11d48"
@@ -4384,9 +4403,9 @@ const App = () => {
                   />
                 </div>
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Performance</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">ROAS estimado x fechado</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Performance</p>
+                <h3 className={UI_H2}>ROAS estimado x fechado</h3>
                 <MiniLineChart
                   data={dashboardMediaData.roasEvolution.map((item) => ({ label: item.label, value: item.estimated }))}
                   color="#2563eb"
@@ -4403,50 +4422,50 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Prioridade</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Temperatura da base</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Prioridade</p>
+                <h3 className={UI_H2}>Temperatura da base</h3>
                 <MiniBarChart data={dashboardData.byTemperature} color="#e11d48" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">SLA</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Estourados por responsável</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>SLA</p>
+                <h3 className={UI_H2}>Estourados por responsável</h3>
                 <MiniBarChart data={dashboardData.overdueByOwner} color="#dc2626" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Conversão</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Taxa por temperatura</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Conversão</p>
+                <h3 className={UI_H2}>Taxa por temperatura</h3>
                 <MiniBarChart data={dashboardData.conversionByTemperature} color="#2563eb" formatValue={(value) => `${value}%`} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Leads por canal</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Marketing</p>
+                <h3 className={UI_H2}>Leads por canal</h3>
                 <MiniBarChart data={dashboardData.byChannel} color="#2563eb" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Marketing</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Campanhas</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Marketing</p>
+                <h3 className={UI_H2}>Campanhas</h3>
                 <MiniBarChart data={dashboardData.byCampaign} color="#7c3aed" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Funil por status</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Funil por status</h3>
                 <MiniBarChart data={dashboardData.byStatus} color="#f97316" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Comercial</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Perfis de cliente</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Perfis de cliente</h3>
                 <MiniBarChart data={dashboardData.bySegment} color="#059669" />
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+            <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Ads</p>
+                  <p className={UI_EYEBROW}>Ads</p>
                   <h3 className="text-lg font-bold text-slate-900">Performance por campanha</h3>
                 </div>
                 <span className="text-xs text-slate-500">
@@ -4457,30 +4476,30 @@ const App = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-slate-500">
-                      <th className="py-2 px-2">Campanha</th>
-                      <th className="py-2 px-2">Plataforma</th>
-                      <th className="py-2 px-2">Investimento</th>
-                      <th className="py-2 px-2">Leads</th>
-                      <th className="py-2 px-2">CPL</th>
-                      <th className="py-2 px-2">Estimado</th>
-                      <th className="py-2 px-2">Fechado</th>
-                      <th className="py-2 px-2">ROAS est.</th>
-                      <th className="py-2 px-2">ROAS fech.</th>
+                      <th className={UI_TD}>Campanha</th>
+                      <th className={UI_TD}>Plataforma</th>
+                      <th className={UI_TD}>Investimento</th>
+                      <th className={UI_TD}>Leads</th>
+                      <th className={UI_TD}>CPL</th>
+                      <th className={UI_TD}>Estimado</th>
+                      <th className={UI_TD}>Fechado</th>
+                      <th className={UI_TD}>ROAS est.</th>
+                      <th className={UI_TD}>ROAS fech.</th>
                       <th className="py-2 px-2 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dashboardMediaData.rows.map((row) => (
                       <tr key={row.key} className="border-b last:border-none">
-                        <td className="py-2 px-2">{row.campaign || '-'}</td>
-                        <td className="py-2 px-2">{row.platform || '-'}</td>
-                        <td className="py-2 px-2">{formatCurrencyBR(row.investment || 0)}</td>
-                        <td className="py-2 px-2">{row.leads || 0}</td>
-                        <td className="py-2 px-2">{formatCurrencyBR(row.cpl || 0)}</td>
-                        <td className="py-2 px-2">{formatCurrencyBR(row.estimated || 0)}</td>
-                        <td className="py-2 px-2">{formatCurrencyBR(row.closed || 0)}</td>
-                        <td className="py-2 px-2">{formatRatio(row.roasEstimated)}</td>
-                        <td className="py-2 px-2">{formatRatio(row.roasClosed)}</td>
+                        <td className={UI_TD}>{row.campaign || '-'}</td>
+                        <td className={UI_TD}>{row.platform || '-'}</td>
+                        <td className={UI_TD}>{formatCurrencyBR(row.investment || 0)}</td>
+                        <td className={UI_TD}>{row.leads || 0}</td>
+                        <td className={UI_TD}>{formatCurrencyBR(row.cpl || 0)}</td>
+                        <td className={UI_TD}>{formatCurrencyBR(row.estimated || 0)}</td>
+                        <td className={UI_TD}>{formatCurrencyBR(row.closed || 0)}</td>
+                        <td className={UI_TD}>{formatRatio(row.roasEstimated)}</td>
+                        <td className={UI_TD}>{formatRatio(row.roasClosed)}</td>
                         <td className="py-2 px-2 text-right text-xs text-slate-400">—</td>
                       </tr>
                     ))}
@@ -4496,10 +4515,10 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+            <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Ads</p>
+                  <p className={UI_EYEBROW}>Ads</p>
                   <h3 className="text-lg font-bold text-slate-900">Lançamentos recentes</h3>
                 </div>
                 <button
@@ -4513,11 +4532,11 @@ const App = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-slate-500">
-                      <th className="py-2 px-2">Data</th>
-                      <th className="py-2 px-2">Plataforma</th>
-                      <th className="py-2 px-2">Campanha</th>
-                      <th className="py-2 px-2">Valor</th>
-                      <th className="py-2 px-2">Observações</th>
+                      <th className={UI_TD}>Data</th>
+                      <th className={UI_TD}>Plataforma</th>
+                      <th className={UI_TD}>Campanha</th>
+                      <th className={UI_TD}>Valor</th>
+                      <th className={UI_TD}>Observações</th>
                       <th className="py-2 px-2 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -4528,13 +4547,13 @@ const App = () => {
                       .slice(0, 8)
                       .map((entry) => (
                         <tr key={entry.id} className="border-b last:border-none">
-                          <td className="py-2 px-2">{formatDateBR(entry.date)}</td>
-                          <td className="py-2 px-2">{entry.platform || '-'}</td>
-                          <td className="py-2 px-2">{entry.campaign || '-'}</td>
-                          <td className="py-2 px-2">{formatCurrencyBR(entry.amount || 0)}</td>
-                          <td className="py-2 px-2">{entry.notes || '-'}</td>
+                          <td className={UI_TD}>{formatDateBR(entry.date)}</td>
+                          <td className={UI_TD}>{entry.platform || '-'}</td>
+                          <td className={UI_TD}>{entry.campaign || '-'}</td>
+                          <td className={UI_TD}>{formatCurrencyBR(entry.amount || 0)}</td>
+                          <td className={UI_TD}>{entry.notes || '-'}</td>
                           <td className="py-2 px-2 text-right space-x-2">
-                            <button onClick={() => openEditAdSpendModal(entry)} className="text-blue-600 text-xs">
+                            <button onClick={() => openEditAdSpendModal(entry)} className="text-brand-600 text-xs">
                               Editar
                             </button>
                             <button onClick={() => deleteAdSpend(entry.id)} className="text-red-600 text-xs">
@@ -4584,7 +4603,7 @@ const App = () => {
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros do Emkt</p>
+                    <p className={UI_EYEBROW}>Filtros do Emkt</p>
                     <p className="text-sm text-slate-500">Leitura separada da dashboard principal.</p>
                   </div>
                   <button
@@ -4603,7 +4622,7 @@ const App = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                  <select value={emktPeriod} onChange={(e) => setEmktPeriod(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={emktPeriod} onChange={(e) => setEmktPeriod(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="30d">Últimos 30 dias</option>
                     <option value="90d">Últimos 90 dias</option>
                     <option value="6m">Últimos 6 meses</option>
@@ -4611,7 +4630,7 @@ const App = () => {
                     <option value="custom">Período personalizado</option>
                     <option value="all">Todo o período</option>
                   </select>
-                  <select value={emktEventFilter} onChange={(e) => setEmktEventFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={emktEventFilter} onChange={(e) => setEmktEventFilter(e.target.value)} className={UI_INPUT_PILL}>
                     {EMAIL_EVENT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -4623,21 +4642,21 @@ const App = () => {
                     value={emktCampaignFilter}
                     onChange={(e) => setEmktCampaignFilter(e.target.value)}
                     placeholder="Filtrar campanha"
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   />
                   <input
                     type="text"
                     value={emktSearch}
                     onChange={(e) => setEmktSearch(e.target.value)}
                     placeholder="Buscar lead ou email"
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                   />
                 </div>
 
                 {emktPeriod === 'custom' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                    <input type="date" value={emktStartDate} onChange={(e) => setEmktStartDate(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
-                    <input type="date" value={emktEndDate} onChange={(e) => setEmktEndDate(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
+                    <input type="date" value={emktStartDate} onChange={(e) => setEmktStartDate(e.target.value)} className={UI_INPUT_PILL} />
+                    <input type="date" value={emktEndDate} onChange={(e) => setEmktEndDate(e.target.value)} className={UI_INPUT_PILL} />
                   </div>
                 )}
               </div>
@@ -4650,48 +4669,48 @@ const App = () => {
               </div>
 
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Taxa de clique</p>
-                  <p className="mt-3 text-3xl font-bold text-slate-900">{emktSummary.clickRate || 0}%</p>
+                <div className={UI_CARD}>
+                  <p className={UI_EYEBROW}>Taxa de clique</p>
+                  <p className={UI_STAT}>{emktSummary.clickRate || 0}%</p>
                 </div>
-                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Eventos gravados</p>
-                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.email_events || 0}</p>
+                <div className={UI_CARD}>
+                  <p className={UI_EYEBROW}>Eventos gravados</p>
+                  <p className={UI_STAT}>{mailrelaySettings.email_events || 0}</p>
                 </div>
-                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Sem match</p>
-                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.last_sync?.unmatched_leads_count || 0}</p>
+                <div className={UI_CARD}>
+                  <p className={UI_EYEBROW}>Sem match</p>
+                  <p className={UI_STAT}>{mailrelaySettings.last_sync?.unmatched_leads_count || 0}</p>
                 </div>
-                <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Duplicados ignorados</p>
-                  <p className="mt-3 text-3xl font-bold text-slate-900">{mailrelaySettings.last_sync?.duplicate_events_skipped || 0}</p>
+                <div className={UI_CARD}>
+                  <p className={UI_EYEBROW}>Duplicados ignorados</p>
+                  <p className={UI_STAT}>{mailrelaySettings.last_sync?.duplicate_events_skipped || 0}</p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className={UI_CARD}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Tendência</p>
+                    <p className={UI_EYEBROW}>Tendência</p>
                     <h3 className="text-lg font-bold text-slate-900">Aberturas por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.opens }))} color="#0f766e" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className={UI_CARD}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Conversão</p>
+                    <p className={UI_EYEBROW}>Conversão</p>
                     <h3 className="text-lg font-bold text-slate-900">Cliques por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.clicks }))} color="#2563eb" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+              <div className={UI_CARD}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Campanhas</p>
+                    <p className={UI_EYEBROW}>Campanhas</p>
                     <h3 className="text-lg font-bold text-slate-900">Top campanhas</h3>
                   </div>
                 </div>
@@ -4699,10 +4718,10 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+            <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Campanhas</p>
+                  <p className={UI_EYEBROW}>Campanhas</p>
                   <h3 className="text-lg font-bold text-slate-900">Resumo por campanha</h3>
                 </div>
               </div>
@@ -4710,24 +4729,24 @@ const App = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-slate-500">
-                      <th className="py-2 px-2">Campanha</th>
-                      <th className="py-2 px-2">Aberturas</th>
-                      <th className="py-2 px-2">Cliques</th>
-                      <th className="py-2 px-2">CTR</th>
-                      <th className="py-2 px-2">Descadastros</th>
-                      <th className="py-2 px-2">Leads impactados</th>
-                      <th className="py-2 px-2">Último evento</th>
+                      <th className={UI_TD}>Campanha</th>
+                      <th className={UI_TD}>Aberturas</th>
+                      <th className={UI_TD}>Cliques</th>
+                      <th className={UI_TD}>CTR</th>
+                      <th className={UI_TD}>Descadastros</th>
+                      <th className={UI_TD}>Leads impactados</th>
+                      <th className={UI_TD}>Último evento</th>
                     </tr>
                   </thead>
                   <tbody>
                     {emktCampaignRows.map((row) => (
                       <tr key={row.campaign} className="border-b last:border-none">
                         <td className="py-2 px-2 font-medium text-slate-800">{row.campaign}</td>
-                        <td className="py-2 px-2">{row.opens}</td>
-                        <td className="py-2 px-2">{row.clicks}</td>
-                        <td className="py-2 px-2">{row.clickRate}%</td>
-                        <td className="py-2 px-2">{row.unsubscribes}</td>
-                        <td className="py-2 px-2">{row.impactedLeads}</td>
+                        <td className={UI_TD}>{row.opens}</td>
+                        <td className={UI_TD}>{row.clicks}</td>
+                        <td className={UI_TD}>{row.clickRate}%</td>
+                        <td className={UI_TD}>{row.unsubscribes}</td>
+                        <td className={UI_TD}>{row.impactedLeads}</td>
                         <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
                       </tr>
                     ))}
@@ -4743,10 +4762,10 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
+            <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Leads</p>
+                  <p className={UI_EYEBROW}>Leads</p>
                   <h3 className="text-lg font-bold text-slate-900">Leads impactados</h3>
                 </div>
               </div>
@@ -4754,26 +4773,26 @@ const App = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-slate-500">
-                      <th className="py-2 px-2">Lead</th>
-                      <th className="py-2 px-2">Empresa</th>
-                      <th className="py-2 px-2">Email</th>
-                      <th className="py-2 px-2">Campanha</th>
-                      <th className="py-2 px-2">Aberturas</th>
-                      <th className="py-2 px-2">Cliques</th>
-                      <th className="py-2 px-2">Descadastros</th>
-                      <th className="py-2 px-2">Último evento</th>
+                      <th className={UI_TD}>Lead</th>
+                      <th className={UI_TD}>Empresa</th>
+                      <th className={UI_TD}>Email</th>
+                      <th className={UI_TD}>Campanha</th>
+                      <th className={UI_TD}>Aberturas</th>
+                      <th className={UI_TD}>Cliques</th>
+                      <th className={UI_TD}>Descadastros</th>
+                      <th className={UI_TD}>Último evento</th>
                     </tr>
                   </thead>
                   <tbody>
                     {emktLeadRows.map((row) => (
                       <tr key={`${row.leadId || row.email}-${row.lastEventAt}`} className="border-b last:border-none">
                         <td className="py-2 px-2 font-medium text-slate-800">{row.name}</td>
-                        <td className="py-2 px-2">{row.company}</td>
-                        <td className="py-2 px-2">{row.email}</td>
-                        <td className="py-2 px-2">{row.campaign}</td>
-                        <td className="py-2 px-2">{row.opens}</td>
-                        <td className="py-2 px-2">{row.clicks}</td>
-                        <td className="py-2 px-2">{row.unsubscribes}</td>
+                        <td className={UI_TD}>{row.company}</td>
+                        <td className={UI_TD}>{row.email}</td>
+                        <td className={UI_TD}>{row.campaign}</td>
+                        <td className={UI_TD}>{row.opens}</td>
+                        <td className={UI_TD}>{row.clicks}</td>
+                        <td className={UI_TD}>{row.unsubscribes}</td>
                         <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
                       </tr>
                     ))}
@@ -4819,7 +4838,7 @@ const App = () => {
                   </button>
                   <button
                     onClick={openNewBudgetModal}
-                    className="px-4 py-3 rounded-2xl bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
+                    className="px-4 py-3 rounded-2xl bg-brand-600 text-white font-semibold shadow hover:bg-brand-700 transition"
                   >
                     Novo orçamento
                   </button>
@@ -4829,7 +4848,7 @@ const App = () => {
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Filtros de orçamentos</p>
+                    <p className={UI_EYEBROW}>Filtros de orçamentos</p>
                     <p className="text-sm text-slate-500">Filtros próprios do módulo de orçamentos.</p>
                   </div>
                   <button
@@ -4850,7 +4869,7 @@ const App = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                  <select value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={budgetPeriod} onChange={(e) => setBudgetPeriod(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="30d">Últimos 30 dias</option>
                     <option value="90d">Últimos 90 dias</option>
                     <option value="6m">Últimos 6 meses</option>
@@ -4858,25 +4877,25 @@ const App = () => {
                     <option value="custom">Período personalizado</option>
                     <option value="all">Todo o período</option>
                   </select>
-                  <select value={budgetStatusFilter} onChange={(e) => setBudgetStatusFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={budgetStatusFilter} onChange={(e) => setBudgetStatusFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os status</option>
                     {BUDGET_STATUS_OPTIONS.map((status) => (
                       <option key={status.value} value={status.value}>{status.label}</option>
                     ))}
                   </select>
-                  <select value={budgetOwnerFilter} onChange={(e) => setBudgetOwnerFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={budgetOwnerFilter} onChange={(e) => setBudgetOwnerFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os vendedores</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
-                  <select value={budgetEstimatorFilter} onChange={(e) => setBudgetEstimatorFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={budgetEstimatorFilter} onChange={(e) => setBudgetEstimatorFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os orçamentistas</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
-                  <select value={budgetLossReasonFilter} onChange={(e) => setBudgetLossReasonFilter(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white">
+                  <select value={budgetLossReasonFilter} onChange={(e) => setBudgetLossReasonFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os motivos de perda</option>
                     {BUDGET_LOSS_REASON_OPTIONS.map((reason) => (
                       <option key={reason.value} value={reason.value}>{reason.label}</option>
@@ -4886,18 +4905,18 @@ const App = () => {
                     type="text"
                     value={budgetSearch}
                     onChange={(e) => setBudgetSearch(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    className={UI_INPUT_PILL}
                     placeholder="Buscar cliente, empresa, campanha..."
                   />
                 </div>
 
                 {budgetPeriod === 'custom' && (
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
                       <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
                       <input type="date" value={budgetStartDate} onChange={(e) => setBudgetStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
                     </div>
-                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
                       <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
                       <input type="date" value={budgetEndDate} onChange={(e) => setBudgetEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
                     </div>
@@ -4914,37 +4933,37 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Evolução</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Solicitações por mês</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Evolução</p>
+                <h3 className={UI_H2}>Solicitações por mês</h3>
                 <MiniLineChart data={budgetDashboardData.monthlyEvolution} color="#0f766e" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Resultado</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Valor fechado por mês</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Resultado</p>
+                <h3 className={UI_H2}>Valor fechado por mês</h3>
                 <MiniLineChart data={budgetDashboardData.closedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Motivos</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Perdas</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Motivos</p>
+                <h3 className={UI_H2}>Perdas</h3>
                 <MiniBarChart data={budgetDashboardData.byLossReason} color="#dc2626" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Produção</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Status dos orçamentos</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Produção</p>
+                <h3 className={UI_H2}>Status dos orçamentos</h3>
                 <MiniBarChart data={budgetDashboardData.byStatus} color="#f97316" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Time Comercial</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Por vendedor</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Time Comercial</p>
+                <h3 className={UI_H2}>Por vendedor</h3>
                 <MiniBarChart data={budgetDashboardData.byOwner} color="#7c3aed" />
               </div>
-              <div className="bg-white rounded-2xl shadow p-5 border border-slate-200">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Time Técnico</p>
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Por orçamentista</h3>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Time Técnico</p>
+                <h3 className={UI_H2}>Por orçamentista</h3>
                 <MiniBarChart data={budgetDashboardData.byEstimator} color="#059669" />
               </div>
             </div>
@@ -4952,7 +4971,7 @@ const App = () => {
             <div className="bg-white rounded-2xl shadow p-5 border border-slate-200 overflow-x-auto">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-bold">Tabela operacional</p>
+                  <p className={UI_EYEBROW}>Tabela operacional</p>
                   <h3 className="text-lg font-bold text-slate-900">Lista de orçamentos</h3>
                 </div>
                 <div className="flex gap-2">
@@ -5048,48 +5067,48 @@ const App = () => {
           {showStats && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                <p className="text-[11px] text-slate-500">Total de Leads</p>
+                <p className={UI_META}>Total de Leads</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.total || 0}</p>
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(5,150,105,0.35)]">
-                <p className="text-[11px] text-slate-500">Novos</p>
+                <p className={UI_META}>Novos</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.novos || 0}</p>
               </div>
               <div className="rounded-2xl border border-cyan-200 bg-cyan-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(8,145,178,0.35)]">
-                <p className="text-[11px] text-slate-500">Em contato</p>
+                <p className={UI_META}>Em contato</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.emContato || 0}</p>
               </div>
-              <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(37,99,235,0.35)]">
-                <p className="text-[11px] text-slate-500">Taxa de Conversão</p>
+              <div className="rounded-2xl border border-brand-200 bg-brand-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(37,99,235,0.35)]">
+                <p className={UI_META}>Taxa de Conversão</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.taxaConversao || 0}%</p>
               </div>
               <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(124,58,237,0.35)]">
-                <p className="text-[11px] text-slate-500">Valor Convertido</p>
+                <p className={UI_META}>Valor Convertido</p>
                 <p className="text-xl font-bold text-slate-900">
                   R$ {(localStats.valorTotal || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
               <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(225,29,72,0.3)]">
-                <p className="text-[11px] text-slate-500">Perdidos</p>
+                <p className={UI_META}>Perdidos</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.perdidos || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor perdido: R$ {(localStats.valorPerdido || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-[0_12px_36px_-20px_rgba(245,158,11,0.35)]">
-                <p className="text-[11px] text-slate-500">Em negociação</p>
+                <p className={UI_META}>Em negociação</p>
                 <p className="text-xl font-bold text-slate-900">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-slate-500 mt-1">
                   Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                <p className="text-[11px] text-slate-500">Empresas (company preenchido)</p>
+                <p className={UI_META}>Empresas (company preenchido)</p>
                 <p className="text-xl font-bold text-slate-900">{statsSegments.empresas || 0}</p>
               </div>
               {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value && s.value !== 'usuario_final').map((opt) => (
                 <div key={opt.value} className="rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur p-4 shadow-[0_12px_36px_-20px_rgba(15,23,42,0.35)]">
-                  <p className="text-[11px] text-slate-500">{opt.label}</p>
+                  <p className={UI_META}>{opt.label}</p>
                   <p className="text-xl font-bold text-slate-900">{statsSegments.bySegment[opt.value] || 0}</p>
                 </div>
               ))}
@@ -5104,7 +5123,7 @@ const App = () => {
             <div className="flex flex-wrap gap-2 text-[11px]">
               <span className="px-2 py-1 rounded-full bg-red-100 text-red-700">Vencidos: {agendaStats.overdue}</span>
               <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">Próx. 3 dias: {agendaStats.next3}</span>
+              <span className="px-2 py-1 rounded-full bg-brand-100 text-brand-700">Próx. 3 dias: {agendaStats.next3}</span>
               <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
             </div>
           </div>
@@ -5121,7 +5140,7 @@ const App = () => {
               {agendaBase.length > 5 && (
                 <button
                   onClick={() => setShowAllAgenda((v) => !v)}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-brand-600 hover:underline"
                 >
                   {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
                 </button>
@@ -5165,7 +5184,7 @@ const App = () => {
                     onClick={() => openEditLeadModal(lead)}
                   >
                     <div>
-                      <p className="font-semibold text-slate-800">
+                      <p className={UI_STRONG}>
                         {lead.company || lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                       </p>
                       {responsible && (
@@ -5181,7 +5200,7 @@ const App = () => {
                             ? formatFollowupBR(lead.next_contact)
                             : '-'}
                         </p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className={UI_META}>
                           {lead.status || '-'}
                         </p>
                         {lead.followup_status && (
@@ -5202,7 +5221,7 @@ const App = () => {
                         <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
                           <input
                             type="checkbox"
-                            className="h-3 w-3 text-blue-600 border-slate-300 rounded"
+                            className="h-3 w-3 text-brand-600 border-slate-300 rounded"
                             onChange={() => handleAgendaContactDone(lead)}
                             checked={agendaUpdatingId === lead.id ? true : false}
                             disabled={agendaUpdatingId === lead.id}
@@ -5212,21 +5231,21 @@ const App = () => {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleAgendaReschedule(lead, 1)}
-                            className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                            className="text-[11px] text-brand-600 hover:underline disabled:opacity-50"
                             disabled={agendaUpdatingId === lead.id}
                           >
                             +1d
                           </button>
                           <button
                             onClick={() => handleAgendaReschedule(lead, 3)}
-                            className="text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                            className="text-[11px] text-brand-600 hover:underline disabled:opacity-50"
                             disabled={agendaUpdatingId === lead.id}
                           >
                             +3d
                           </button>
                         </div>
                         {agendaUpdatingId === lead.id && (
-                          <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
                         )}
                       </div>
                     </div>
@@ -5256,21 +5275,21 @@ const App = () => {
                   onClick={() => openEditLeadModal(lead)}
                 >
                   <div>
-                    <p className="font-semibold text-slate-800">
+                    <p className={UI_STRONG}>
                       {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
                       {lead.owner || lead.responsible_name || 'Sem responsável'}
                     </p>
                     {lead.first_contact && (
-                      <p className="text-[11px] text-slate-500">
+                      <p className={UI_META}>
                         Primeiro contato: {formatDateBR(lead.first_contact)}
                       </p>
                     )}
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-600">{lead._daysSince || 0} dias</p>
-                    <p className="text-[11px] text-slate-500">{lead.status || '-'}</p>
+                    <p className={UI_META}>{lead.status || '-'}</p>
                   </div>
                 </div>
               ))}
@@ -5480,7 +5499,7 @@ const App = () => {
 
           <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3 text-sm flex-wrap">
-              <span className="font-semibold text-slate-800">Selecionados: {selectedCount}</span>
+              <span className={UI_STRONG}>Selecionados: {selectedCount}</span>
               <span className="text-slate-500 text-xs">Disponíveis: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap md:flex-nowrap items-center gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
@@ -5489,7 +5508,7 @@ const App = () => {
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value)}
-                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none"
                 >
                   <option value="">Status...</option>
                   {STATUS_OPTIONS.map((option) => (
@@ -5501,7 +5520,7 @@ const App = () => {
                 <button
                   onClick={bulkChangeStatus}
                   disabled={!selectedEditableCount || !bulkStatus}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 transition-colors whitespace-nowrap"
                 >
                   Aplicar
                 </button>
@@ -5558,14 +5577,14 @@ const App = () => {
                           onChange={toggleSelectAll}
                         />
                       </th>
-                      <th className="py-2 px-2">Nome</th>
-                      <th className="py-2 px-2">Empresa</th>
-                      <th className="py-2 px-2">Canal</th>
-                      <th className="py-2 px-2">Região</th>
-                      <th className="py-2 px-2">Status</th>
-                      <th className="py-2 px-2">Termômetro</th>
-                      <th className="py-2 px-2">Responsável</th>
-                      <th className="py-2 px-2">Próximo contato</th>
+                      <th className={UI_TD}>Nome</th>
+                      <th className={UI_TD}>Empresa</th>
+                      <th className={UI_TD}>Canal</th>
+                      <th className={UI_TD}>Região</th>
+                      <th className={UI_TD}>Status</th>
+                      <th className={UI_TD}>Termômetro</th>
+                      <th className={UI_TD}>Responsável</th>
+                      <th className={UI_TD}>Próximo contato</th>
                       <th className="py-2 px-2 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -5582,7 +5601,7 @@ const App = () => {
                         SEGMENT_OPTIONS.find((s) => s.value === (lead.segment || ''))?.label || null;
                       return (
                         <tr key={lead.id} className={rowClass}>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>
                             <input
                               type="checkbox"
                               className="h-4 w-4"
@@ -5591,7 +5610,7 @@ const App = () => {
                               onChange={() => toggleSelectLead(normalizedId)}
                             />
                           </td>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>
                             <div className="flex items-center gap-1">
                               {lead.name}
                               {hasCompany && (
@@ -5601,30 +5620,30 @@ const App = () => {
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>
                             <div className="flex items-center gap-1">
                               {lead.company || '-'}
                               {segmentLabel && (
-                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100">
                                   {segmentLabel}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="py-2 px-2">{lead.channel_name || '-'}</td>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>{lead.channel_name || '-'}</td>
+                          <td className={UI_TD}>
                             {lead.region ? (
                               <span className="px-2 py-[2px] rounded-full text-[10px] bg-slate-100 text-slate-600 border border-slate-200 uppercase font-bold">
                                 {lead.region}
                               </span>
                             ) : '-'}
                           </td>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>
                             <span className="px-2 py-[2px] rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">
                               {lead.status}
                             </span>
                           </td>
-                          <td className="py-2 px-2">
+                          <td className={UI_TD}>
                             <div className="flex flex-wrap items-center gap-1">
                               <LeadTemperatureBadge value={lead.temperature} />
                               <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
@@ -5634,7 +5653,7 @@ const App = () => {
                               </span>
                             </div>
                           </td>
-                          <td className="py-2 px-2">{lead.owner || lead.responsible_name || '-'}</td>
+                          <td className={UI_TD}>{lead.owner || lead.responsible_name || '-'}</td>
                           <td className="py-2 px-2 text-xs text-slate-500">
                             {lead.next_contact
                               ? formatFollowupBR(lead.next_contact)
@@ -5643,7 +5662,7 @@ const App = () => {
                           <td className="py-2 px-2 text-right space-x-2">
                             <button
                               onClick={() => openEditLeadModal(lead)}
-                              className="text-blue-600 text-xs"
+                              className="text-brand-600 text-xs"
                             >
                               Editar
                             </button>
@@ -5711,7 +5730,7 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-blue-200 ${lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
+                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-brand-200 ${lead.company ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'
                             }`}
                           onClick={() => openEditLeadModal(lead)}
                           draggable
@@ -5719,7 +5738,7 @@ const App = () => {
                           onDragEnd={handleCardDragEnd}
                         >
                           {statusUpdatingId && String(statusUpdatingId) === String(lead.id) && (
-                            <div className="absolute top-2 right-2 w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                            <div className="absolute top-2 right-2 w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
                           )}
                           <div className="flex items-center justify-between">
                             <p className="font-semibold text-slate-900 text-sm">{lead.name}</p>
@@ -5734,7 +5753,7 @@ const App = () => {
                               </span>
                             )}
                             {lead.segment && (
-                              <span className="px-2 py-[2px] rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                              <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100">
                                 {
                                   SEGMENT_OPTIONS.find((s) => s.value === lead.segment)?.label ||
                                   lead.segment
@@ -5895,7 +5914,7 @@ const App = () => {
                         onChange={(e) =>
                           setLeadInteractionForm({ ...leadInteractionForm, interaction_at: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                        className={UI_INPUT_BG}
                       />
                     </div>
                     <div>
@@ -5910,7 +5929,7 @@ const App = () => {
                           setLeadInteractionForm({ ...leadInteractionForm, channel: e.target.value })
                         }
                         placeholder="Ex.: WhatsApp, telefone, email, visita"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                        className={UI_INPUT_BG}
                       />
                       <datalist id="lead-interaction-channel-options">
                         {channels.map((channel) => (
@@ -5933,7 +5952,7 @@ const App = () => {
                         }
                         rows={3}
                         placeholder="Resumo do contato, pedido, objeção, retorno..."
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                        className={UI_INPUT_BG}
                       />
                     </div>
                   </div>
@@ -5950,17 +5969,17 @@ const App = () => {
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                     <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                       <p className="text-[10px] uppercase font-bold text-slate-400">Total</p>
-                      <p className="font-semibold text-slate-800">{leadForm.interactions_count || 0}</p>
+                      <p className={UI_STRONG}>{leadForm.interactions_count || 0}</p>
                     </div>
                     <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                       <p className="text-[10px] uppercase font-bold text-slate-400">Última interação</p>
-                      <p className="font-semibold text-slate-800">
+                      <p className={UI_STRONG}>
                         {leadForm.last_interaction_at ? formatDateTimeBR(leadForm.last_interaction_at) : '-'}
                       </p>
                     </div>
                     <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                       <p className="text-[10px] uppercase font-bold text-slate-400">Canal</p>
-                      <p className="font-semibold text-slate-800">
+                      <p className={UI_STRONG}>
                         {leadForm.last_interaction_channel || '-'}
                       </p>
                     </div>
@@ -5972,7 +5991,7 @@ const App = () => {
                           Histórico recente
                         </p>
                         {leadInteractionsLoading ? (
-                          <span className="text-[11px] text-slate-500">Carregando...</span>
+                          <span className={UI_META}>Carregando...</span>
                         ) : null}
                       </div>
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -5986,7 +6005,7 @@ const App = () => {
                                   <p className="text-xs font-semibold text-slate-800">
                                     {item.channel || 'Canal não informado'}
                                   </p>
-                                  <p className="text-[11px] text-slate-500">
+                                  <p className={UI_META}>
                                     {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
                                     {item.operator ? ` • ${item.operator}` : ''}
                                   </p>
@@ -5995,7 +6014,7 @@ const App = () => {
                                   <button
                                     type="button"
                                     onClick={() => editLeadInteraction(item)}
-                                    className="text-[11px] text-blue-600 hover:underline"
+                                    className="text-[11px] text-brand-600 hover:underline"
                                   >
                                     Editar
                                   </button>
@@ -6021,7 +6040,7 @@ const App = () => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Nome *
                   </label>
                   <input
@@ -6030,11 +6049,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Empresa
                   </label>
                   <input
@@ -6043,17 +6062,17 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, company: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Perfil
                   </label>
                   <select
                     value={leadForm.segment || ''}
                     onChange={(e) => setLeadForm({ ...leadForm, segment: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    className={UI_INPUT_BG}
                   >
                     {CLIENT_SEGMENT_OPTIONS.map((opt) => (
                       <option key={opt.value || 'none'} value={opt.value}>
@@ -6063,7 +6082,7 @@ const App = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Email
                   </label>
                   <input
@@ -6072,11 +6091,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, email: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Telefone *
                   </label>
                   <input
@@ -6086,12 +6105,12 @@ const App = () => {
                       setLeadForm({ ...leadForm, phone: formatPhone(e.target.value) })
                     }
                     maxLength={16}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Telefone 2
                   </label>
                   <input
@@ -6101,11 +6120,11 @@ const App = () => {
                       setLeadForm({ ...leadForm, phone2: formatPhone(e.target.value) })
                     }
                     maxLength={16}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Responsável
                   </label>
                   <select
@@ -6119,7 +6138,7 @@ const App = () => {
                         owner: selectedUser ? selectedUser.name : user?.name || '',
                       });
                     }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    className={UI_INPUT_BG}
                   >
                     <option value={user?.id || ''}>
                       {user?.name ? `${user.name} (Você)` : 'Selecione'}
@@ -6134,7 +6153,7 @@ const App = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Canal
                   </label>
                   <select
@@ -6142,7 +6161,7 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, channel_id: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    className={UI_INPUT_BG}
                   >
                     <option value="">Selecione</option>
                     {channels.map((c) => (
@@ -6153,7 +6172,7 @@ const App = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Campanha
                   </label>
                   <input
@@ -6162,11 +6181,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, campaign: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Valor (R$)
                   </label>
                   <input
@@ -6176,11 +6195,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, value: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Status
                   </label>
                   <select
@@ -6188,7 +6207,7 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, status: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    className={UI_INPUT_BG}
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -6198,7 +6217,7 @@ const App = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Primeiro contato
                   </label>
                   <input
@@ -6207,11 +6226,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, first_contact: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Próximo contato (agenda)
                   </label>
                   <input
@@ -6220,11 +6239,11 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, next_contact: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Data de adição
                   </label>
                   <input
@@ -6249,7 +6268,7 @@ const App = () => {
                         is_customer: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
                   />
                   <label
                     htmlFor="lead-customer"
@@ -6269,7 +6288,7 @@ const App = () => {
                         is_out_of_scope: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
                   />
                   <label
                     htmlFor="lead-out-of-scope"
@@ -6290,8 +6309,8 @@ const App = () => {
                         type="button"
                         onClick={() => setLeadForm({ ...leadForm, customer_type: type })}
                         className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${leadForm.customer_type === type
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                          ? 'bg-brand-600 text-white border-brand-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
                           }`}
                       >
                         {type}
@@ -6366,7 +6385,7 @@ const App = () => {
                         is_private: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
                   />
                   <label
                     htmlFor="lead-private"
@@ -6376,7 +6395,7 @@ const App = () => {
                   </label>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Observações da origem
                   </label>
                   <textarea
@@ -6388,7 +6407,7 @@ const App = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className={UI_LABEL}>
                     Observações do operador
                   </label>
                   <textarea
@@ -6396,7 +6415,7 @@ const App = () => {
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, operator_notes: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                     rows={3}
                   />
                 </div>
@@ -6411,7 +6430,7 @@ const App = () => {
                 <button
                   onClick={saveLead}
                   disabled={savingLead}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg disabled:opacity-50"
                 >
                   {savingLead ? (
                     <span className="inline-flex items-center gap-2">
@@ -6453,22 +6472,22 @@ const App = () => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">ID externo (ERP)</label>
+                    <label className={UI_LABEL}>ID externo (ERP)</label>
                     <input
                       type="text"
                       value={budgetForm.external_id || ''}
                       onChange={(e) => setBudgetForm({ ...budgetForm, external_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Lead relacionado</label>
+                    <label className={UI_LABEL}>Lead relacionado</label>
                     <select
                       value={budgetForm.lead_id || ''}
                       onChange={(e) => setBudgetForm({ ...budgetForm, lead_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Sem lead relacionado</option>
                       {leads.map((lead) => (
@@ -6477,11 +6496,11 @@ const App = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                    <label className={UI_LABEL}>Status</label>
                     <select
                       value={budgetForm.status}
                       onChange={(e) => setBudgetForm({ ...budgetForm, status: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       {BUDGET_STATUS_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -6489,33 +6508,33 @@ const App = () => {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Cliente</label>
+                    <label className={UI_LABEL}>Cliente</label>
                     <input
                       type="text"
                       value={budgetForm.client_name}
                       onChange={(e) => setBudgetForm({ ...budgetForm, client_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Empresa</label>
+                    <label className={UI_LABEL}>Empresa</label>
                     <input
                       type="text"
                       value={budgetForm.company}
                       onChange={(e) => setBudgetForm({ ...budgetForm, company: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Perfil</label>
+                    <label className={UI_LABEL}>Perfil</label>
                     <select
                       value={budgetForm.segment || ''}
                       onChange={(e) => setBudgetForm({ ...budgetForm, segment: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       {CLIENT_SEGMENT_OPTIONS.map((opt) => (
                         <option key={opt.value || 'none'} value={opt.value}>{opt.label}</option>
@@ -6523,11 +6542,11 @@ const App = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Fase</label>
+                    <label className={UI_LABEL}>Fase</label>
                     <select
                       value={budgetForm.stage || ''}
                       onChange={(e) => setBudgetForm({ ...budgetForm, stage: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Selecione</option>
                       <option value="prospeccao">Prospecção</option>
@@ -6537,13 +6556,13 @@ const App = () => {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Motivo da perda</label>
+                    <label className={UI_LABEL}>Motivo da perda</label>
                     <select
                       value={budgetForm.loss_reason || ''}
                       onChange={(e) => setBudgetForm({ ...budgetForm, loss_reason: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Selecione</option>
                       {BUDGET_LOSS_REASON_OPTIONS.map((opt) => (
@@ -6552,7 +6571,7 @@ const App = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Vendedor</label>
+                    <label className={UI_LABEL}>Vendedor</label>
                     <select
                       value={budgetForm.owner_id || ''}
                       onChange={(e) => {
@@ -6563,7 +6582,7 @@ const App = () => {
                           owner_name: selectedUser?.name || '',
                         });
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Selecione</option>
                       {users.map((u) => (
@@ -6572,7 +6591,7 @@ const App = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Orçamentista</label>
+                    <label className={UI_LABEL}>Orçamentista</label>
                     <select
                       value={budgetForm.estimator_id || ''}
                       onChange={(e) => {
@@ -6583,7 +6602,7 @@ const App = () => {
                           estimator_name: selectedUser?.name || '',
                         });
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Selecione</option>
                       {users.map((u) => (
@@ -6594,55 +6613,55 @@ const App = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Filial</label>
-                    <input type="text" value={budgetForm.branch || ''} onChange={(e) => setBudgetForm({ ...budgetForm, branch: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Filial</label>
+                    <input type="text" value={budgetForm.branch || ''} onChange={(e) => setBudgetForm({ ...budgetForm, branch: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Pedido do cliente</label>
-                    <input type="text" value={budgetForm.customer_order || ''} onChange={(e) => setBudgetForm({ ...budgetForm, customer_order: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Pedido do cliente</label>
+                    <input type="text" value={budgetForm.customer_order || ''} onChange={(e) => setBudgetForm({ ...budgetForm, customer_order: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Plano de pagamento</label>
-                    <input type="text" value={budgetForm.payment_terms || ''} onChange={(e) => setBudgetForm({ ...budgetForm, payment_terms: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Plano de pagamento</label>
+                    <input type="text" value={budgetForm.payment_terms || ''} onChange={(e) => setBudgetForm({ ...budgetForm, payment_terms: e.target.value })} className={UI_INPUT} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor orçado</label>
-                    <input type="number" step="0.01" value={budgetForm.budget_value} onChange={(e) => setBudgetForm({ ...budgetForm, budget_value: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Valor orçado</label>
+                    <input type="number" step="0.01" value={budgetForm.budget_value} onChange={(e) => setBudgetForm({ ...budgetForm, budget_value: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor fechado</label>
-                    <input type="number" step="0.01" value={budgetForm.closed_value} onChange={(e) => setBudgetForm({ ...budgetForm, closed_value: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Valor fechado</label>
+                    <input type="number" step="0.01" value={budgetForm.closed_value} onChange={(e) => setBudgetForm({ ...budgetForm, closed_value: e.target.value })} className={UI_INPUT} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Solicitado em</label>
-                    <input type="date" value={budgetForm.requested_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, requested_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Solicitado em</label>
+                    <input type="date" value={budgetForm.requested_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, requested_at: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Enviado em</label>
-                    <input type="date" value={budgetForm.sent_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, sent_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Enviado em</label>
+                    <input type="date" value={budgetForm.sent_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, sent_at: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Fechado em</label>
-                    <input type="date" value={budgetForm.closed_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, closed_at: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Fechado em</label>
+                    <input type="date" value={budgetForm.closed_at || ''} onChange={(e) => setBudgetForm({ ...budgetForm, closed_at: e.target.value })} className={UI_INPUT} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Canal</label>
-                    <input type="text" value={budgetForm.channel_name || ''} onChange={(e) => setBudgetForm({ ...budgetForm, channel_name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Canal</label>
+                    <input type="text" value={budgetForm.channel_name || ''} onChange={(e) => setBudgetForm({ ...budgetForm, channel_name: e.target.value })} className={UI_INPUT} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Campanha</label>
-                    <input type="text" value={budgetForm.campaign || ''} onChange={(e) => setBudgetForm({ ...budgetForm, campaign: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                    <label className={UI_LABEL}>Campanha</label>
+                    <input type="text" value={budgetForm.campaign || ''} onChange={(e) => setBudgetForm({ ...budgetForm, campaign: e.target.value })} className={UI_INPUT} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Observações</label>
-                  <textarea value={budgetForm.notes} onChange={(e) => setBudgetForm({ ...budgetForm, notes: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" rows={3} />
+                  <label className={UI_LABEL}>Observações</label>
+                  <textarea value={budgetForm.notes} onChange={(e) => setBudgetForm({ ...budgetForm, notes: e.target.value })} className={UI_INPUT} rows={3} />
                 </div>
               </div>
               <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
@@ -6658,7 +6677,7 @@ const App = () => {
                 <button
                   onClick={saveBudget}
                   disabled={savingBudget}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg disabled:opacity-50"
                 >
                   {savingBudget ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -6685,18 +6704,18 @@ const App = () => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Data</label>
+                    <label className={UI_LABEL}>Data</label>
                     <input
                       type="date"
                       value={adSpendForm.date || ''}
                       onChange={(e) => setAdSpendForm({ ...adSpendForm, date: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Canal</label>
+                    <label className={UI_LABEL}>Canal</label>
                     <select
                       value={adSpendForm.channel_id || ''}
                       onChange={(e) => {
@@ -6708,7 +6727,7 @@ const App = () => {
                           platform: selectedChannel?.name || '',
                         });
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                      className={UI_INPUT_BG}
                     >
                       <option value="">Selecione</option>
                       {channels.map((channel) => (
@@ -6717,34 +6736,34 @@ const App = () => {
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className={UI_GRID2}>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Campanha</label>
+                    <label className={UI_LABEL}>Campanha</label>
                     <input
                       type="text"
                       value={adSpendForm.campaign || ''}
                       onChange={(e) => setAdSpendForm({ ...adSpendForm, campaign: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Valor investido</label>
+                    <label className={UI_LABEL}>Valor investido</label>
                     <input
                       type="text"
                       inputMode="decimal"
                       value={adSpendForm.amount}
                       onChange={(e) => setAdSpendForm({ ...adSpendForm, amount: formatCurrencyInputBR(e.target.value) })}
                       placeholder="0,00"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Observações</label>
+                  <label className={UI_LABEL}>Observações</label>
                   <textarea
                     value={adSpendForm.notes}
                     onChange={(e) => setAdSpendForm({ ...adSpendForm, notes: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                    className={UI_INPUT}
                     rows={3}
                   />
                 </div>
@@ -6762,7 +6781,7 @@ const App = () => {
                 <button
                   onClick={saveAdSpend}
                   disabled={savingAdSpend}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg disabled:opacity-50"
                 >
                   {savingAdSpend ? 'Salvando...' : 'Salvar'}
                 </button>
@@ -6778,7 +6797,7 @@ const App = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setProfileTab('me')}
-                    className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'me' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                    className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'me' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'
                       }`}
                   >
                     Meu perfil
@@ -6798,7 +6817,7 @@ const App = () => {
                         });
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'users'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-brand-600 text-white'
                         : 'bg-slate-100 text-slate-700'
                         }`}
                     >
@@ -6812,7 +6831,7 @@ const App = () => {
                         loadMailrelaySettings();
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'mailrelay'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-brand-600 text-white'
                         : 'bg-slate-100 text-slate-700'
                         }`}
                     >
@@ -6826,7 +6845,7 @@ const App = () => {
                         loadOmnichatSettings();
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'omnichat'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-brand-600 text-white'
                         : 'bg-slate-100 text-slate-700'
                         }`}
                     >
@@ -6844,44 +6863,44 @@ const App = () => {
 
               {profileTab === 'me' && (
                 <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className={UI_GRID2}>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nome</label>
+                      <label className={UI_LABEL}>Nome</label>
                       <input
                         type="text"
                         value={profileForm.name}
                         onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Telefone</label>
+                      <label className={UI_LABEL}>Telefone</label>
                       <input
                         type="tel"
                         value={profileForm.phone}
                         onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                    <label className={UI_LABEL}>Email</label>
                     <input
                       type="email"
                       value={profileForm.email}
                       onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className={UI_LABEL}>
                       Nova senha (opcional)
                     </label>
                     <input
                       type="password"
                       value={profileForm.password}
                       onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                       placeholder="Deixe em branco para manter"
                     />
                   </div>
@@ -6894,7 +6913,7 @@ const App = () => {
                     </button>
                     <button
                       onClick={saveProfile}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
+                      className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg"
                     >
                       Salvar
                     </button>
@@ -6910,69 +6929,69 @@ const App = () => {
                     </h3>
                     <button
                       onClick={startNewUser}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-brand-600 hover:underline"
                     >
                       Novo
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className={UI_GRID2}>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nome</label>
+                      <label className={UI_LABEL}>Nome</label>
                       <input
                         type="text"
                         value={userForm.name}
                         onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Usuário (login)</label>
+                      <label className={UI_LABEL}>Usuário (login)</label>
                       <input
                         type="text"
                         value={userForm.username}
                         onChange={(e) =>
                           setUserForm({ ...userForm, username: e.target.value.toLowerCase() })
                         }
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                         placeholder="ex: leandro, ines..."
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Telefone</label>
+                      <label className={UI_LABEL}>Telefone</label>
                       <input
                         type="tel"
                         value={userForm.phone}
                         onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                      <label className={UI_LABEL}>Email</label>
                       <input
                         type="email"
                         value={userForm.email}
                         onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className={UI_LABEL}>
                         Senha {userForm.id ? '(opcional)' : ''}
                       </label>
                       <input
                         type="password"
                         value={userForm.password}
                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                         placeholder={userForm.id ? 'Deixe em branco para manter' : ''}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Papel</label>
+                      <label className={UI_LABEL}>Papel</label>
                       <select
                         value={userForm.role}
                         onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                        className={UI_INPUT_BG}
                       >
                         <option value="vendedor">Vendedor</option>
                         <option value="representante">Representante</option>
@@ -6989,7 +7008,7 @@ const App = () => {
                     </button>
                     <button
                       onClick={saveAdminUser}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg"
+                      className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg"
                     >
                       {userForm.id ? 'Salvar alterações' : 'Criar usuário'}
                     </button>
@@ -7000,24 +7019,24 @@ const App = () => {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b text-left text-slate-500">
-                            <th className="py-2 px-2">Nome</th>
-                            <th className="py-2 px-2">Email</th>
-                            <th className="py-2 px-2">Telefone</th>
-                            <th className="py-2 px-2">Papel</th>
+                            <th className={UI_TD}>Nome</th>
+                            <th className={UI_TD}>Email</th>
+                            <th className={UI_TD}>Telefone</th>
+                            <th className={UI_TD}>Papel</th>
                             <th className="py-2 px-2 text-right">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
                           {users.map((u) => (
                             <tr key={u.id} className="border-b last:border-none">
-                              <td className="py-2 px-2">{u.name}</td>
-                              <td className="py-2 px-2">{u.email}</td>
-                              <td className="py-2 px-2">{u.phone || '-'}</td>
-                              <td className="py-2 px-2">{u.role}</td>
+                              <td className={UI_TD}>{u.name}</td>
+                              <td className={UI_TD}>{u.email}</td>
+                              <td className={UI_TD}>{u.phone || '-'}</td>
+                              <td className={UI_TD}>{u.role}</td>
                               <td className="py-2 px-2 text-right space-x-2">
                                 <button
                                   onClick={() => editExistingUser(u)}
-                                  className="text-blue-600 text-xs"
+                                  className="text-brand-600 text-xs"
                                 >
                                   Editar
                                 </button>
@@ -7067,30 +7086,30 @@ const App = () => {
                     </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
                     <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                      Leads com engajamento: <span className="font-semibold text-slate-800">{mailrelaySettings.leads_with_engagement || 0}</span>
+                      Leads com engajamento: <span className={UI_STRONG}>{mailrelaySettings.leads_with_engagement || 0}</span>
                     </div>
                     <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                      Eventos gravados: <span className="font-semibold text-slate-800">{mailrelaySettings.email_events || 0}</span>
+                      Eventos gravados: <span className={UI_STRONG}>{mailrelaySettings.email_events || 0}</span>
                     </div>
                   </div>
                   {mailrelaySettings.last_sync && (
                     <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 text-xs text-slate-600">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-slate-800">Última sincronização:</span>
+                        <span className={UI_STRONG}>Última sincronização:</span>
                         <span>{mailrelaySettings.last_sync.synced_at ? formatDateTimeBR(mailrelaySettings.last_sync.synced_at) : '-'}</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Campanhas: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.campaigns_processed || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Eventos: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.events_processed || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Casados: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.leads_updated || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Sem match: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.unmatched_leads_count || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Campanhas: <span className={UI_STRONG}>{mailrelaySettings.last_sync.campaigns_processed || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Eventos: <span className={UI_STRONG}>{mailrelaySettings.last_sync.events_processed || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Casados: <span className={UI_STRONG}>{mailrelaySettings.last_sync.leads_updated || 0}</span></div>
+                        <div className="rounded-lg bg-slate-50 px-2 py-2">Sem match: <span className={UI_STRONG}>{mailrelaySettings.last_sync.unmatched_leads_count || 0}</span></div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="rounded-lg bg-slate-50 px-2 py-2">
-                          Duplicados ignorados: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.duplicate_events_skipped || 0}</span>
+                          Duplicados ignorados: <span className={UI_STRONG}>{mailrelaySettings.last_sync.duplicate_events_skipped || 0}</span>
                         </div>
                         <div className="rounded-lg bg-slate-50 px-2 py-2">
-                          Sem identidade: <span className="font-semibold text-slate-800">{mailrelaySettings.last_sync.missing_identity_skipped || 0}</span>
+                          Sem identidade: <span className={UI_STRONG}>{mailrelaySettings.last_sync.missing_identity_skipped || 0}</span>
                         </div>
                       </div>
                       {Array.isArray(mailrelaySettings.last_sync.unmatched_emails_sample) && mailrelaySettings.last_sync.unmatched_emails_sample.length > 0 && (
@@ -7110,23 +7129,23 @@ const App = () => {
                 </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">URL da API</label>
+                    <label className={UI_LABEL}>URL da API</label>
                     <input
                       type="text"
                       value={mailrelaySettings.api_base}
                       onChange={(e) => setMailrelaySettings({ ...mailrelaySettings, api_base: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                       placeholder="https://SEU_ACCOUNT/api/v1"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Chave da API</label>
+                    <label className={UI_LABEL}>Chave da API</label>
                     <input
                       type="password"
                       value={mailrelaySettings.api_key}
                       onChange={(e) => setMailrelaySettings({ ...mailrelaySettings, api_key: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                      className={UI_INPUT}
                       placeholder={mailrelaySettings.has_api_key ? 'Informe uma nova chave para substituir a atual' : 'Cole a chave aqui'}
                     />
                   </div>
@@ -7148,7 +7167,7 @@ const App = () => {
                     <button
                       onClick={saveMailrelaySettings}
                       disabled={savingMailrelaySettings}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                      className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg disabled:opacity-50"
                     >
                       {savingMailrelaySettings ? 'Salvando...' : 'Salvar Mailrelay'}
                     </button>
@@ -7179,39 +7198,39 @@ const App = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className={UI_GRID2}>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">URL base da API</label>
+                      <label className={UI_LABEL}>URL base da API</label>
                       <input
                         type="text"
                         value={omnichatSettings.send_url}
                         onChange={(e) => setOmnichatSettings({ ...omnichatSettings, send_url: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                         placeholder="https://chat.bhseletrica.com.br"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Chave x-api-key</label>
+                      <label className={UI_LABEL}>Chave x-api-key</label>
                       <input
                         type="password"
                         value={omnichatSettings.api_key}
                         onChange={(e) => setOmnichatSettings({ ...omnichatSettings, api_key: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                         placeholder={omnichatSettings.has_api_key ? 'Informe uma nova chave para substituir a atual' : 'Cole a chave aqui'}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Nome do header</label>
+                      <label className={UI_LABEL}>Nome do header</label>
                       <input
                         type="text"
                         value={omnichatSettings.auth_header}
                         onChange={(e) => setOmnichatSettings({ ...omnichatSettings, auth_header: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                         placeholder="Authorization"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Janela do lembrete (min)</label>
+                      <label className={UI_LABEL}>Janela do lembrete (min)</label>
                       <input
                         type="number"
                         min={1}
@@ -7222,7 +7241,7 @@ const App = () => {
                             reminder_minutes: Number(e.target.value || 30),
                           })
                         }
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className={UI_INPUT}
                       />
                     </div>
                   </div>
@@ -7255,7 +7274,7 @@ const App = () => {
                     <button
                       onClick={saveOmnichatSettings}
                       disabled={savingOmnichatSettings}
-                      className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                      className="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg disabled:opacity-50"
                     >
                       {savingOmnichatSettings ? 'Salvando...' : 'Salvar Omnichat'}
                     </button>
@@ -7274,7 +7293,7 @@ const App = () => {
                 </div>
                 <div className="p-4 space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className={UI_LABEL}>
                       Novo canal
                     </label>
                     <div className="flex gap-2">
@@ -7286,7 +7305,7 @@ const App = () => {
                       />
                       <button
                         onClick={handleAddChannel}
-                        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg"
+                        className="px-3 py-2 text-sm bg-brand-600 text-white rounded-lg"
                       >
                         Adicionar
                       </button>
