@@ -15,6 +15,29 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-08-31 — Claude (via Cowork) — Editor de lead: modal vira drawer
+
+**O quê:** O editor de lead deixou de ser um modal centralizado e passou a ser um drawer que entra pela direita, como o `DESIGN.md` especifica.
+
+- `frontend/src/App.js`: trocados **apenas os dois `div` de container** (linhas ~5822-5827). O conteúdo do formulário não foi tocado.
+  - Fundo: `fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4` → `fixed inset-0 bg-ink/45 scrim-enter`
+  - Caixa: `bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh]` → `fixed top-0 right-0 h-full w-full max-w-lg bg-surface-card border-l border-line shadow-2xl drawer-enter`
+- `frontend/src/index.css`: keyframes `drawer-in` e `scrim-in`, com `prefers-reduced-motion` desligando a animação.
+
+**Por quê:** É a primeira mudança estrutural do redesenho. Feita da forma mais contida possível: o formulário inteiro — 34 campos, 37 rótulos — continua exatamente como estava.
+
+**Desvio consciente do DESIGN.md:** ele pede drawer de **400px**; ficou em **512px** (`max-w-lg`, a mesma largura do modal anterior). O formulário usa grade de 2 colunas dimensionada para 512px, e como `md:` responde à largura da *viewport* e não do container, estreitar para 400px espremeria as duas colunas em vez de empilhá-las. Refluir os 34 campos é tarefa própria.
+
+**O que NÃO foi feito de propósito:** clicar no fundo não fecha o drawer. Seria o comportamento esperado, mas com 34 campos preenchidos um clique fora significaria perder o trabalho. Fica como decisão a tomar, não como esquecimento.
+
+**Impacto:** Só apresentação e posicionamento. Nenhuma lógica de estado, validação ou salvamento foi tocada.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** `npm run build` exit 0; keyframes e `prefers-reduced-motion` presentes no CSS. Baseline capturada antes da alteração (34 campos, 37 rótulos, caixa de 512px) para comparação depois do deploy.
+
+---
+
 ## 2026-08-31 — Claude (via Cowork) — Estados semânticos (agenda, SLA, temperatura, pílulas)
 
 **O quê:** Criados 4 estados semânticos no `tailwind.config.js` e migrados para eles todos os pastéis do Tailwind espalhados pelo `App.js`. **44 substituições**, zero `bg-*-50/100` restante.

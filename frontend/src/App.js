@@ -5819,8 +5819,12 @@ const App = () => {
         </div>
 
         {showLeadModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-ink/45 z-50 scrim-enter">
+            {/* Drawer: entra pela direita. Largura mantida em max-w-lg (512px),
+                nao nos 400px do DESIGN.md, porque o formulario usa grade de 2
+                colunas dimensionada para essa largura — estreitar exigiria
+                refluir os 34 campos, que e outra tarefa. */}
+            <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-surface-card border-l border-line shadow-2xl overflow-y-auto drawer-enter">
               <div className="p-4 border-b border-slate-200 flex items-start justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">
                   {editingLead ? 'Editar Lead' : 'Novo Lead'}
