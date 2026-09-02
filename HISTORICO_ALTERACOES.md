@@ -15,6 +15,33 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Gráficos, etapa 2: análise de orçamentos
+
+**Correção de premissa registrada:** eu havia dito ao usuário que "a seção Orçamentos não tem nenhum gráfico". Isso vale para a **aba Dashboard**; a **aba Orçamentos** já tinha 6 gráficos, alimentados por `budgetDashboardData` e pelos filtros do módulo. A etapa 2 reformou esses 6 e acrescentou 3, em vez de duplicar gráficos numa aba nova.
+
+**Perguntas que a diretoria escolheu responder** (as quatro): onde o orçamento trava, quanto entra x quanto fecha, quem produz e quem fecha, por que perdemos.
+
+**Dados novos em `budgetDashboardData`:** `estimatedMonthlyMap` (valor orçado por mês da solicitação), `lossValueMap` (valor orçado perdido por motivo), e três mapas de desempenho por pessoa (`total`, `aprovados`, `valorOrcado`, `valorFechado`) para vendedor, orçamentista e representante, via o helper `acumularDesempenho`. Saídas novas: `estimatedEvolution`, `aprovacaoPorVendedor`, `aprovacaoPorOrcamentista`, `aprovacaoPorRepresentante`.
+
+**Gráficos, um por pergunta:**
+
+1. **Funil de orçamentos** — substitui "Status dos orçamentos". Agora em ordem de funil (`BUDGET_STATUS_OPTIONS`), com etapa zerada visível. Antes vinha ordenado por volume, o mesmo defeito do funil de leads. `statusMap` passou a ser chaveado pelo status normalizado.
+2. **Valor orçado e valor fechado por mês** — duas séries rotuladas no mesmo card, substituindo o card que mostrava só o fechado. O rótulo diz explicitamente a base temporal de cada série: orçado pelo **mês da solicitação**, fechado pelo **mês do fechamento**. São recortes diferentes e o card não deixa isso implícito.
+3. **Perdas por motivo** — a barra passou a ser o **valor orçado perdido**, com a quantidade entre parênteses no rótulo. Antes era só contagem, sem peso financeiro. Usa `showZeros` para o motivo não sumir quando o valor for zero.
+4. **Aprovação por vendedor / por orçamentista / por representante** — três gráficos novos. Barra = taxa de aprovação; rótulo = nome e total de orçamentos.
+
+**Decisão registrada — ordenação da taxa de aprovação:** os três gráficos de aprovação são ordenados por **volume**, não pela taxa. Ordenar pela taxa colocaria no topo quem tem 1 orçamento e 1 aprovação (100%), o que engana a leitura. O total vai no rótulo exatamente para que a taxa nunca seja lida sozinha. Está escrito em comentário no código e em nota sob o gráfico.
+
+**Nota sobre o valor perdido:** usa `budget_value`, não `closed_value`, pela mesma razão já registrada — orçamento reprovado não fecha valor.
+
+**Preservado:** "Solicitações por mês", "Orçamentos por vendedor" e "Orçamentos por orçamentista" continuam existindo, agora na paleta unificada. Nenhum gráfico foi eliminado sem substituto que contenha a mesma informação.
+
+**Impacto:** Somente leitura, tudo calculado em memória a partir de `budgetFilteredItems` — os gráficos respeitam os filtros do módulo, inclusive o de exclusão de vendedor. Nenhuma escrita, nenhuma chamada de API nova.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** parser JSX OK e `react-scripts build` com sucesso (238.98 kB, +677 B). Conferência em produção após o deploy.
+
 ## 2026-09-02 — Claude (via Cowork) — Gráficos, etapa 1: correção dos 14 já existentes
 
 **Contexto:** O Dashboard já tinha 14 gráficos. O pedido de "representar melhor os números" foi tratado primeiro como correção do que existe, e só depois como criação (etapa 2, gráficos de orçamento).

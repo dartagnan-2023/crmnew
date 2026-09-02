@@ -2569,6 +2569,11 @@ const App = () => {
     const estimatorMap = new Map();
     const monthlyMap = new Map();
     const closedMonthlyMap = new Map();
+    const estimatedMonthlyMap = new Map();
+    const lossValueMap = new Map();
+    const desempenhoOwner = new Map();
+    const desempenhoEstimator = new Map();
+    const desempenhoRepresentante = new Map();
     const today = new Date();
     const sixMonths = [];
 
@@ -2577,8 +2582,18 @@ const App = () => {
       const key = monthKey(date);
       monthlyMap.set(key, 0);
       closedMonthlyMap.set(key, 0);
+      estimatedMonthlyMap.set(key, 0);
       sixMonths.push(key);
     }
+
+    const acumularDesempenho = (mapa, chave, aprovado, valorOrcado, valorFechado) => {
+      const atual = mapa.get(chave) || { total: 0, aprovados: 0, valorOrcado: 0, valorFechado: 0 };
+      atual.total += 1;
+      if (aprovado) atual.aprovados += 1;
+      atual.valorOrcado += valorOrcado;
+      atual.valorFechado += valorFechado;
+      mapa.set(chave, atual);
+    };
 
     budgetFilteredItems.forEach((budget) => {
       const status = budget.status || 'sem_status';
@@ -2588,18 +2603,34 @@ const App = () => {
       const createdDate = parseLeadDate(budget.requested_at || budget.created_at);
       const closedDate = parseLeadDate(budget.closed_at || budget.updated_at);
 
-      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      const statusNorm = normalizeOptionValue(status);
+      const aprovado = statusNorm === 'aprovado';
+      const valorOrcado = Number(budget.budget_value || 0);
+      const valorFechado = Number(budget.closed_value || 0);
+      const representante = String(budget.representante || '').trim() || 'Sem representante';
+
+      statusMap.set(statusNorm || 'sem_status', (statusMap.get(statusNorm || 'sem_status') || 0) + 1);
       if (normalizeOptionValue(lossReason) !== 'sem motivo') {
         lossReasonMap.set(lossReason, (lossReasonMap.get(lossReason) || 0) + 1);
+        // Peso financeiro do motivo: usa o valor ORCADO, porque orcamento
+        // perdido nao tem valor fechado (conferido na base: closed_value = 0
+        // em todo reprovado).
+        lossValueMap.set(lossReason, (lossValueMap.get(lossReason) || 0) + valorOrcado);
       }
       ownerMap.set(owner, (ownerMap.get(owner) || 0) + 1);
       estimatorMap.set(estimator, (estimatorMap.get(estimator) || 0) + 1);
+      acumularDesempenho(desempenhoOwner, owner, aprovado, valorOrcado, valorFechado);
+      acumularDesempenho(desempenhoEstimator, estimator, aprovado, valorOrcado, valorFechado);
+      acumularDesempenho(desempenhoRepresentante, representante, aprovado, valorOrcado, valorFechado);
 
       if (createdDate) {
         const key = monthKey(createdDate);
         if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+        if (estimatedMonthlyMap.has(key)) {
+          estimatedMonthlyMap.set(key, (estimatedMonthlyMap.get(key) || 0) + valorOrcado);
+        }
       }
-      if (closedDate && normalizeOptionValue(status) === 'aprovado') {
+      if (closedDate && aprovado) {
         const key = monthKey(closedDate);
         if (closedMonthlyMap.has(key)) {
           closedMonthlyMap.set(key, (closedMonthlyMap.get(key) || 0) + Number(budget.closed_value || 0));
@@ -2612,18 +2643,46 @@ const App = () => {
         .map(([label, value]) => ({ label, value }))
         .sort((a, b) => b.value - a.value);
 
+    // Taxa de aprovacao por pessoa. ORDENA POR VOLUME, nao pela taxa: quem tem
+    // 1 orcamento e 1 aprovacao marca 100% e apareceria no topo, o que engana.
+    // O total vai no rotulo justamente para a taxa nunca ser lida sozinha.
+    const taxaPorPessoa = (mapa) =>
+      Array.from(mapa.entries())
+        .map(([nome, d]) => ({
+          label: `${nome} (${d.total})`,
+          value: d.total ? Math.round((d.aprovados / d.total) * 100) : 0,
+          _total: d.total,
+        }))
+        .sort((a, b) => b._total - a._total);
+
     return {
-      byStatus: sortEntries(statusMap).map((item) => ({
-        ...item,
-        label: BUDGET_STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
-      })),
-      byLossReason: sortEntries(lossReasonMap).map((item) => ({
-        ...item,
-        label: BUDGET_LOSS_REASON_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
-      })),
+      // Funil em ordem de funil, com etapa zerada visivel.
+      byStatus: [
+        ...BUDGET_STATUS_OPTIONS.map((opt) => ({
+          label: opt.label,
+          value: statusMap.get(opt.value) || 0,
+        })),
+        ...Array.from(statusMap.entries())
+          .filter(([chave]) => !BUDGET_STATUS_OPTIONS.some((opt) => opt.value === chave))
+          .map(([chave, valor]) => ({
+            label: chave === 'sem_status' ? 'Sem status' : chave,
+            value: valor,
+          })),
+      ],
+      // Motivo de perda pesado pelo VALOR perdido; a quantidade vai no rotulo.
+      byLossReason: Array.from(lossReasonMap.entries())
+        .map(([chave, quantidade]) => ({
+          label: `${BUDGET_LOSS_REASON_OPTIONS.find((opt) => opt.value === chave)?.label || chave} (${quantidade})`,
+          value: lossValueMap.get(chave) || 0,
+        }))
+        .sort((a, b) => b.value - a.value),
       byOwner: sortEntries(ownerMap),
       byEstimator: sortEntries(estimatorMap),
+      aprovacaoPorVendedor: taxaPorPessoa(desempenhoOwner),
+      aprovacaoPorOrcamentista: taxaPorPessoa(desempenhoEstimator),
+      aprovacaoPorRepresentante: taxaPorPessoa(desempenhoRepresentante),
       monthlyEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: monthlyMap.get(key) || 0 })),
+      estimatedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: estimatedMonthlyMap.get(key) || 0 })),
       closedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: closedMonthlyMap.get(key) || 0 })),
     };
   }, [budgetFilteredItems]);
@@ -5198,37 +5257,96 @@ const App = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Evolução</p>
-                <h3 className={UI_H2}>Solicitações por mês</h3>
-                <MiniLineChart data={budgetDashboardData.monthlyEvolution} color="#0f766e" />
+                <p className={UI_EYEBROW}>Onde trava</p>
+                <h3 className={UI_H2}>Funil de orçamentos</h3>
+                <MiniBarChart data={budgetDashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
+                <p className="mt-3 text-[11px] text-ink-faint">
+                  Etapas em ordem de funil, não por tamanho. Etapa sem nenhum orçamento aparece com zero.
+                </p>
               </div>
               <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Resultado</p>
-                <h3 className={UI_H2}>Valor fechado por mês</h3>
-                <MiniLineChart data={budgetDashboardData.closedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
+                <p className={UI_EYEBROW}>Entra x fecha</p>
+                <h3 className={UI_H2}>Valor orçado e valor fechado por mês</h3>
+                <ChartSeriesLabel color={CHART_COLORS.volume} text="Valor orçado (mês da solicitação)" />
+                <MiniLineChart data={budgetDashboardData.estimatedEvolution} color={CHART_COLORS.volume} formatValue={formatCurrencyBR} />
+                <div className="mt-4">
+                  <ChartSeriesLabel color={CHART_COLORS.positivo} text="Valor fechado (mês do fechamento)" />
+                  <MiniLineChart data={budgetDashboardData.closedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
+                </div>
               </div>
               <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Motivos</p>
-                <h3 className={UI_H2}>Perdas</h3>
-                <MiniBarChart data={budgetDashboardData.byLossReason} color="#dc2626" />
+                <p className={UI_EYEBROW}>Por que perdemos</p>
+                <h3 className={UI_H2}>Perdas por motivo</h3>
+                <MiniBarChart
+                  data={budgetDashboardData.byLossReason}
+                  color={CHART_COLORS.risco}
+                  showZeros
+                  formatValue={formatCurrencyBR}
+                />
+                <p className="mt-3 text-[11px] text-ink-faint">
+                  Barra = valor orçado perdido. Entre parênteses, a quantidade de orçamentos.
+                </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Produção</p>
-                <h3 className={UI_H2}>Status dos orçamentos</h3>
-                <MiniBarChart data={budgetDashboardData.byStatus} color="#f97316" />
+                <p className={UI_EYEBROW}>Quem fecha</p>
+                <h3 className={UI_H2}>Aprovação por vendedor</h3>
+                <MiniBarChart
+                  data={budgetDashboardData.aprovacaoPorVendedor}
+                  color={CHART_COLORS.positivo}
+                  showZeros
+                  aggregateRest={false}
+                  formatValue={(value) => `${value}%`}
+                />
+                <p className="mt-3 text-[11px] text-ink-faint">
+                  Ordenado por volume, não pela taxa. Entre parênteses, quantos orçamentos a pessoa tem — 100% de 1 orçamento não é desempenho.
+                </p>
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Quem produz</p>
+                <h3 className={UI_H2}>Aprovação por orçamentista</h3>
+                <MiniBarChart
+                  data={budgetDashboardData.aprovacaoPorOrcamentista}
+                  color={CHART_COLORS.positivo}
+                  showZeros
+                  aggregateRest={false}
+                  formatValue={(value) => `${value}%`}
+                />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Canal indireto</p>
+                <h3 className={UI_H2}>Aprovação por representante</h3>
+                <MiniBarChart
+                  data={budgetDashboardData.aprovacaoPorRepresentante}
+                  color={CHART_COLORS.positivo}
+                  showZeros
+                  aggregateRest={false}
+                  formatValue={(value) => `${value}%`}
+                  emptyLabel="Nenhum orçamento com representante registrado ainda."
+                />
+                <p className="mt-3 text-[11px] text-ink-faint">
+                  Alimentado pelo campo Representante do orçamento. Enquanto ninguém preencher, aparece tudo em "Sem representante".
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Evolução</p>
+                <h3 className={UI_H2}>Solicitações por mês</h3>
+                <MiniLineChart data={budgetDashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Time Comercial</p>
-                <h3 className={UI_H2}>Por vendedor</h3>
-                <MiniBarChart data={budgetDashboardData.byOwner} color="#7c3aed" />
+                <h3 className={UI_H2}>Orçamentos por vendedor</h3>
+                <MiniBarChart data={budgetDashboardData.byOwner} color={CHART_COLORS.volume} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Time Técnico</p>
-                <h3 className={UI_H2}>Por orçamentista</h3>
-                <MiniBarChart data={budgetDashboardData.byEstimator} color="#059669" />
+                <h3 className={UI_H2}>Orçamentos por orçamentista</h3>
+                <MiniBarChart data={budgetDashboardData.byEstimator} color={CHART_COLORS.volume} />
               </div>
             </div>
 
