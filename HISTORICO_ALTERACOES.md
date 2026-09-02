@@ -15,6 +15,28 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Gráficos, etapa 1: correção dos 14 já existentes
+
+**Contexto:** O Dashboard já tinha 14 gráficos. O pedido de "representar melhor os números" foi tratado primeiro como correção do que existe, e só depois como criação (etapa 2, gráficos de orçamento).
+
+**O quê:**
+
+1. **`MiniBarChart` parou de esconder dados.** O componente cortava a lista nos 6 primeiros e descartava qualquer item com valor zero, sem nada na tela indicando isso. Medido antes da correção: "Leads por canal" exibia 6 canais enquanto o filtro do CRM lista 11. Agora o corte continua (legibilidade), mas o restante vira uma barra **"Outros (N)"** somada e o rodapé declara o total de itens. Novas props: `limit`, `showZeros`, `aggregateRest`.
+2. **"Taxa por temperatura" recebeu `aggregateRest={false}`.** Somar porcentagens numa barra "Outros" produziria número sem significado. Esse gráfico só corta, nunca agrega.
+3. **"Funil por status" passou a sair em ordem de funil.** Estava ordenado por volume, o que colocava *Perdido* entre *Proposta enviada* e *Novo* — um funil fora de ordem é ranking, não funil. Agora segue a ordem de `STATUS_OPTIONS` (Novo → Em contato → Proposta enviada → Negociação → Ganho → Perdido), com status zerado visível em vez de sumir. Status desconhecido aparece no fim, nunca é descartado.
+4. **`statusMap` passou a ser chaveado pelo status normalizado**, para casar com os `value` de `STATUS_OPTIONS` na montagem do funil.
+5. **Rótulo cru corrigido.** "Perfis de cliente" exibia `sem_perfil`. O código usa `lead.segment || 'sem_perfil'` como fallback, mas em `SEGMENT_OPTIONS` esse caso é `{ value: '', label: 'Sem perfil' }`, então a busca nunca casava. Mesma família do bug do `nao_feito`.
+6. **Legendas nos cards de duas séries.** "Investimento x Leads" e "ROAS estimado x fechado" empilhavam dois gráficos sem nada dizendo qual era qual — identidade apenas pela cor, e sem legenda. Novo componente `ChartSeriesLabel` nomeia cada série.
+7. **Paleta unificada e validada.** As cores eram 7 hexadecimais chumbados (`#2563eb`, `#e11d48`, `#dc2626`, `#7c3aed`, `#f97316`, `#059669`, `#0f766e`), anteriores ao Deep Ocean. Agora existe `CHART_COLORS`, atribuída por **função do dado**: `volume` `#006194`, `positivo` `#0f8a5f`, `risco` `#a4262c`, `atencao` `#b26a00`.
+
+**Como a paleta foi escolhida:** rodada no validador de paleta (não escolhida a olho). Os quatro tons passam em faixa de luminosidade, piso de croma, separação para daltonismo (protan/deutan/tritan, pior par ΔE 8,0 sob `--pairs all`) e contraste contra a superfície do card. O par vermelho↔verde fica em ΔE 8,8, acima do alvo de 8, e mesmo assim nunca depende só de cor: toda barra carrega rótulo de texto ao lado. **Não trocar essas cores sem revalidar** — está escrito em comentário no código.
+
+**Impacto:** Nenhum cálculo de métrica alterado, exceto onde o resultado exibido estava errado por construção (ordem do funil e itens ocultos). Nenhuma leitura de API, nenhuma escrita. Números que antes não apareciam passam a aparecer — é esperado que o Dashboard mostre mais linhas em "Leads por canal" e "Campanhas".
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** parser JSX OK, `react-scripts build` com sucesso (238.3 kB, +436 B), validador de paleta com todos os checks em PASS. Conferência visual em produção após o deploy.
+
 ## 2026-09-02 — Claude (via Cowork) — Remoção de dois cards duplicados na seção Mídia paga
 
 **O quê:** Removidos os cards **"CPL"** e **"Orçamento estimado"** do Dashboard, e a segunda fileira da seção de mídia foi dissolvida: "Estimado por lead" e "Fechado por lead" passaram para a mesma grade dos demais, agora como `StatCard` (antes eram `div` com `UI_CARD`/`UI_STAT`, sem linha de apoio e com rótulo de cor diferente). A seção Mídia paga foi de 8 para 6 cards, em uma única grade.

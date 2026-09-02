@@ -476,21 +476,51 @@ const StatCard = ({ label, value, helper, tone = 'slate' }) => {
   );
 };
 
-const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados', formatValue = (value) => value }) => {
-  const safeData = (data || []).filter((item) => item && Number(item.value) > 0).slice(0, 6);
-  const max = Math.max(...safeData.map((item) => Number(item.value)), 1);
-  if (!safeData.length) {
-    return <p className="text-sm text-slate-400">{emptyLabel}</p>;
+// Paleta dos graficos, por FUNCAO do dado e nao por decoracao.
+// Os quatro tons passaram no validador de paleta (faixa de luminosidade,
+// piso de croma, separacao para daltonismo protan/deutan/tritan e contraste
+// contra a superficie do card). Nao trocar por gosto sem revalidar.
+const CHART_COLORS = {
+  volume: '#006194',    // contagem, quantidade, neutro (mesma familia da marca)
+  positivo: '#0f8a5f',  // resultado concretizado: ganho, fechado, aprovado
+  risco: '#a4262c',     // perda e risco: SLA estourado, perdido, reprovado
+  atencao: '#b26a00',   // em andamento e custo: pipeline, investimento
+};
+
+// `limit` corta a lista, mas o que sobra NAO some: vira uma barra "Outros"
+// somada, e o rodape declara quantos itens existem no total. Antes o
+// componente cortava em 6 silenciosamente, escondendo canais inteiros.
+// `showZeros` mantem a categoria com valor zero visivel, necessario em
+// conjuntos fixos como o funil de status.
+const MiniBarChart = ({
+  data,
+  color = CHART_COLORS.volume,
+  emptyLabel = 'Sem dados',
+  formatValue = (value) => value,
+  limit = 6,
+  showZeros = false,
+  aggregateRest = true,
+}) => {
+  const todos = (data || []).filter((item) => item && (showZeros || Number(item.value) > 0));
+  if (!todos.length) {
+    return <p className="text-sm text-ink-faint">{emptyLabel}</p>;
   }
+  const visiveis = todos.slice(0, limit);
+  const ocultos = todos.slice(limit);
+  const somaOcultos = ocultos.reduce((total, item) => total + Number(item.value || 0), 0);
+  const linhas = ocultos.length && aggregateRest
+    ? [...visiveis, { label: `Outros (${ocultos.length})`, value: somaOcultos }]
+    : visiveis;
+  const max = Math.max(...linhas.map((item) => Number(item.value)), 1);
   return (
     <div className="space-y-3">
-      {safeData.map((item) => (
+      {linhas.map((item) => (
         <div key={item.label} className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-slate-600 gap-3">
+          <div className="flex items-center justify-between text-xs text-ink-soft gap-3">
             <span className="font-medium truncate">{item.label}</span>
             <span className={UI_STRONG}>{formatValue(item.value)}</span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-2 rounded-full bg-surface-mid overflow-hidden">
             <div
               className="h-full rounded-full transition-all"
               style={{ width: `${(Number(item.value) / max) * 100}%`, backgroundColor: color }}
@@ -498,11 +528,28 @@ const MiniBarChart = ({ data, color = '#2563eb', emptyLabel = 'Sem dados', forma
           </div>
         </div>
       ))}
+      {ocultos.length > 0 && (
+        <p className="text-[11px] text-ink-faint">
+          {aggregateRest
+            ? `Os ${limit} maiores estão detalhados; os outros ${ocultos.length} estão somados em "Outros". Total de ${todos.length} itens.`
+            : `Mostrando ${limit} de ${todos.length} itens.`}
+        </p>
+      )}
     </div>
   );
 };
 
-const MiniLineChart = ({ data, color = '#0f766e', emptyLabel = 'Sem histórico suficiente', formatValue = (value) => value }) => {
+// Legenda de serie. Nos cards com duas series empilhadas nao havia nada
+// dizendo qual grafico era qual: a identidade ficava so na cor, que nem
+// legenda tinha. O texto carrega o nome; a bolinha apenas reforca.
+const ChartSeriesLabel = ({ color, text }) => (
+  <div className="flex items-center gap-2 mb-2">
+    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+    <span className="text-xs font-semibold text-ink-soft">{text}</span>
+  </div>
+);
+
+const MiniLineChart = ({ data, color = CHART_COLORS.volume, emptyLabel = 'Sem histórico suficiente', formatValue = (value) => value }) => {
   const safeData = (data || []).slice(-6);
   const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
   if (!safeData.length) {
@@ -1853,7 +1900,9 @@ const App = () => {
       channelMap.set(channel, (channelMap.get(channel) || 0) + 1);
       campaignMap.set(campaign, (campaignMap.get(campaign) || 0) + 1);
       segmentMap.set(segment, (segmentMap.get(segment) || 0) + 1);
-      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      // Chaveia pelo status NORMALIZADO para casar com os values de
+      // STATUS_OPTIONS na montagem do funil, logo abaixo.
+      statusMap.set(statusNormalized || 'sem_status', (statusMap.get(statusNormalized || 'sem_status') || 0) + 1);
       temperatureMap.set(temperatureNormalized, (temperatureMap.get(temperatureNormalized) || 0) + 1);
 
       if (lead.is_customer) customers += 1;
@@ -1914,16 +1963,33 @@ const App = () => {
       byCampaign: sortEntries(campaignMap),
       bySegment: sortEntries(segmentMap).map((item) => ({
         ...item,
-        label: SEGMENT_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
+        // 'sem_perfil' e o valor de fallback usado acima; em SEGMENT_OPTIONS
+        // o mesmo caso e representado por value '', entao a busca nunca casava
+        // e o token cru aparecia na tela.
+        label:
+          item.label === 'sem_perfil'
+            ? 'Sem perfil'
+            : SEGMENT_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
       })),
       byTemperature: LEAD_TEMPERATURE_OPTIONS.map((item) => ({
         label: item.label,
         value: temperatureMap.get(item.value) || 0,
       })),
-      byStatus: sortEntries(statusMap).map((item) => ({
-        ...item,
-        label: STATUS_OPTIONS.find((opt) => opt.value === item.label)?.label || item.label,
-      })),
+      // Funil em ORDEM DE FUNIL, nao por tamanho. Ordenar por volume
+      // transformava o funil em ranking (Perdido aparecia entre Proposta e
+      // Novo). Status zerado permanece visivel, com zero.
+      byStatus: [
+        ...STATUS_OPTIONS.map((opt) => ({
+          label: opt.label,
+          value: statusMap.get(opt.value) || 0,
+        })),
+        ...Array.from(statusMap.entries())
+          .filter(([chave]) => !STATUS_OPTIONS.some((opt) => opt.value === chave))
+          .map(([chave, valor]) => ({
+            label: chave === 'sem_status' ? 'Sem status' : chave,
+            value: valor,
+          })),
+      ],
       overdueByOwner: sortEntries(overdueByOwnerMap),
       conversionByTemperature,
       monthlyEvolution,
@@ -4506,19 +4572,19 @@ const App = () => {
                     <h3 className="text-lg font-bold text-slate-900">Entradas por mês</h3>
                   </div>
                 </div>
-                <MiniLineChart data={dashboardData.monthlyEvolution} color="#0f766e" />
+                <MiniLineChart data={dashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
               </div>
 
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Evolução do valor convertido</h3>
-                <MiniLineChart data={dashboardData.convertedEvolution} color="#2563eb" formatValue={formatCurrencyBR} />
+                <MiniLineChart data={dashboardData.convertedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
               </div>
 
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Evolução do pipeline ativo</h3>
-                <MiniLineChart data={dashboardData.pipelineEvolution} color="#f97316" formatValue={formatCurrencyBR} />
+                <MiniLineChart data={dashboardData.pipelineEvolution} color={CHART_COLORS.atencao} formatValue={formatCurrencyBR} />
               </div>
             </div>
 
@@ -4526,30 +4592,35 @@ const App = () => {
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Marketing</p>
                 <h3 className={UI_H2}>Investimento x Leads</h3>
+                <ChartSeriesLabel color={CHART_COLORS.atencao} text="Investimento por mês" />
                 <MiniLineChart
                   data={dashboardMediaData.spendVsLeads.map((item) => ({ label: item.label, value: item.spend }))}
-                  color="#e11d48"
+                  color={CHART_COLORS.atencao}
                   formatValue={formatCurrencyBR}
                 />
                 <div className="mt-4">
+                  <ChartSeriesLabel color={CHART_COLORS.volume} text="Leads gerados por mês" />
                   <MiniBarChart
                     data={dashboardMediaData.spendVsLeads.map((item) => ({ label: item.label, value: item.leads }))}
-                    color="#2563eb"
+                    color={CHART_COLORS.volume}
+                    limit={12}
                   />
                 </div>
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Performance</p>
                 <h3 className={UI_H2}>ROAS estimado x fechado</h3>
+                <ChartSeriesLabel color={CHART_COLORS.volume} text="ROAS estimado" />
                 <MiniLineChart
                   data={dashboardMediaData.roasEvolution.map((item) => ({ label: item.label, value: item.estimated }))}
-                  color="#2563eb"
+                  color={CHART_COLORS.volume}
                   formatValue={formatRatio}
                 />
                 <div className="mt-4">
+                  <ChartSeriesLabel color={CHART_COLORS.positivo} text="ROAS fechado" />
                   <MiniLineChart
                     data={dashboardMediaData.roasEvolution.map((item) => ({ label: item.label, value: item.closed }))}
-                    color="#059669"
+                    color={CHART_COLORS.positivo}
                     formatValue={formatRatio}
                   />
                 </div>
@@ -4560,17 +4631,17 @@ const App = () => {
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Prioridade</p>
                 <h3 className={UI_H2}>Temperatura da base</h3>
-                <MiniBarChart data={dashboardData.byTemperature} color="#e11d48" />
+                <MiniBarChart data={dashboardData.byTemperature} color={CHART_COLORS.volume} showZeros />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>SLA</p>
                 <h3 className={UI_H2}>Estourados por responsável</h3>
-                <MiniBarChart data={dashboardData.overdueByOwner} color="#dc2626" />
+                <MiniBarChart data={dashboardData.overdueByOwner} color={CHART_COLORS.risco} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Conversão</p>
                 <h3 className={UI_H2}>Taxa por temperatura</h3>
-                <MiniBarChart data={dashboardData.conversionByTemperature} color="#2563eb" formatValue={(value) => `${value}%`} />
+                <MiniBarChart data={dashboardData.conversionByTemperature} color={CHART_COLORS.positivo} showZeros aggregateRest={false} formatValue={(value) => `${value}%`} />
               </div>
             </div>
 
@@ -4578,22 +4649,22 @@ const App = () => {
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Marketing</p>
                 <h3 className={UI_H2}>Leads por canal</h3>
-                <MiniBarChart data={dashboardData.byChannel} color="#2563eb" />
+                <MiniBarChart data={dashboardData.byChannel} color={CHART_COLORS.volume} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Marketing</p>
                 <h3 className={UI_H2}>Campanhas</h3>
-                <MiniBarChart data={dashboardData.byCampaign} color="#7c3aed" />
+                <MiniBarChart data={dashboardData.byCampaign} color={CHART_COLORS.volume} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Funil por status</h3>
-                <MiniBarChart data={dashboardData.byStatus} color="#f97316" />
+                <MiniBarChart data={dashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Perfis de cliente</h3>
-                <MiniBarChart data={dashboardData.bySegment} color="#059669" />
+                <MiniBarChart data={dashboardData.bySegment} color={CHART_COLORS.volume} />
               </div>
             </div>
 
