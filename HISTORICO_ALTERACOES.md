@@ -15,6 +15,22 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Remoção de dois cards duplicados na seção Mídia paga
+
+**O quê:** Removidos os cards **"CPL"** e **"Orçamento estimado"** do Dashboard, e a segunda fileira da seção de mídia foi dissolvida: "Estimado por lead" e "Fechado por lead" passaram para a mesma grade dos demais, agora como `StatCard` (antes eram `div` com `UI_CARD`/`UI_STAT`, sem linha de apoio e com rótulo de cor diferente). A seção Mídia paga foi de 8 para 6 cards, em uma única grade.
+
+**Por quê:** Duplicidade pura, autorizada pelo usuário. `CPL` já aparecia no rodapé do card "Leads gerados" (`CPL R$ X`) e `estimatedReturn` já era o rodapé do card "ROAS estimado". Dois números idênticos em dois lugares da mesma seção.
+
+**Rodapés novos:** "Estimado por lead" recebeu `Orçado ÷ leads gerados` e "Fechado por lead" recebeu `Fechado ÷ leads gerados`, que é literalmente o cálculo em `App.js` linhas 2167-2168 (`estimatedReturn / leadsGenerated` e `closedReturn / leadsGenerated`). Conferido no código antes de escrever o rótulo.
+
+**Impacto:** Nenhum cálculo alterado. Nenhum dado deixou de existir — os dois valores removidos continuam visíveis nos rodapés dos cards onde já apareciam. Bundle diminuiu 67 B.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** parser JSX OK e `react-scripts build` com sucesso (237.87 kB, -67 B).
+
+**Próximo passo combinado com o usuário (ainda não iniciado):** revisar a representação visual dos números do Dashboard — gráficos de barra, pizza e afins no lugar de parte dos cards.
+
 ## 2026-09-02 — Claude (via Cowork) — Dashboard: separação entre Leads, Orçamentos e Mídia paga
 
 **O quê:** Reorganização visual das 6 fileiras de cards do topo da aba Dashboard. Antes eram 24 cards empilhados em 6 grids idênticos, sem título, com as naturezas intercaladas: fileira 1 lead, 2 orçamento, 3 mídia, 4 e 5 lead de novo, 6 mídia. Agora estão em três seções com cabeçalho e linha divisória:

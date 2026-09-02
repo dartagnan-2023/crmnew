@@ -4481,25 +4481,21 @@ const App = () => {
               <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
               <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
               <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>CPL</p>
-                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.cpl || 0)}</p>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Orçamento estimado</p>
-                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)}</p>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Estimado por lead</p>
-                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}</p>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Fechado por lead</p>
-                <p className={UI_STAT}>{formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}</p>
-              </div>
+              {/* Os cards "CPL" e "Orçamento estimado" foram removidos por duplicidade:
+                  CPL ja aparece no rodape de "Leads gerados" e o orcamento estimado
+                  ja e o rodape de "ROAS estimado". Nenhum calculo foi alterado. */}
+              <StatCard
+                label="Estimado por lead"
+                value={formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}
+                helper="Orçado ÷ leads gerados"
+                tone="blue"
+              />
+              <StatCard
+                label="Fechado por lead"
+                value={formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}
+                helper="Fechado ÷ leads gerados"
+                tone="emerald"
+              />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
