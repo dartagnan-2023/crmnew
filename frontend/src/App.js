@@ -354,6 +354,7 @@ const buildBudgetStatsSummary = (items) => {
     naoFeitos: 0,
     valorOrcado: 0,
     valorFechado: 0,
+    valorReprovado: 0,
   };
 
   items.forEach((item) => {
@@ -363,7 +364,13 @@ const buildBudgetStatsSummary = (items) => {
       acc.aprovados += 1;
       acc.valorFechado += Number(item.closed_value || 0);
     }
-    if (status === 'reprovado') acc.reprovados += 1;
+    if (status === 'reprovado') {
+      acc.reprovados += 1;
+      // Valor reprovado = valor ORCADO do que foi recusado. Em orcamento
+      // reprovado o closed_value fica zerado (nada foi fechado), entao usar
+      // closed_value aqui mostraria R$ 0,00 para sempre.
+      acc.valorReprovado += Number(item.budget_value || 0);
+    }
     if (status === 'nao feito') acc.naoFeitos += 1;
     acc.valorOrcado += Number(item.budget_value || 0);
   });
@@ -5011,7 +5018,7 @@ const App = () => {
               <StatCard label="Orçamentos" value={budgetStats.total || 0} helper={`${budgetStats.enviados || 0} enviados`} tone="slate" />
               <StatCard label="Taxa de Aprovação" value={`${budgetStats.taxaAprovacao || 0}%`} helper={`${budgetStats.aprovados || 0} aprovados`} tone="blue" />
               <StatCard label="Valor Orçado" value={formatCurrencyBR(budgetStats.valorOrcado || 0)} helper={`Ticket médio ${formatCurrencyBR(budgetStats.ticketMedio || 0)}`} tone="emerald" />
-              <StatCard label="Valor Fechado" value={formatCurrencyBR(budgetStats.valorFechado || 0)} helper={`${budgetStats.reprovados || 0} reprovados`} tone="amber" />
+              <StatCard label="Valor Fechado" value={formatCurrencyBR(budgetStats.valorFechado || 0)} helper={`${budgetStats.reprovados || 0} reprovados · ${formatCurrencyBR(budgetStats.valorReprovado || 0)}`} tone="amber" />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">

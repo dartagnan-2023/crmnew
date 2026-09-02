@@ -15,6 +15,20 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Valor reprovado no card "Valor Fechado"
+
+**O quê:** `buildBudgetStatsSummary` passa a acumular `valorReprovado` (soma de `budget_value` dos orçamentos com status `reprovado`), e o card "Valor Fechado" mostra esse valor ao lado da contagem: `N reprovados · R$ X`.
+
+**Por quê:** O card mostrava só a quantidade de reprovados, sem valor, impedindo comparar fechado contra perdido.
+
+**Decisão de qual campo somar:** usa `budget_value`, não `closed_value`. Verificado em produção antes de escrever o código: dos 1.101 orçamentos, 7 estão como reprovado; a soma de `budget_value` deles é R$ 10.687,93 e a soma de `closed_value` é R$ 0,00. Orçamento reprovado não fecha valor, então somar `closed_value` mostraria R$ 0,00 permanentemente. Registrado também em comentário no código.
+
+**Impacto:** Aditivo. Nenhum campo existente foi alterado, nenhuma chamada de API, nenhuma escrita em planilha. O número obedece aos filtros do módulo, igual aos demais cards.
+
+**Rollback:** `git revert <commit>`. Alteração de exibição em um único arquivo de frontend, sem efeito em dado gravado.
+
+**Validação:** parser JSX OK e `react-scripts build` executado com sucesso antes do push. Conferência do número em produção após o deploy.
+
 ## 2026-09-02 — Claude (via Cowork) — Filtros de orçamentos e marcação de representante
 
 **O quê:** Cinco alterações em `frontend/src/App.js`, todas no módulo de Orçamentos.
