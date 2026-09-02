@@ -15,6 +15,32 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Filtros de orçamentos e marcação de representante
+
+**O quê:** Cinco alterações em `frontend/src/App.js`, todas no módulo de Orçamentos.
+
+1. Opção fixa **"Representante"** na lista do campo *Orçamentista*, tanto no formulário quanto no filtro. Constantes `ESTIMATOR_REPRESENTANTE_ID = 'representante'` e `ESTIMATOR_REPRESENTANTE_LABEL`. Quando o orçamento entra por representante, o time marca essa opção; assim dá para contar depois quantos vieram por esse caminho.
+2. Filtro de vendedor ganhou o modo **exclusão**: além de "Somente um vendedor", agora existe "Excluir um vendedor" (`exceto:<id>`), atendendo ao pedido "todos os vendedores, exceto Osnil".
+3. Campos **Data inicial / Data final sempre visíveis** na barra de filtros. Antes só apareciam depois de escolher "Período personalizado" no seletor, e a equipe não encontrava o filtro por data. Preencher qualquer uma das datas troca o período para `custom` automaticamente.
+4. Campo **Representante** movido do rodapé do modal para o lado de *Vendedor* e *Orçamentista*. Medição na tela real: o modal tem 1071px de conteúdo com 854px visíveis, e o campo começava em 845px — nascia na borda inferior.
+5. Correção: **"Limpar filtros"** não zerava `budgetRepresentanteFilter`. Zera agora.
+
+**Por quê:** Pedido direto da diretoria. Os itens 3 e 4 são de descoberta (a funcionalidade existia, ninguém achava); os itens 1 e 2 são funcionalidade nova; o item 5 é bug introduzido na entrega anterior.
+
+**Impacto:**
+- Nenhuma funcionalidade removida. Nenhuma alteração de backend, de planilha ou de contrato de API.
+- A sentinela `'representante'` grava em `estimator_id`. Os ids reais dos usuários são numéricos ("1" a "6"), verificado em produção via `/api/users` — não há colisão.
+- O backend grava `estimator_id`/`estimator_name` sem validar contra a tabela de usuários (`server.js` ~4374, ~4450), então a sentinela persiste sem erro.
+- **Ponto de atenção:** `mcpNormalizeBudget` (`server.js` ~3224) monta `owner_id: budget.owner_id || budget.estimator_id`. Um orçamento sem vendedor e marcado como "Representante" sairia com `owner_id: "representante"` no payload do MCP. O MCP ainda não está conectado; anotado para quando for.
+- Orçamentos **sem vendedor** continuam aparecendo no filtro "Todos, exceto X" — decisão explícita do usuário, registrada em comentário no código.
+
+**Rollback:** `git revert <commit>`. Alteração restrita a um arquivo de frontend; reverter e reimplantar devolve a tela ao estado anterior sem tocar em dado gravado. Orçamentos já marcados como "Representante" manteriam `estimator_name: "Representante"` na planilha, visível na tabela, apenas sem a opção no seletor.
+
+**Validação:**
+- `@babel/parser` com plugin JSX: sintaxe OK. O teste foi provado válido injetando um `<th>` quebrado numa cópia — o parser acusou o erro (`node --check` não acusa, é falso positivo conhecido).
+- **Build real** `react-scripts build` executado com sucesso (237.18 kB gzip); apenas os warnings de lint pré-existentes.
+- Estado anterior verificado em produção antes de mexer: deploy `32ac76e` concluído com sucesso, bundle servido contendo o campo, 1.101 orçamentos com a coluna `representante` presente e 0 preenchidos.
+
 ## 2026-09-01 — Claude (via Cowork) — Campo "Representante" nos orçamentos
 
 **O quê:** Novo campo `representante` no orçamento. Opcional, preenchido à mão pelo orçamentista, com autocompletar dos valores já usados.

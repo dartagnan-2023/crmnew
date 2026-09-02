@@ -30,6 +30,13 @@ const SLA_TARGET_LABELS = {
   quente: '30 min',
 };
 
+// Orçamento que entrou por representante: o time marca o campo "Orçamentista"
+// com este valor fixo. Assim dá para contar depois quantos orçamentos vieram
+// por representante. Os ids dos usuários são numéricos ("1".."6"), então esta
+// sentinela de texto não colide com ninguém.
+const ESTIMATOR_REPRESENTANTE_ID = 'representante';
+const ESTIMATOR_REPRESENTANTE_LABEL = 'Representante';
+
 const BUDGET_STATUS_OPTIONS = [
   { value: 'novo', label: 'Novo' },
   { value: 'em_orcamento', label: 'Em orçamento' },
@@ -2366,8 +2373,15 @@ const App = () => {
       if (budgetStatusFilter !== 'all' && normalizeOptionValue(budget.status) !== normalizeOptionValue(budgetStatusFilter)) {
         return false;
       }
-      if (budgetOwnerFilter !== 'all' && String(budget.owner_id || '') !== String(budgetOwnerFilter)) {
-        return false;
+      if (budgetOwnerFilter !== 'all') {
+        const ownerId = String(budget.owner_id || '');
+        if (budgetOwnerFilter.startsWith('exceto:')) {
+          // "Todos, exceto X". Orcamento sem vendedor definido CONTINUA aparecendo:
+          // ele nao e do X, e o filtro promete apenas tirar o X.
+          if (ownerId === budgetOwnerFilter.slice('exceto:'.length)) return false;
+        } else if (ownerId !== String(budgetOwnerFilter)) {
+          return false;
+        }
       }
       if (budgetEstimatorFilter !== 'all' && String(budget.estimator_id || '') !== String(budgetEstimatorFilter)) {
         return false;
@@ -4886,6 +4900,7 @@ const App = () => {
                       setBudgetOwnerFilter('all');
                       setBudgetEstimatorFilter('all');
                       setBudgetLossReasonFilter('all');
+                      setBudgetRepresentanteFilter('');
                       setBudgetSearch('');
                     }}
                     className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
@@ -4911,15 +4926,23 @@ const App = () => {
                   </select>
                   <select value={budgetOwnerFilter} onChange={(e) => setBudgetOwnerFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os vendedores</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
+                    <optgroup label="Somente um vendedor">
+                      {users.map((u) => (
+                        <option key={`somente-${u.id}`} value={u.id}>{u.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Excluir um vendedor">
+                      {users.map((u) => (
+                        <option key={`exceto-${u.id}`} value={`exceto:${u.id}`}>Todos, exceto {u.name}</option>
+                      ))}
+                    </optgroup>
                   </select>
                   <select value={budgetEstimatorFilter} onChange={(e) => setBudgetEstimatorFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os orçamentistas</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
+                    <option value={ESTIMATOR_REPRESENTANTE_ID}>{ESTIMATOR_REPRESENTANTE_LABEL}</option>
                   </select>
                   <select value={budgetLossReasonFilter} onChange={(e) => setBudgetLossReasonFilter(e.target.value)} className={UI_INPUT_PILL}>
                     <option value="all">Todos os motivos de perda</option>
@@ -4949,18 +4972,38 @@ const App = () => {
                   </datalist>
                 </div>
 
-                {budgetPeriod === 'custom' && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
-                      <input type="date" value={budgetStartDate} onChange={(e) => setBudgetStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
-                    </div>
-                    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
-                      <input type="date" value={budgetEndDate} onChange={(e) => setBudgetEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white" />
-                    </div>
+                {/* Datas sempre visiveis. Antes ficavam escondidas atras da opcao
+                    "Periodo personalizado" do seletor e o time nao achava o filtro por data.
+                    Preencher qualquer uma das datas ja troca o periodo para personalizado. */}
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
+                    <input
+                      type="date"
+                      value={budgetStartDate}
+                      onChange={(e) => {
+                        setBudgetStartDate(e.target.value);
+                        if (e.target.value) setBudgetPeriod('custom');
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    />
                   </div>
-                )}
+                  <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
+                    <input
+                      type="date"
+                      value={budgetEndDate}
+                      onChange={(e) => {
+                        setBudgetEndDate(e.target.value);
+                        if (e.target.value) setBudgetPeriod('custom');
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-ink-soft">
+                  Deixe as duas datas em branco para usar o periodo do seletor acima. Preencher uma delas filtra de dia a dia.
+                </p>
               </div>
             </div>
 
@@ -6640,11 +6683,15 @@ const App = () => {
                     <select
                       value={budgetForm.estimator_id || ''}
                       onChange={(e) => {
-                        const selectedUser = users.find((u) => String(u.id) === String(e.target.value));
+                        const valor = e.target.value;
+                        const selectedUser = users.find((u) => String(u.id) === String(valor));
                         setBudgetForm({
                           ...budgetForm,
-                          estimator_id: e.target.value,
-                          estimator_name: selectedUser?.name || '',
+                          estimator_id: valor,
+                          estimator_name:
+                            valor === ESTIMATOR_REPRESENTANTE_ID
+                              ? ESTIMATOR_REPRESENTANTE_LABEL
+                              : (selectedUser?.name || ''),
                         });
                       }}
                       className={UI_INPUT_BG}
@@ -6653,7 +6700,25 @@ const App = () => {
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
+                      <option value={ESTIMATOR_REPRESENTANTE_ID}>{ESTIMATOR_REPRESENTANTE_LABEL}</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className={UI_LABEL}>Representante</label>
+                    <input
+                      type="text"
+                      list="lista-representantes-form"
+                      value={budgetForm.representante || ''}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, representante: e.target.value })}
+                      className={UI_INPUT}
+                      placeholder="Deixe em branco se não houver"
+                    />
+                    <datalist id="lista-representantes-form">
+                      {representanteOptions.map((nome) => (
+                        <option key={nome} value={nome} />
+                      ))}
+                    </datalist>
+                    <span className="text-[11px] text-ink-soft">Opcional. Sugere os representantes já registrados; escolher da lista mantém a grafia igual e as métricas confiáveis.</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -6703,23 +6768,6 @@ const App = () => {
                     <label className={UI_LABEL}>Campanha</label>
                     <input type="text" value={budgetForm.campaign || ''} onChange={(e) => setBudgetForm({ ...budgetForm, campaign: e.target.value })} className={UI_INPUT} />
                   </div>
-                </div>
-                <div>
-                  <label className={UI_LABEL}>Representante</label>
-                  <input
-                    type="text"
-                    list="lista-representantes-form"
-                    value={budgetForm.representante || ''}
-                    onChange={(e) => setBudgetForm({ ...budgetForm, representante: e.target.value })}
-                    className={UI_INPUT}
-                    placeholder="Deixe em branco se não houver"
-                  />
-                  <datalist id="lista-representantes-form">
-                    {representanteOptions.map((nome) => (
-                      <option key={nome} value={nome} />
-                    ))}
-                  </datalist>
-                  <span className="text-[11px] text-ink-soft">Sugere os representantes já registrados. Escolher da lista mantém a grafia igual e as métricas confiáveis.</span>
                 </div>
                 <div>
                   <label className={UI_LABEL}>Observações</label>
