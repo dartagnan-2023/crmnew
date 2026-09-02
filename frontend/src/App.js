@@ -2122,7 +2122,11 @@ const App = () => {
       const date = parseLeadDate(budget.requested_at || budget.created_at || budget.closed_at);
       const month = date ? monthKey(date) : '';
 
-      if (!group.estimated && !['reprovado', 'nao feito'].includes(status)) {
+      // CORRECAO: o status gravado e 'nao_feito' (underscore), como declarado em
+      // BUDGET_STATUS_OPTIONS. A comparacao antiga usava 'nao feito' (espaco) e
+      // nunca casava, entao orcamento nao feito entrava no valor estimado e
+      // inflava o ROAS estimado do canal.
+      if (!group.estimated && !['reprovado', 'nao_feito'].includes(status)) {
         group.estimated += budgetValue;
         if (estimatedByMonth.has(month)) {
           estimatedByMonth.set(month, (estimatedByMonth.get(month) || 0) + budgetValue);
@@ -2444,6 +2448,53 @@ const App = () => {
   ]);
 
   const budgetStats = useMemo(() => buildBudgetStatsSummary(budgetFilteredItems), [budgetFilteredItems]);
+
+  // Exporta exatamente o que esta na tela: usa budgetFilteredItems, entao
+  // respeita todos os filtros ativos do modulo (periodo, datas, status,
+  // vendedor, exceto-vendedor, orcamentista, representante e busca).
+  const exportBudgetsXlsx = () => {
+    if (!budgetFilteredItems.length) {
+      showToast('Nenhum orçamento para exportar com os filtros atuais', 'error');
+      return;
+    }
+
+    const rotuloStatus = (valor) =>
+      BUDGET_STATUS_OPTIONS.find((opt) => opt.value === valor)?.label || valor || '';
+    const rotuloPerda = (valor) =>
+      BUDGET_LOSS_REASON_OPTIONS.find((opt) => opt.value === valor)?.label || valor || '';
+    // formatDateBR devolve '-' quando vazio, o que poluiria a planilha.
+    const dataOuVazio = (valor) => (valor ? formatDateBR(valor) : '');
+
+    const linhas = budgetFilteredItems.map((b) => ({
+      ID: b.id || '',
+      'ID externo (ERP)': b.external_id || '',
+      Cliente: b.client_name || '',
+      Empresa: b.company || '',
+      Status: rotuloStatus(b.status),
+      Vendedor: b.owner_name || '',
+      Orçamentista: b.estimator_name || '',
+      Representante: b.representante || '',
+      Filial: b.branch || '',
+      'Pedido do cliente': b.customer_order || '',
+      'Plano de pagamento': b.payment_terms || '',
+      'Motivo da perda': rotuloPerda(b.loss_reason),
+      Canal: b.channel_name || '',
+      Campanha: b.campaign || '',
+      // Valores como numero, para a planilha somar sem conversao manual.
+      'Valor orçado': Number(b.budget_value || 0),
+      'Valor fechado': Number(b.closed_value || 0),
+      'Solicitado em': dataOuVazio(b.requested_at),
+      'Enviado em': dataOuVazio(b.sent_at),
+      'Fechado em': dataOuVazio(b.closed_at),
+      Observações: b.notes || '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Orçamentos');
+    XLSX.writeFile(wb, `orcamentos-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showToast(`${linhas.length} orçamento(s) exportado(s)`, 'success');
+  };
 
   const budgetDashboardData = useMemo(() => {
     const statusMap = new Map();
@@ -4892,6 +4943,12 @@ const App = () => {
                     {importingBudgets ? 'Importando...' : 'Importar planilha'}
                   </button>
                   <button
+                    onClick={exportBudgetsXlsx}
+                    className="px-4 py-3 rounded-2xl border border-line bg-surface-card text-ink font-semibold shadow-sm hover:bg-surface-low transition"
+                  >
+                    Exportar planilha
+                  </button>
+                  <button
                     onClick={openNewBudgetModal}
                     className="px-4 py-3 rounded-2xl bg-brand-600 text-white font-semibold shadow hover:bg-brand-700 transition"
                   >
@@ -5088,6 +5145,12 @@ const App = () => {
                     className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium disabled:opacity-60"
                   >
                     {importingBudgets ? 'Importando...' : 'Importar'}
+                  </button>
+                  <button
+                    onClick={exportBudgetsXlsx}
+                    className="px-4 py-2 rounded-xl border border-line bg-surface-card text-ink text-sm font-medium"
+                  >
+                    Exportar
                   </button>
                   <button onClick={openNewBudgetModal} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium">Cadastrar</button>
                 </div>

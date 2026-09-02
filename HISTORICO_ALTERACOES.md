@@ -15,6 +15,26 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Correção do ROAS estimado e exportação de orçamentos
+
+**O quê:**
+1. **Correção (autorizada pelo usuário).** No dashboard de mídia, `!['reprovado', 'nao feito'].includes(status)` passou a `'nao_feito'`. Era o mesmo erro de underscore corrigido antes no somatório: como `'nao feito'` nunca casava, orçamentos com status `nao_feito` estavam sendo somados ao **valor estimado** do canal, inflando o ROAS estimado.
+2. **Nova função `exportBudgetsXlsx`.** Exporta `budgetFilteredItems` — ou seja, exatamente o que está na tela, respeitando período, datas, status, vendedor (inclusive o modo "exceto"), orçamentista, representante e busca. Gera `.xlsx` via SheetJS (`XLSX`), já presente no projeto e usado na exportação de contatos. Arquivo `orcamentos-AAAA-MM-DD.xlsx`, aba "Orçamentos".
+3. **Dois botões** ("Exportar planilha" no cabeçalho do módulo e "Exportar" na barra da tabela operacional), ambos chamando a mesma função.
+
+**Colunas (20):** ID, ID externo (ERP), Cliente, Empresa, Status, Vendedor, Orçamentista, Representante, Filial, Pedido do cliente, Plano de pagamento, Motivo da perda, Canal, Campanha, Valor orçado, Valor fechado, Solicitado em, Enviado em, Fechado em, Observações.
+
+**Decisões de formato:** Status e Motivo da perda saem com o rótulo legível ("Em orçamento", não `em_orcamento`), resolvidos por `BUDGET_STATUS_OPTIONS` / `BUDGET_LOSS_REASON_OPTIONS`. Os dois campos de valor saem como **número**, não texto, para a planilha somar e permitir tabela dinâmica. Datas usam `formatDateBR`, mas com guarda: `formatDateBR` devolve `'-'` quando vazio, o que poluiria a planilha, então campo vazio sai vazio.
+
+**Impacto:**
+- **O ROAS estimado do dashboard de mídia vai cair** para o canal que tiver orçamento "não feito" (na base atual, 2 registros somando R$ 16.533,06). Essa queda é a correção, não uma regressão: o número anterior estava inflado.
+- A exportação é somente leitura. Não escreve em planilha, não chama API, roda inteiramente no navegador a partir dos dados já carregados.
+- Antes desta entrega o sistema não tinha nenhuma exportação de orçamentos.
+
+**Rollback:** `git revert <commit>`. Um único arquivo de frontend; reverter devolve o botão e o cálculo ao estado anterior sem tocar em dado gravado.
+
+**Validação:** parser JSX OK e `react-scripts build` com sucesso (237.73 kB, +465 B).
+
 ## 2026-09-02 — Claude (via Cowork) — Valor de "Enviado" e "Não feito" + correção do contador de não feitos
 
 **O quê:**
