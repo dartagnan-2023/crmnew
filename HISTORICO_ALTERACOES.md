@@ -15,6 +15,22 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Correção: "sem motivo" contaminava o gráfico de perdas
+
+**O quê:** Em `budgetDashboardData`, a condição que deveria excluir orçamentos sem motivo de perda era `normalizeOptionValue(lossReason) !== 'sem motivo'` (com espaço), enquanto o fallback atribuído logo acima é `'sem_motivo'` (com underscore). `normalizeOptionValue` não troca underscore por espaço, então a condição era **sempre verdadeira** e todo orçamento sem motivo entrava no gráfico de perdas como se fosse um motivo. Passou a comparar contra `['sem_motivo', 'sem motivo', '']`.
+
+**Terceira ocorrência da mesma família de bug hoje**, depois de `nao_feito` e `sem_perfil`: valor de fallback com underscore comparado contra texto com espaço.
+
+**Gravidade medida em produção, no momento da correção:** a barra `sem_motivo` trazia **781 orçamentos e R$ 3.078.302,79** — várias vezes a soma de todos os motivos reais juntos (Prazo R$ 16.528,00; Preço R$ 9.167,13; Sem retorno R$ 1.725,46; Outros R$ 1.282,79; Escopo R$ 20,00). O gráfico de perdas era ilegível: uma barra cheia e cinco fatias invisíveis.
+
+**Por que só apareceu agora:** o defeito é antigo e já estava visível como contagem (`sem_motivo 787`), mas passava despercebido entre números de mesma ordem de grandeza. Ao passar a barra para **valor**, a distorção ficou impossível de ignorar. Foi encontrado na conferência em produção da etapa 2, não em revisão de código.
+
+**Impacto:** O gráfico "Perdas por motivo" passa a mostrar apenas motivos reais. Nenhum dado deixou de existir — orçamento sem motivo simplesmente não é mais contado como motivo.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** parser JSX OK, build com sucesso (238.99 kB, +7 B) e conferência dos motivos em produção após o deploy.
+
 ## 2026-09-02 — Claude (via Cowork) — Gráficos, etapa 2: análise de orçamentos
 
 **Correção de premissa registrada:** eu havia dito ao usuário que "a seção Orçamentos não tem nenhum gráfico". Isso vale para a **aba Dashboard**; a **aba Orçamentos** já tinha 6 gráficos, alimentados por `budgetDashboardData` e pelos filtros do módulo. A etapa 2 reformou esses 6 e acrescentou 3, em vez de duplicar gráficos numa aba nova.

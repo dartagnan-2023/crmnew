@@ -2610,7 +2610,14 @@ const App = () => {
       const representante = String(budget.representante || '').trim() || 'Sem representante';
 
       statusMap.set(statusNorm || 'sem_status', (statusMap.get(statusNorm || 'sem_status') || 0) + 1);
-      if (normalizeOptionValue(lossReason) !== 'sem motivo') {
+      // BUG CORRIGIDO (mesma familia do 'nao_feito' e do 'sem_perfil'):
+      // o fallback usado acima e 'sem_motivo' com underscore, e a comparacao
+      // era contra 'sem motivo' com espaco. normalizeOptionValue nao troca
+      // underscore por espaco, entao a condicao era sempre verdadeira e
+      // orcamento SEM motivo de perda entrava no grafico de perdas como se
+      // fosse um motivo. Medido em producao: 781 registros, R$ 3.078.302,79 —
+      // varias vezes maior que todos os motivos reais somados.
+      if (!['sem_motivo', 'sem motivo', ''].includes(normalizeOptionValue(lossReason))) {
         lossReasonMap.set(lossReason, (lossReasonMap.get(lossReason) || 0) + 1);
         // Peso financeiro do motivo: usa o valor ORCADO, porque orcamento
         // perdido nao tem valor fechado (conferido na base: closed_value = 0
