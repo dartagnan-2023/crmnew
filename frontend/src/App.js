@@ -4402,25 +4402,22 @@ const App = () => {
               </div>
             </div>
 
+            <div className="pt-2">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className={UI_EYEBROW}>Comercial</p>
+                  <h3 className="mt-1 text-xl font-black text-ink">Leads</h3>
+                </div>
+                <div className="flex-1 h-px bg-line" />
+              </div>
+              <p className="mt-1 text-xs text-ink-soft">Base de contatos, conversão e pipeline.</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Leads Totais" value={dashboardLocalStats.total || 0} helper={`${dashboardData.leadsThisMonth || 0} no mês`} tone="slate" />
               <StatCard label="Taxa de Conversão" value={`${dashboardLocalStats.taxaConversao || 0}%`} helper={`${dashboardLocalStats.ganhos || 0} ganhos`} tone="blue" />
               <StatCard label="Valor Convertido" value={formatCurrencyBR(dashboardLocalStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
               <StatCard label="Pipeline Ativo" value={formatCurrencyBR(dashboardLocalStats.valorNegociacao || 0)} helper={`${dashboardLocalStats.qtdNegociacao || 0} em negociação`} tone="amber" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Orçamentos" value={dashboardBudgetStats.total || 0} helper={`${dashboardBudgetStats.enviados || 0} enviados`} tone="slate" />
-              <StatCard label="Taxa de Aprovação" value={`${dashboardBudgetStats.taxaAprovacao || 0}%`} helper={`${dashboardBudgetStats.aprovados || 0} aprovados`} tone="blue" />
-              <StatCard label="Valor Orçado" value={formatCurrencyBR(dashboardBudgetStats.valorOrcado || 0)} helper={`${dashboardBudgetStats.reprovados || 0} reprovados`} tone="emerald" />
-              <StatCard label="Valor Fechado" value={formatCurrencyBR(dashboardBudgetStats.valorFechado || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardBudgetStats.ticketMedio || 0)}`} tone="amber" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
-              <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
-              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
-              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -4448,6 +4445,42 @@ const App = () => {
               <StatCard label="Leads mornos" value={dashboardData.byTemperature.find((item) => item.label === 'Morno')?.value || 0} helper="Em evolução" tone="amber" />
               <StatCard label="Leads frios" value={dashboardData.byTemperature.find((item) => item.label === 'Frio')?.value || 0} helper="Base de prospecção" tone="slate" />
               <StatCard label="SLA estourado" value={dashboardData.overdueByOwner.reduce((sum, item) => sum + Number(item.value || 0), 0)} helper="Leads fora do prazo" tone="blue" />
+            </div>
+
+            <div className="pt-2">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className={UI_EYEBROW}>Orçamentação</p>
+                  <h3 className="mt-1 text-xl font-black text-ink">Orçamentos</h3>
+                </div>
+                <div className="flex-1 h-px bg-line" />
+              </div>
+              <p className="mt-1 text-xs text-ink-soft">Produção de orçamentos e valores aprovados.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Orçamentos" value={dashboardBudgetStats.total || 0} helper={`${dashboardBudgetStats.enviados || 0} enviados`} tone="slate" />
+              <StatCard label="Taxa de Aprovação" value={`${dashboardBudgetStats.taxaAprovacao || 0}%`} helper={`${dashboardBudgetStats.aprovados || 0} aprovados`} tone="blue" />
+              <StatCard label="Valor Orçado" value={formatCurrencyBR(dashboardBudgetStats.valorOrcado || 0)} helper={`${dashboardBudgetStats.reprovados || 0} reprovados`} tone="emerald" />
+              <StatCard label="Valor Fechado" value={formatCurrencyBR(dashboardBudgetStats.valorFechado || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardBudgetStats.ticketMedio || 0)}`} tone="amber" />
+            </div>
+
+            <div className="pt-2">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className={UI_EYEBROW}>Marketing</p>
+                  <h3 className="mt-1 text-xl font-black text-ink">Mídia paga</h3>
+                </div>
+                <div className="flex-1 h-px bg-line" />
+              </div>
+              <p className="mt-1 text-xs text-ink-soft">Investimento em campanhas e retorno sobre o gasto.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
+              <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
+              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
+              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

@@ -15,6 +15,24 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Dashboard: separação entre Leads, Orçamentos e Mídia paga
+
+**O quê:** Reorganização visual das 6 fileiras de cards do topo da aba Dashboard. Antes eram 24 cards empilhados em 6 grids idênticos, sem título, com as naturezas intercaladas: fileira 1 lead, 2 orçamento, 3 mídia, 4 e 5 lead de novo, 6 mídia. Agora estão em três seções com cabeçalho e linha divisória:
+
+- **Leads** (Comercial) — Leads Totais, Taxa de Conversão, Valor Convertido, Pipeline Ativo, Prospects, Clientes, Perdidos, Follow-up vencido, Leads quentes, mornos, frios, SLA estourado.
+- **Orçamentos** (Orçamentação) — Orçamentos, Taxa de Aprovação, Valor Orçado, Valor Fechado.
+- **Mídia paga** (Marketing) — Investimento, Leads gerados, ROAS estimado, ROAS fechado, CPL, Orçamento estimado, Estimado por lead, Fechado por lead.
+
+**Por quê:** Pedido do usuário a partir de print da tela: "o que é lead e o que é orçamento tem que ficar separado".
+
+**Impacto:** Puramente de layout. **Nenhum card foi removido, nenhum valor recalculado, nenhuma fonte de dado alterada** — os mesmos 24 cards, com as mesmas expressões, apenas reordenados e agrupados. A reorganização foi feita por script que extraiu os 6 blocos existentes e os remontou na nova ordem, sem redigitar o conteúdo dos cards, justamente para não introduzir divergência.
+
+**Redundâncias observadas, não alteradas:** "CPL" aparece duas vezes (como helper do card "Leads gerados" e como card próprio na seção de mídia); "Orçamento estimado" repete o valor que já é o helper do card "ROAS estimado". Nada foi removido sem autorização; anotado para decisão.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação:** parser JSX OK e `react-scripts build` com sucesso (237.93 kB, +202 B). Conferência visual em produção após o deploy.
+
 ## 2026-09-02 — Claude (via Cowork) — Correção do ROAS estimado e exportação de orçamentos
 
 **O quê:**
