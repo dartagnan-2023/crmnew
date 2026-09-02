@@ -355,11 +355,16 @@ const buildBudgetStatsSummary = (items) => {
     valorOrcado: 0,
     valorFechado: 0,
     valorReprovado: 0,
+    valorEnviado: 0,
+    valorNaoFeito: 0,
   };
 
   items.forEach((item) => {
     const status = normalizeOptionValue(item.status);
-    if (status === 'enviado') acc.enviados += 1;
+    if (status === 'enviado') {
+      acc.enviados += 1;
+      acc.valorEnviado += Number(item.budget_value || 0);
+    }
     if (status === 'aprovado') {
       acc.aprovados += 1;
       acc.valorFechado += Number(item.closed_value || 0);
@@ -371,7 +376,10 @@ const buildBudgetStatsSummary = (items) => {
       // closed_value aqui mostraria R$ 0,00 para sempre.
       acc.valorReprovado += Number(item.budget_value || 0);
     }
-    if (status === 'nao feito') acc.naoFeitos += 1;
+    if (status === 'nao_feito') {
+      acc.naoFeitos += 1;
+      acc.valorNaoFeito += Number(item.budget_value || 0);
+    }
     acc.valorOrcado += Number(item.budget_value || 0);
   });
 
@@ -5015,7 +5023,17 @@ const App = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Orçamentos" value={budgetStats.total || 0} helper={`${budgetStats.enviados || 0} enviados`} tone="slate" />
+              <StatCard
+                label="Orçamentos"
+                value={budgetStats.total || 0}
+                helper={(
+                  <>
+                    <span className="block">{`${budgetStats.enviados || 0} enviados · ${formatCurrencyBR(budgetStats.valorEnviado || 0)}`}</span>
+                    <span className="block">{`${budgetStats.naoFeitos || 0} não feitos · ${formatCurrencyBR(budgetStats.valorNaoFeito || 0)}`}</span>
+                  </>
+                )}
+                tone="slate"
+              />
               <StatCard label="Taxa de Aprovação" value={`${budgetStats.taxaAprovacao || 0}%`} helper={`${budgetStats.aprovados || 0} aprovados`} tone="blue" />
               <StatCard label="Valor Orçado" value={formatCurrencyBR(budgetStats.valorOrcado || 0)} helper={`Ticket médio ${formatCurrencyBR(budgetStats.ticketMedio || 0)}`} tone="emerald" />
               <StatCard label="Valor Fechado" value={formatCurrencyBR(budgetStats.valorFechado || 0)} helper={`${budgetStats.reprovados || 0} reprovados · ${formatCurrencyBR(budgetStats.valorReprovado || 0)}`} tone="amber" />

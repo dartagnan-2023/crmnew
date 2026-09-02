@@ -15,6 +15,25 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Valor de "Enviado" e "Não feito" + correção do contador de não feitos
+
+**O quê:**
+1. **Correção de bug.** `buildBudgetStatsSummary` comparava `status === 'nao feito'` (com espaço), mas o valor gravado é `nao_feito` (com underscore) — é o `value` declarado em `BUDGET_STATUS_OPTIONS`. `normalizeOptionValue` só remove acento, apara espaços das pontas e baixa a caixa; **não** troca underscore por espaço. Resultado: o contador `naoFeitos` era **sempre 0**. Passou a comparar `'nao_feito'`.
+2. `valorEnviado` e `valorNaoFeito` acumulados a partir de `budget_value`.
+3. O card "Orçamentos" da aba Orçamentos passou a exibir duas linhas de apoio: `N enviados · R$ X` e `M não feitos · R$ Y`. O `helper` do `StatCard` agora aceita nó React (dois `<span className="block">`), não só texto.
+
+**Por quê:** Pedido da diretoria para fechar a régua de valor por status, junto com o valor reprovado. O bug 1 apareceu ao conferir os dados antes de exibir: sem corrigir, o card mostraria "0 não feitos · R$ 0,00", número falso.
+
+**Distribuição verificada na base no momento da alteração (1.100 registros):** em_orcamento 1.048 (R$ 3.923.192,61) · aprovado 31 (R$ 65.987,90 orçado / R$ 65.146,67 fechado) · novo 8 (R$ 192.871,07) · reprovado 7 (R$ 10.687,93) · enviado 4 (R$ 9.747,10) · nao_feito 2 (R$ 16.533,06). Em todos os status exceto "aprovado", `closed_value` é zero — por isso o valor exibido é sempre o **orçado**.
+
+**Impacto:** O contador de "não feito" sai de 0 para o número real (2 na base atual). Nenhuma escrita, nenhuma alteração de API ou planilha. Os cards do Dashboard (`dashboardBudgetStats`, linhas ~4354) usam o mesmo somatório e portanto também passam a contar "não feito" corretamente, mas o layout deles não foi alterado.
+
+**BUG CONHECIDO, AINDA NÃO CORRIGIDO (autorização pendente):** a mesma comparação errada existe na linha ~2117, no dashboard de mídia: `!['reprovado', 'nao feito'].includes(status)`. Como `'nao feito'` nunca casa, os orçamentos "não feito" (**R$ 16.533,06** hoje) estão sendo somados ao **valor estimado**, inflando o ROAS estimado do canal deles. Não corrigido nesta entrega porque altera um número que a diretoria já acompanha — corrigir fará o ROAS estimado cair. Aguardando decisão.
+
+**Rollback:** `git revert <commit>`. Exibição e cálculo em memória, em um único arquivo de frontend.
+
+**Validação:** parser JSX OK, `react-scripts build` com sucesso (237.27 kB, +69 B), e conferência dos valores em produção contra recálculo independente feito direto sobre a API.
+
 ## 2026-09-02 — Claude (via Cowork) — Valor reprovado no card "Valor Fechado"
 
 **O quê:** `buildBudgetStatsSummary` passa a acumular `valorReprovado` (soma de `budget_value` dos orçamentos com status `reprovado`), e o card "Valor Fechado" mostra esse valor ao lado da contagem: `N reprovados · R$ X`.
