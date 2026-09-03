@@ -25,7 +25,7 @@ Ordem: mais recente primeiro.
 
 **Como foi publicado — registrar para a próxima vez:** o push por linha de comando foi **recusado pelo GitHub**: `refusing to allow a Personal Access Token to create or update workflow .github/workflows/deploy.yml without workflow scope`. O token "CRM - Claude" tem permissão de Contents, não de Workflows. Com autorização explícita do usuário, o commit foi feito pelo **editor web do GitHub** na sessão dele. Depois disso, o arquivo publicado foi conferido contra a cópia local: **md5 idêntico** (`9d2a7df01db756eaa954a501cfd41294`), `diff` vazio e YAML válido com os três passos na ordem certa.
 
-**Pendência:** enquanto o token não receber a permissão **Workflows: Read and write**, qualquer alteração futura em pipeline vai exigir esse mesmo desvio manual.
+**Pendência RESOLVIDA no mesmo dia:** o usuário concedeu **Workflows: Read and write** ao token (a tela do GitHub exigiu confirmação de identidade por e-mail, feita por ele — Claude não digita código de autenticação nem senha). Verificado empurrando uma alteração no `deploy.yml` para um branch descartável `teste-permissao-workflow`: o push foi **aceito**. O branch foi apagado do GitHub (confirmado: HTTP 404) e o arquivo local voltou ao md5 original `9d2a7df01db756eaa954a501cfd41294`. O teste usou branch justamente para **não tocar na `main`** e não disparar deploy — conferido: os runs continuam sendo apenas os da `main`. Alterações futuras em pipeline já podem ser publicadas direto por linha de comando.
 
 **Rollback:** `git revert 9b3ea85` — mas o revert também precisará ser publicado pelo editor web, pela mesma restrição de escopo.
 
