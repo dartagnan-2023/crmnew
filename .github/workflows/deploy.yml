@@ -13,6 +13,25 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     
+    # A porta 22 do VPS ja ficou inacessivel a partir dos runners do GitHub
+    # duas vezes em 02/09/2026 ("dial tcp ***:22: i/o timeout"), sempre de forma
+    # intermitente: o site seguia no ar em 443 e a reexecucao manual do job
+    # passava. Este passo espera a porta responder antes de tentar o deploy,
+    # em vez de falhar na primeira negativa e exigir alguem reexecutando na mao.
+    - name: Aguardar SSH do VPS responder
+      run: |
+        for tentativa in 1 2 3 4 5 6; do
+          if timeout 10 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.VPS_HOST }}/22" 2>/dev/null; then
+            echo "✅ Porta 22 respondeu na tentativa $tentativa."
+            exit 0
+          fi
+          echo "⏳ Tentativa $tentativa de 6: porta 22 nao respondeu. Nova checagem em 30s..."
+          sleep 30
+        done
+        echo "❌ A porta 22 do VPS nao respondeu em 6 tentativas (cerca de 3 minutos)."
+        echo "   O site em producao NAO foi alterado: o deploy nem chegou a comecar."
+        exit 1
+
     - name: Deploy to VPS
       uses: appleboy/ssh-action@master
       with:
