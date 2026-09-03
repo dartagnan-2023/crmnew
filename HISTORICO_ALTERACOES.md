@@ -15,6 +15,24 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-03 — Claude (via Cowork) — Cache de leitura das planilhas: 2s -> 25s
+
+**O quê:** Em `backend/server.js`, `CACHE_TTL_MS` passou de 2000 para 25000 ms. Uma linha, com o override por variável de ambiente `SHEETS_CACHE_TTL_MS` mantido.
+
+**Por quê:** A cota do Google Sheets é de cerca de **60 requisições de leitura por minuto por usuário**. Contagem real por rota, verificada no código: `GET /api/leads` faz 4 leituras (leads, canais, interações, follow-ups), `GET /api/stats` faz 2, `GET /api/budgets` faz 1. A tela atualiza sozinha a cada 30 segundos, ou seja, cerca de 8 leituras por minuto por usuário aberto. Isso dava um **teto prático de aproximadamente 7 usuários simultâneos sem ninguém salvando nada** — depois disso, HTTP 429. Com o cache em 2 segundos e o ciclo da tela em 30, o cache praticamente nunca acertava: cada usuário pagava a leitura inteira. Em 25 segundos, usuários simultâneos passam a compartilhar a mesma leitura e o teto deixa de existir na prática.
+
+**Por que 25 e não 30:** fica logo abaixo do ciclo da tela, então o dado exibido nunca é mais velho do que já seria com o poll de 30 segundos.
+
+**Impacto — e por que NÃO há risco de perder gravação:** todas as rotas de escrita chamam `loadTable(..., true)`, que ignora o cache e força leitura fresca da planilha. Foi auditado rota por rota (exemplos conferidos: `PUT /api/budgets/:id` -> 2 leituras frescas, 0 do cache; `PUT /api/leads/:id` -> 1 fresca, 0 do cache). Além disso, `writeSheet` e `saveSheetRow` invalidam o cache da tabela após gravar. O único efeito da mudança é a **idade do dado exibido**, que já era limitada pelo ciclo de 30 segundos da tela.
+
+**Efeito colateral aceito:** uma alteração feita direto na planilha do Google (fora do CRM) pode demorar até 25 segundos a mais para aparecer. Antes eram até 2 segundos.
+
+**Rollback:** duas opções. (1) Sem deploy: definir `SHEETS_CACHE_TTL_MS=2000` no `.env` do servidor e reiniciar o PM2. (2) Com deploy: `git revert` do commit correspondente.
+
+**Validação:** `node --check` no arquivo antes de publicar; conferência de md5 entre a cópia local e a publicada; deploy acompanhado até o fim; e medição de latência em produção depois de no ar.
+
+**Limite conhecido:** isto reduz o **consumo de cota**, não o custo de cada leitura. `readSheet` continua lendo o intervalo `A:AZ` (52 colunas) independentemente da largura real da tabela, e toda gravação continua relendo a planilha inteira antes de gravar. Reduzir o intervalo lido é o próximo ganho de performance disponível, ainda não executado.
+
 ## 2026-09-03 — Claude (via Cowork) — Ambiente local quebrado e rota de publicação alternativa
 
 **Não é alteração de código.** Registro operacional, para não se perder o diagnóstico.
