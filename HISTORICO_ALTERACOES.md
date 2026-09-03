@@ -15,6 +15,29 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-03 — Claude (via Cowork) — Ambiente local quebrado e rota de publicação alternativa
+
+**Não é alteração de código.** Registro operacional, para não se perder o diagnóstico.
+
+**O quê:** O ambiente Linux isolado do Claude Desktop (`device_bash`) parou de subir nesta máquina. Erro constante: `Workspace unavailable. The isolated Linux environment on this device failed to start.` Persistiu após reinício completo do aplicativo. Consequência: não é possível rodar `git`, `npm` nem qualquer comando diretamente no `crmnew-temp`.
+
+**O que continua funcionando:** a ponte com a máquina está de pé — listar diretórios, ler arquivos (`device_stage_files`) e escrever arquivos (`device_commit_files`) funcionam normalmente. O container na nuvem clona o repositório do GitHub, edita e roda o build completo. O que falta é apenas executar comandos na máquina do usuário.
+
+**Rota de publicação sem o ambiente Linux:**
+1. Ler o arquivo da máquina do usuário (stage) ou do clone do GitHub no container.
+2. Editar e validar no container (parser JSX + `react-scripts build`).
+3. Escrever de volta na máquina do usuário (commit de arquivo).
+4. Publicar pelo **GitHub web**, na sessão autenticada do navegador do usuário — commit direto na `main`, que dispara o deploy.
+5. Conferir o deploy pela API do GitHub e o resultado em produção pelo navegador.
+
+**Limite conhecido:** o terminal do Windows não serve de alternativa. O sistema concede terminais e IDEs apenas em modo *click* — dá para ver e clicar, não para digitar. Foi verificado, não presumido.
+
+**Limpeza de git executada nesta data** (pelo usuário, a pedido, porque exigia shell): removidos `.git/packed-refs.lock` e `.git/refs/remotes/origin/teste-permissao-workflow.lock`, apagada a ref órfã `refs/remotes/origin/teste-permissao-workflow` e atualizada a `main` local. Esses arquivos eram resíduo de comandos anteriores cujo shell não conseguia apagar arquivos, e travariam o próximo `fetch`/`push`.
+
+**Estado verificado após a limpeza:** `main` local, `claude/fase1-tokens`, `origin/main` local e `main` no GitHub — todos em `7bf57d6`. `App.js` local com md5 idêntico ao publicado. Produção no ar servindo `main.9e3d0e79.js`.
+
+**Pendência:** o ambiente Linux do Claude Desktop. Provável causa de raiz: componente de virtualização (WSL2/Hyper-V) da máquina. Não diagnosticado a fundo — exigiria comando administrativo, que não foi executado.
+
 ## 2026-09-02 — Claude (via Cowork) — Deploy: espera da porta SSH antes de publicar
 
 **O quê:** Novo passo `Aguardar SSH do VPS responder` em `.github/workflows/deploy.yml`, entre o checkout e o deploy. Testa a porta 22 do VPS até 6 vezes, com 30s de intervalo (até cerca de 3 minutos), e só libera o deploy quando a porta responder. Se não responder nas 6 tentativas, o job falha com mensagem explícita de que **produção não foi alterada**, porque o deploy nem chegou a começar.
