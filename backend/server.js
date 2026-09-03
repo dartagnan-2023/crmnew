@@ -504,7 +504,14 @@ const auth = new google.auth.JWT(
 );
 const sheets = google.sheets({ version: 'v4', auth });
 // Cache leve de leituras das planilhas (ms).
-const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 2000); // Reduzido para 2s para mais frescor
+// 25s: logo abaixo do ciclo de 30s de atualizacao da tela. Usuarios simultaneos
+// passam a compartilhar a mesma leitura, o que derruba o consumo da cota de
+// leitura do Google Sheets (~60 req/min/usuario) que gerava os erros 429.
+// Seguranca: NENHUMA rota de gravacao le do cache — todas usam loadTable(..., true),
+// que forca leitura fresca. Portanto um TTL maior NAO pode causar perda de escrita;
+// o unico efeito e a idade do dado exibido, que ja era limitada pelo poll de 30s.
+// Reversivel sem deploy: basta definir SHEETS_CACHE_TTL_MS no .env do servidor.
+const CACHE_TTL_MS = Number(process.env.SHEETS_CACHE_TTL_MS || 25000);
 const cache = {};
 
 // Gerenciador de Travas (Mutex) por Tabela
