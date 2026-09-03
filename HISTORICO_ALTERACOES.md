@@ -15,6 +15,22 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-02 — Claude (via Cowork) — Deploy: espera da porta SSH antes de publicar
+
+**O quê:** Novo passo `Aguardar SSH do VPS responder` em `.github/workflows/deploy.yml`, entre o checkout e o deploy. Testa a porta 22 do VPS até 6 vezes, com 30s de intervalo (até cerca de 3 minutos), e só libera o deploy quando a porta responder. Se não responder nas 6 tentativas, o job falha com mensagem explícita de que **produção não foi alterada**, porque o deploy nem chegou a começar.
+
+**Por quê:** Duas falhas em 02/09/2026 com `dial tcp ***:22: i/o timeout`, ambas resolvidas por reexecução manual do job. O site seguia respondendo em 443 nas duas vezes, ou seja, o VPS estava no ar e apenas a porta 22 ficou inacessível a partir dos runners do GitHub. Sem o passo novo, cada ocorrência exigia alguém percebendo a falha e reexecutando na mão — e, se ninguém percebesse, o deploy simplesmente não acontecia.
+
+**Limite conhecido:** cobre falha de **conexão**, que é o modo observado. **Não** cobre queda no meio de um deploy já iniciado — para isso seria preciso reestruturar o workflow (mover o script para arquivo e usar `script_path` com um segundo passo condicional), tarefa maior e de risco mais alto, não executada.
+
+**Como foi publicado — registrar para a próxima vez:** o push por linha de comando foi **recusado pelo GitHub**: `refusing to allow a Personal Access Token to create or update workflow .github/workflows/deploy.yml without workflow scope`. O token "CRM - Claude" tem permissão de Contents, não de Workflows. Com autorização explícita do usuário, o commit foi feito pelo **editor web do GitHub** na sessão dele. Depois disso, o arquivo publicado foi conferido contra a cópia local: **md5 idêntico** (`9d2a7df01db756eaa954a501cfd41294`), `diff` vazio e YAML válido com os três passos na ordem certa.
+
+**Pendência:** enquanto o token não receber a permissão **Workflows: Read and write**, qualquer alteração futura em pipeline vai exigir esse mesmo desvio manual.
+
+**Rollback:** `git revert 9b3ea85` — mas o revert também precisará ser publicado pelo editor web, pela mesma restrição de escopo.
+
+**Validação:** YAML validado localmente antes do commit; conferência de md5 contra o arquivo publicado; e o **próprio deploy seguinte exercitou o passo novo**: `Aguardar SSH do VPS responder -> success (0s)` (porta respondeu na primeira tentativa), `Deploy to VPS -> success (117s)`, job concluído com sucesso.
+
 ## 2026-09-02 — Claude (via Cowork) — Correção: "sem motivo" contaminava o gráfico de perdas
 
 **O quê:** Em `budgetDashboardData`, a condição que deveria excluir orçamentos sem motivo de perda era `normalizeOptionValue(lossReason) !== 'sem motivo'` (com espaço), enquanto o fallback atribuído logo acima é `'sem_motivo'` (com underscore). `normalizeOptionValue` não troca underscore por espaço, então a condição era **sempre verdadeira** e todo orçamento sem motivo entrava no gráfico de perdas como se fosse um motivo. Passou a comparar contra `['sem_motivo', 'sem motivo', '']`.
