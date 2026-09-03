@@ -402,7 +402,12 @@ const markLeadAsCustomer = async (leadId) => {
     if (idx === -1) return;
     leads[idx].is_customer = true;
     leads[idx].updated_at = new Date().toISOString();
-    await saveTable('leads', leads);
+    // Grava so a linha do lead. A reescrita da tabela inteira continua como
+    // fallback: se o id da linha nao bater com o esperado, saveSheetRow
+    // devolve false sem escrever nada e caimos no gravador completo.
+    if (!(await saveSheetRow('leads', idx, leads[idx]))) {
+      await saveTable('leads', leads);
+    }
   });
 };
 
@@ -421,7 +426,9 @@ const updateLeadFromBudgetEvent = async (leadId, budgetStatus) => {
       budgetStatus,
     });
     leads[idx] = nextLead;
-    await saveTable('leads', leads);
+    if (!(await saveSheetRow('leads', idx, leads[idx]))) {
+      await saveTable('leads', leads);
+    }
   });
 };
 
@@ -4463,7 +4470,9 @@ app.put('/api/budgets/:id', authMiddleware, async (req, res) => {
     if (representante !== undefined) budgets[idx].representante = String(representante || '').trim();
     budgets[idx].updated_at = new Date().toISOString();
 
-    await saveTable('budgets', budgets);
+    if (!(await saveSheetRow('budgets', idx, budgets[idx]))) {
+      await saveTable('budgets', budgets);
+    }
     if (normalizeName(budgets[idx].status) === 'aprovado' && budgets[idx].lead_id) {
       await markLeadAsCustomer(budgets[idx].lead_id);
     }
