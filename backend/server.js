@@ -3075,7 +3075,12 @@ const mcpConstantTimeEqual = (provided, expected) => {
   return left.length === right.length && timingSafeEqual(leftPadded, rightPadded);
 };
 
-const mcpIsValidToken = (candidate, allowedTokens = [MCP_ACCESS_TOKEN, API_KEY_LEADS]) =>
+// SEGURANCA: API_KEY_LEADS NAO entra aqui. Ela e a chave de ingestao de leads,
+// usada por integracao externa, e o middleware do MCP concede role 'admin' —
+// aceita-la dava leitura de todo o CRM (leads, orcamentos, eventos de e-mail e
+// o resumo) a quem tivesse apenas a chave de formulario. O MCP_CLAUDE_SETUP.md
+// ja mandava "nao reutilize API_KEY_LEADS"; o codigo nao cumpria.
+const mcpIsValidToken = (candidate, allowedTokens = [MCP_ACCESS_TOKEN]) =>
   allowedTokens.some((token) => token && mcpConstantTimeEqual(candidate, token));
 
 const mcpUnauthorized = (res) =>
