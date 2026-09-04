@@ -462,7 +462,7 @@ const UI_GRID2 = 'grid grid-cols-1 md:grid-cols-2 gap-3';
 const StatCard = ({ label, value, helper, tone = 'slate' }) => {
   const toneClasses = {
     slate: 'text-ink-soft',
-    blue: 'text-brand-600',
+    blue: 'text-brand-ink',
     emerald: 'text-[#0b6b45]',
     amber: 'text-[#ac6200]',
     rose: 'text-[#ba1a1a]',
@@ -553,7 +553,7 @@ const MiniLineChart = ({ data, color = CHART_COLORS.volume, emptyLabel = 'Sem hi
   const safeData = (data || []).slice(-6);
   const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
   if (!safeData.length) {
-    return <p className="text-sm text-slate-400">{emptyLabel}</p>;
+    return <p className="text-sm text-ink-faint">{emptyLabel}</p>;
   }
   const points = safeData
     .map((item, index) => {
@@ -580,10 +580,10 @@ const MiniLineChart = ({ data, color = CHART_COLORS.volume, emptyLabel = 'Sem hi
           return <circle key={item.label} cx={x} cy={y} r="2.5" fill={color} />;
         })}
       </svg>
-      <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500">
+      <div className="grid grid-cols-3 gap-2 text-[11px] text-ink-faint">
         {safeData.map((item) => (
-          <div key={item.label} className="rounded-lg bg-slate-50 px-2 py-1 text-center">
-            <div className="font-semibold text-slate-700">{formatValue(item.value)}</div>
+          <div key={item.label} className="rounded-lg bg-surface-low px-2 py-1 text-center">
+            <div className="font-semibold text-ink-soft">{formatValue(item.value)}</div>
             <div>{item.label}</div>
           </div>
         ))}
@@ -606,6 +606,12 @@ const formatSlaDuration = (minutes) => {
   const h = Math.floor((total % (60 * 24)) / 60);
   return h ? `${d}d ${h}h` : `${d}d`;
 };
+
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Claro', hint: 'Sempre claro' },
+  { value: 'dark', label: 'Escuro', hint: 'Sempre escuro' },
+  { value: 'auto', label: 'Automático', hint: 'Segue o tema do sistema operacional' },
+];
 
 const NAV_TABS = [
   { value: 'crm', label: 'Leads' },
@@ -689,7 +695,7 @@ const LeadEmailEngagementBadges = ({ lead }) => {
   return (
     <>
       {engagement.hasClick ? (
-        <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100 text-[10px] font-semibold">
+        <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-ink border border-brand-100 text-[10px] font-semibold">
           Clicou email
         </span>
       ) : null}
@@ -952,6 +958,17 @@ const App = () => {
   // Agenda e follow-up dividem um card so: lado a lado eles competiam, e o de
   // follow-up e cronico (nao muda de um dia para o outro).
   const [agendaPane, setAgendaPane] = useState('agenda');
+  // Tema: 'auto' (segue o sistema), 'light' ou 'dark'. Guardado no navegador,
+  // por maquina. O valor inicial ja foi aplicado em public/index.html antes do
+  // primeiro desenho — aqui so mantemos o React em dia com ele.
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem('theme');
+      return saved === 'light' || saved === 'dark' ? saved : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
   const [users, setUsers] = useState([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileTab, setProfileTab] = useState('me');
@@ -1054,6 +1071,28 @@ const App = () => {
     setUsers([]);
     setShowProfileModal(false);
   };
+
+  useEffect(() => {
+    const media =
+      typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(prefers-color-scheme: dark)')
+        : null;
+    const aplicar = () => {
+      const escuro = theme === 'dark' || (theme === 'auto' && media && media.matches);
+      document.documentElement.setAttribute('data-theme', escuro ? 'dark' : 'light');
+    };
+    aplicar();
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      // navegador sem armazenamento: o tema vale so para esta aba
+    }
+    // Em 'auto' precisamos reagir se a pessoa trocar o tema do sistema com o
+    // CRM aberto. Nos outros modos nao ha o que escutar.
+    if (theme !== 'auto' || !media) return undefined;
+    media.addEventListener('change', aplicar);
+    return () => media.removeEventListener('change', aplicar);
+  }, [theme]);
 
   const verifyToken = async () => {
     if (!token) return;
@@ -4193,8 +4232,8 @@ const App = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4 text-center">
+        <div className="bg-surface-card rounded-xl shadow-2xl max-w-md w-full p-8">
+          <h1 className="text-2xl font-bold text-ink mb-4 text-center">
             Leads - BHS Eletronica
           </h1>
           {error && (
@@ -4207,7 +4246,7 @@ const App = () => {
               onClick={() => setAuthMode('login')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'login'
                 ? 'bg-brand-600 text-white'
-                : 'bg-slate-100 text-slate-700'
+                : 'bg-surface-mid text-ink-soft'
                 }`}
             >
               Login
@@ -4216,7 +4255,7 @@ const App = () => {
               onClick={() => setAuthMode('register')}
               className={`flex-1 py-2 rounded-lg font-semibold ${authMode === 'register'
                 ? 'bg-brand-600 text-white'
-                : 'bg-slate-100 text-slate-700'
+                : 'bg-surface-mid text-ink-soft'
                 }`}
             >
               Cadastrar
@@ -4226,7 +4265,7 @@ const App = () => {
             {authMode === 'register' && (
               <>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  <label className="block text-sm font-semibold text-ink-soft mb-1">
                     Nome
                   </label>
                   <input
@@ -4235,12 +4274,12 @@ const App = () => {
                     onChange={(e) =>
                       setAuthForm({ ...authForm, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-line rounded-lg"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  <label className="block text-sm font-semibold text-ink-soft mb-1">
                     Usuário (login)
                   </label>
                   <input
@@ -4252,12 +4291,12 @@ const App = () => {
                         username: e.target.value.toLowerCase(),
                       })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-line rounded-lg"
                     placeholder="ex: leandro, ines..."
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  <label className="block text-sm font-semibold text-ink-soft mb-1">
                     Telefone
                   </label>
                   <input
@@ -4266,14 +4305,14 @@ const App = () => {
                     onChange={(e) =>
                       setAuthForm({ ...authForm, phone: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-line rounded-lg"
                     required
                   />
                 </div>
               </>
             )}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-ink-soft mb-1">
                 {authMode === 'login' ? 'Email ou usuário' : 'Email'}
               </label>
               <input
@@ -4282,12 +4321,12 @@ const App = () => {
                 onChange={(e) =>
                   setAuthForm({ ...authForm, email: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full px-3 py-2 border border-line rounded-lg"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-ink-soft mb-1">
                 Senha
               </label>
               <input
@@ -4296,7 +4335,7 @@ const App = () => {
                 onChange={(e) =>
                   setAuthForm({ ...authForm, password: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full px-3 py-2 border border-line rounded-lg"
                 required
               />
             </div>
@@ -4314,7 +4353,7 @@ const App = () => {
               <span>{loading ? 'Aguarde' : authMode === 'login' ? 'Entrar' : 'Criar conta'}</span>
             </button>
             {authHint && (
-              <p className="mt-2 text-xs text-brand-700 text-center">{authHint}</p>
+              <p className="mt-2 text-xs text-brand-ink text-center">{authHint}</p>
             )}
           </form>
         </div>
@@ -4338,7 +4377,7 @@ const App = () => {
 
         {loadingData && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-40">
-            <div className="bg-white rounded-xl shadow-lg px-6 py-4 text-sm text-slate-700 flex items-center gap-3">
+            <div className="bg-surface-card rounded-xl shadow-lg px-6 py-4 text-sm text-ink-soft flex items-center gap-3">
               <div className="w-4 h-4 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
               <span>Carregando dados...</span>
             </div>
@@ -4348,14 +4387,14 @@ const App = () => {
         <header className="rounded-2xl border border-line bg-surface-card shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4">
             <div className="flex items-center gap-6 min-w-0">
-              <span className="text-[13px] font-bold tracking-[0.1em] text-brand-600 whitespace-nowrap">BHS CRM</span>
+              <span className="text-[13px] font-bold tracking-[0.1em] text-brand-ink whitespace-nowrap">BHS CRM</span>
               <nav className="flex items-center -mb-px overflow-x-auto scrollbar-hide">
                 {NAV_TABS.map((tab) => (
                   <button
                     key={tab.value}
                     onClick={() => setActiveTab(tab.value)}
                     className={`px-3 h-[52px] text-sm whitespace-nowrap border-b-2 transition ${activeTab === tab.value
-                      ? 'border-brand-600 text-brand-600 font-semibold'
+                      ? 'border-brand-600 text-brand-ink font-semibold'
                       : 'border-transparent text-ink-soft hover:text-ink'
                       }`}
                   >
@@ -4366,7 +4405,7 @@ const App = () => {
             </div>
             <details className="relative group">
               <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-soft hover:bg-surface-low">
-                <span className="grid h-6 w-6 place-items-center rounded-full border border-brand-100 bg-brand-50 text-[10px] font-bold text-brand-700">
+                <span className="grid h-6 w-6 place-items-center rounded-full border border-brand-100 bg-brand-50 text-[10px] font-bold text-brand-ink">
                   {(user.name || '?').trim().charAt(0).toUpperCase()}
                 </span>
                 <span className="max-w-[160px] truncate">{user.name}</span>
@@ -4394,9 +4433,29 @@ const App = () => {
                     Unificar Meta Ads
                   </button>
                 )}
+                <div className="mt-1 border-t border-surface-mid px-3 pb-2 pt-2">
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.09em] text-ink-faint">
+                    Aparência
+                  </p>
+                  <div className="inline-flex w-full overflow-hidden rounded-lg border border-line">
+                    {THEME_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => setTheme(option.value)}
+                        className={`flex-1 border-r border-line px-2 py-1.5 text-[11px] last:border-r-0 ${theme === option.value
+                          ? 'bg-brand-600 font-semibold text-white'
+                          : 'bg-surface-card text-ink-soft hover:bg-surface-low'
+                          }`}
+                        title={option.hint}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="mt-1 block w-full border-t border-surface-mid px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
+                  className="block w-full border-t border-surface-mid px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                 >
                   Sair
                 </button>
@@ -4407,12 +4466,12 @@ const App = () => {
 
         {activeTab === 'dashboard' && (
           <section className="space-y-6">
-            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+            <div className="bg-surface-card rounded-3xl shadow-xl p-6 border border-line">
               <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Executive Dashboard</p>
-                  <h2 className="mt-2 text-3xl font-black text-slate-900">Marketing e Comercial</h2>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="text-xs uppercase tracking-[0.24em] text-ink-faint font-bold">Executive Dashboard</p>
+                  <h2 className="mt-2 text-3xl font-black text-ink">Marketing e Comercial</h2>
+                  <p className="mt-2 text-sm text-ink-faint">
                     Os indicadores abaixo respeitam os filtros atuais do CRM e servem para acompanhamento da diretoria.
                   </p>
                 </div>
@@ -4429,11 +4488,11 @@ const App = () => {
                   Baixar relatório em Excel
                 </button>
               </div>
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-5 rounded-2xl border border-line bg-surface-low p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
                     <p className={UI_EYEBROW}>Filtros da dashboard</p>
-                    <p className="text-sm text-slate-500">Esses filtros são independentes dos filtros operacionais do CRM.</p>
+                    <p className="text-sm text-ink-faint">Esses filtros são independentes dos filtros operacionais do CRM.</p>
                   </div>
                   <button
                     onClick={() => {
@@ -4446,7 +4505,7 @@ const App = () => {
                       setDashboardCampaignFilter('');
                       setDashboardFollowUpFilter('all');
                     }}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                    className="px-3 py-2 rounded-xl border border-line bg-surface-card text-sm text-ink-soft shadow-sm"
                   >
                     Limpar filtros
                   </button>
@@ -4519,21 +4578,21 @@ const App = () => {
                 {dashboardPeriod === 'custom' && (
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
+                      <label className="block text-xs font-semibold text-ink-soft mb-2">Data inicial</label>
                       <input
                         type="date"
                         value={dashboardStartDate}
                         onChange={(e) => setDashboardStartDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                        className="w-full px-3 py-2 border border-line rounded-xl text-sm bg-surface-card"
                       />
                     </div>
                     <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
+                      <label className="block text-xs font-semibold text-ink-soft mb-2">Data final</label>
                       <input
                         type="date"
                         value={dashboardEndDate}
                         onChange={(e) => setDashboardEndDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                        className="w-full px-3 py-2 border border-line rounded-xl text-sm bg-surface-card"
                       />
                     </div>
                   </div>
@@ -4571,7 +4630,7 @@ const App = () => {
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Perdidos</p>
                 <p className={UI_STAT}>{dashboardLocalStats.perdidos || 0}</p>
-                <p className="mt-2 text-xs text-slate-500">{formatCurrencyBR(dashboardLocalStats.valorPerdido || 0)} perdidos</p>
+                <p className="mt-2 text-xs text-ink-faint">{formatCurrencyBR(dashboardLocalStats.valorPerdido || 0)} perdidos</p>
               </div>
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Follow-up vencido</p>
@@ -4642,7 +4701,7 @@ const App = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className={UI_EYEBROW}>Marketing</p>
-                    <h3 className="text-lg font-bold text-slate-900">Entradas por mês</h3>
+                    <h3 className="text-lg font-bold text-ink">Entradas por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={dashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
@@ -4745,16 +4804,16 @@ const App = () => {
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
                   <p className={UI_EYEBROW}>Ads</p>
-                  <h3 className="text-lg font-bold text-slate-900">Performance por campanha</h3>
+                  <h3 className="text-lg font-bold text-ink">Performance por campanha</h3>
                 </div>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-ink-faint">
                   Plataforma principal: {dashboardMediaData.topPlatform || '-'}
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-slate-500">
+                    <tr className="border-b text-left text-ink-faint">
                       <th className={UI_TD}>Campanha</th>
                       <th className={UI_TD}>Plataforma</th>
                       <th className={UI_TD}>Investimento</th>
@@ -4779,12 +4838,12 @@ const App = () => {
                         <td className={UI_TD}>{formatCurrencyBR(row.closed || 0)}</td>
                         <td className={UI_TD}>{formatRatio(row.roasEstimated)}</td>
                         <td className={UI_TD}>{formatRatio(row.roasClosed)}</td>
-                        <td className="py-2 px-2 text-right text-xs text-slate-400">—</td>
+                        <td className="py-2 px-2 text-right text-xs text-ink-faint">—</td>
                       </tr>
                     ))}
                     {dashboardMediaData.rows.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="py-4 text-center text-slate-500 text-sm">
+                        <td colSpan={10} className="py-4 text-center text-ink-faint text-sm">
                           Nenhum lançamento de Ads encontrado para os filtros atuais.
                         </td>
                       </tr>
@@ -4798,7 +4857,7 @@ const App = () => {
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
                   <p className={UI_EYEBROW}>Ads</p>
-                  <h3 className="text-lg font-bold text-slate-900">Lançamentos recentes</h3>
+                  <h3 className="text-lg font-bold text-ink">Lançamentos recentes</h3>
                 </div>
                 <button
                   onClick={openNewAdSpendModal}
@@ -4810,7 +4869,7 @@ const App = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-slate-500">
+                    <tr className="border-b text-left text-ink-faint">
                       <th className={UI_TD}>Data</th>
                       <th className={UI_TD}>Plataforma</th>
                       <th className={UI_TD}>Campanha</th>
@@ -4832,7 +4891,7 @@ const App = () => {
                           <td className={UI_TD}>{formatCurrencyBR(entry.amount || 0)}</td>
                           <td className={UI_TD}>{entry.notes || '-'}</td>
                           <td className="py-2 px-2 text-right space-x-2">
-                            <button onClick={() => openEditAdSpendModal(entry)} className="text-brand-600 text-xs">
+                            <button onClick={() => openEditAdSpendModal(entry)} className="text-brand-ink text-xs">
                               Editar
                             </button>
                             <button onClick={() => deleteAdSpend(entry.id)} className="text-red-600 text-xs">
@@ -4843,7 +4902,7 @@ const App = () => {
                       ))}
                     {adSpendItems.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-4 text-center text-slate-500 text-sm">
+                        <td colSpan={6} className="py-4 text-center text-ink-faint text-sm">
                           Nenhum gasto lançado ainda.
                         </td>
                       </tr>
@@ -4857,12 +4916,12 @@ const App = () => {
 
         {activeTab === 'emkt' && (
           <section className="space-y-6">
-            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+            <div className="bg-surface-card rounded-3xl shadow-xl p-6 border border-line">
               <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Email Marketing</p>
-                  <h2 className="mt-2 text-3xl font-black text-slate-900">Emkt | Mailrelay</h2>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="text-xs uppercase tracking-[0.24em] text-ink-faint font-bold">Email Marketing</p>
+                  <h2 className="mt-2 text-3xl font-black text-ink">Emkt | Mailrelay</h2>
+                  <p className="mt-2 text-sm text-ink-faint">
                     KPIs de engajamento, campanhas e leads impactados pela Mailrelay.
                   </p>
                 </div>
@@ -4879,11 +4938,11 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-5 rounded-2xl border border-line bg-surface-low p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
                     <p className={UI_EYEBROW}>Filtros do Emkt</p>
-                    <p className="text-sm text-slate-500">Leitura separada da dashboard principal.</p>
+                    <p className="text-sm text-ink-faint">Leitura separada da dashboard principal.</p>
                   </div>
                   <button
                     onClick={() => {
@@ -4894,7 +4953,7 @@ const App = () => {
                       setEmktCampaignFilter('');
                       setEmktSearch('');
                     }}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                    className="px-3 py-2 rounded-xl border border-line bg-surface-card text-sm text-ink-soft shadow-sm"
                   >
                     Limpar filtros
                   </button>
@@ -4972,7 +5031,7 @@ const App = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className={UI_EYEBROW}>Tendência</p>
-                    <h3 className="text-lg font-bold text-slate-900">Aberturas por mês</h3>
+                    <h3 className="text-lg font-bold text-ink">Aberturas por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.opens }))} color="#0f766e" />
@@ -4981,7 +5040,7 @@ const App = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className={UI_EYEBROW}>Conversão</p>
-                    <h3 className="text-lg font-bold text-slate-900">Cliques por mês</h3>
+                    <h3 className="text-lg font-bold text-ink">Cliques por mês</h3>
                   </div>
                 </div>
                 <MiniLineChart data={emktEventEvolution.map((item) => ({ label: item.label, value: item.clicks }))} color="#2563eb" />
@@ -4990,7 +5049,7 @@ const App = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className={UI_EYEBROW}>Campanhas</p>
-                    <h3 className="text-lg font-bold text-slate-900">Top campanhas</h3>
+                    <h3 className="text-lg font-bold text-ink">Top campanhas</h3>
                   </div>
                 </div>
                 <MiniBarChart data={emktCampaignRows.slice(0, 6).map((row) => ({ label: row.campaign, value: row.opens + row.clicks }))} color="#7c3aed" />
@@ -5001,13 +5060,13 @@ const App = () => {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className={UI_EYEBROW}>Campanhas</p>
-                  <h3 className="text-lg font-bold text-slate-900">Resumo por campanha</h3>
+                  <h3 className="text-lg font-bold text-ink">Resumo por campanha</h3>
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-slate-500">
+                    <tr className="border-b text-left text-ink-faint">
                       <th className={UI_TD}>Campanha</th>
                       <th className={UI_TD}>Aberturas</th>
                       <th className={UI_TD}>Cliques</th>
@@ -5020,18 +5079,18 @@ const App = () => {
                   <tbody>
                     {emktCampaignRows.map((row) => (
                       <tr key={row.campaign} className="border-b last:border-none">
-                        <td className="py-2 px-2 font-medium text-slate-800">{row.campaign}</td>
+                        <td className="py-2 px-2 font-medium text-ink">{row.campaign}</td>
                         <td className={UI_TD}>{row.opens}</td>
                         <td className={UI_TD}>{row.clicks}</td>
                         <td className={UI_TD}>{row.clickRate}%</td>
                         <td className={UI_TD}>{row.unsubscribes}</td>
                         <td className={UI_TD}>{row.impactedLeads}</td>
-                        <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
+                        <td className="py-2 px-2 text-ink-faint">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
                       </tr>
                     ))}
                     {emktCampaignRows.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-4 text-center text-slate-500 text-sm">
+                        <td colSpan={7} className="py-4 text-center text-ink-faint text-sm">
                           Nenhuma campanha encontrada para os filtros atuais.
                         </td>
                       </tr>
@@ -5045,13 +5104,13 @@ const App = () => {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className={UI_EYEBROW}>Leads</p>
-                  <h3 className="text-lg font-bold text-slate-900">Leads impactados</h3>
+                  <h3 className="text-lg font-bold text-ink">Leads impactados</h3>
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-slate-500">
+                    <tr className="border-b text-left text-ink-faint">
                       <th className={UI_TD}>Lead</th>
                       <th className={UI_TD}>Empresa</th>
                       <th className={UI_TD}>Email</th>
@@ -5065,19 +5124,19 @@ const App = () => {
                   <tbody>
                     {emktLeadRows.map((row) => (
                       <tr key={`${row.leadId || row.email}-${row.lastEventAt}`} className="border-b last:border-none">
-                        <td className="py-2 px-2 font-medium text-slate-800">{row.name}</td>
+                        <td className="py-2 px-2 font-medium text-ink">{row.name}</td>
                         <td className={UI_TD}>{row.company}</td>
                         <td className={UI_TD}>{row.email}</td>
                         <td className={UI_TD}>{row.campaign}</td>
                         <td className={UI_TD}>{row.opens}</td>
                         <td className={UI_TD}>{row.clicks}</td>
                         <td className={UI_TD}>{row.unsubscribes}</td>
-                        <td className="py-2 px-2 text-slate-500">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
+                        <td className="py-2 px-2 text-ink-faint">{row.lastEventAt ? formatDateTimeBR(row.lastEventAt) : '-'}</td>
                       </tr>
                     ))}
                     {emktLeadRows.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-4 text-center text-slate-500 text-sm">
+                        <td colSpan={8} className="py-4 text-center text-ink-faint text-sm">
                           Nenhum lead impactado encontrado para os filtros atuais.
                         </td>
                       </tr>
@@ -5091,12 +5150,12 @@ const App = () => {
 
         {activeTab === 'orcamentos' && (
           <section className="space-y-6">
-            <div className="bg-white rounded-3xl shadow-xl p-6 border border-slate-200">
+            <div className="bg-surface-card rounded-3xl shadow-xl p-6 border border-line">
               <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-slate-400 font-bold">Budget Dashboard</p>
-                  <h2 className="mt-2 text-3xl font-black text-slate-900">Orçamentos</h2>
-                  <p className="mt-2 text-sm text-slate-500">
+                  <p className="text-xs uppercase tracking-[0.24em] text-ink-faint font-bold">Budget Dashboard</p>
+                  <h2 className="mt-2 text-3xl font-black text-ink">Orçamentos</h2>
+                  <p className="mt-2 text-sm text-ink-faint">
                     Indicadores de produção comercial e de orçamentação para acompanhamento da diretoria.
                   </p>
                 </div>
@@ -5130,11 +5189,11 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mt-5 rounded-2xl border border-line bg-surface-low p-4">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div>
                     <p className={UI_EYEBROW}>Filtros de orçamentos</p>
-                    <p className="text-sm text-slate-500">Filtros próprios do módulo de orçamentos.</p>
+                    <p className="text-sm text-ink-faint">Filtros próprios do módulo de orçamentos.</p>
                   </div>
                   <button
                     onClick={() => {
@@ -5148,7 +5207,7 @@ const App = () => {
                       setBudgetRepresentanteFilter('');
                       setBudgetSearch('');
                     }}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 shadow-sm"
+                    className="px-3 py-2 rounded-xl border border-line bg-surface-card text-sm text-ink-soft shadow-sm"
                   >
                     Limpar filtros
                   </button>
@@ -5222,7 +5281,7 @@ const App = () => {
                     Preencher qualquer uma das datas ja troca o periodo para personalizado. */}
                 <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Data inicial</label>
+                    <label className="block text-xs font-semibold text-ink-soft mb-2">Data inicial</label>
                     <input
                       type="date"
                       value={budgetStartDate}
@@ -5230,11 +5289,11 @@ const App = () => {
                         setBudgetStartDate(e.target.value);
                         if (e.target.value) setBudgetPeriod('custom');
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                      className="w-full px-3 py-2 border border-line rounded-xl text-sm bg-surface-card"
                     />
                   </div>
                   <div className="rounded-2xl border border-brand-200 bg-brand-50 p-3">
-                    <label className="block text-xs font-semibold text-slate-700 mb-2">Data final</label>
+                    <label className="block text-xs font-semibold text-ink-soft mb-2">Data final</label>
                     <input
                       type="date"
                       value={budgetEndDate}
@@ -5242,7 +5301,7 @@ const App = () => {
                         setBudgetEndDate(e.target.value);
                         if (e.target.value) setBudgetPeriod('custom');
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white"
+                      className="w-full px-3 py-2 border border-line rounded-xl text-sm bg-surface-card"
                     />
                   </div>
                 </div>
@@ -5364,11 +5423,11 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-5 border border-slate-200 overflow-x-auto">
+            <div className="bg-surface-card rounded-2xl shadow p-5 border border-line overflow-x-auto">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
                   <p className={UI_EYEBROW}>Tabela operacional</p>
-                  <h3 className="text-lg font-bold text-slate-900">Lista de orçamentos</h3>
+                  <h3 className="text-lg font-bold text-ink">Lista de orçamentos</h3>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -5389,7 +5448,7 @@ const App = () => {
               </div>
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="text-left text-slate-500 border-b border-slate-200">
+                  <tr className="text-left text-ink-faint border-b border-line">
                     <th className="py-2 pr-3">Cliente</th>
                     <th className="py-2 pr-3">Empresa</th>
                     <th className="py-2 pr-3">Status</th>
@@ -5405,20 +5464,20 @@ const App = () => {
                 </thead>
                 <tbody>
                   {budgetFilteredItems.map((budget) => (
-                    <tr key={budget.id} className="border-b border-slate-100">
-                      <td className="py-3 pr-3 font-medium text-slate-900">{budget.client_name || '-'}</td>
-                      <td className="py-3 pr-3 text-slate-600">{budget.company || '-'}</td>
-                      <td className="py-3 pr-3 text-slate-600">{BUDGET_STATUS_OPTIONS.find((item) => item.value === budget.status)?.label || budget.status}</td>
-                      <td className="py-3 pr-3 text-slate-600">{budget.owner_name || '-'}</td>
-                      <td className="py-3 pr-3 text-slate-600">{budget.estimator_name || '-'}</td>
-                      <td className="py-3 pr-3 text-slate-600">{budget.representante || '-'}</td>
-                      <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.budget_value || 0)}</td>
-                      <td className="py-3 pr-3 text-slate-600">{formatCurrencyBR(budget.closed_value || 0)}</td>
-                      <td className="py-3 pr-3 text-slate-600">{formatDateBR(budget.requested_at)}</td>
-                      <td className="py-3 pr-3 text-slate-600">{BUDGET_LOSS_REASON_OPTIONS.find((item) => item.value === budget.loss_reason)?.label || '-'}</td>
+                    <tr key={budget.id} className="border-b border-surface-mid">
+                      <td className="py-3 pr-3 font-medium text-ink">{budget.client_name || '-'}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{budget.company || '-'}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{BUDGET_STATUS_OPTIONS.find((item) => item.value === budget.status)?.label || budget.status}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{budget.owner_name || '-'}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{budget.estimator_name || '-'}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{budget.representante || '-'}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{formatCurrencyBR(budget.budget_value || 0)}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{formatCurrencyBR(budget.closed_value || 0)}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{formatDateBR(budget.requested_at)}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{BUDGET_LOSS_REASON_OPTIONS.find((item) => item.value === budget.loss_reason)?.label || '-'}</td>
                       <td className="py-3 pr-0">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => openEditBudgetModal(budget)} className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700">Editar</button>
+                          <button onClick={() => openEditBudgetModal(budget)} className="px-3 py-1 rounded-lg border border-line text-ink-soft">Editar</button>
                           <button onClick={() => deleteBudget(budget.id)} className="px-3 py-1 rounded-lg border border-rose-200 text-rose-600">Excluir</button>
                         </div>
                       </td>
@@ -5426,7 +5485,7 @@ const App = () => {
                   ))}
                   {!budgetFilteredItems.length && (
                     <tr>
-                      <td colSpan="11" className="py-8 text-center text-slate-400">Nenhum orçamento encontrado.</td>
+                      <td colSpan="11" className="py-8 text-center text-ink-faint">Nenhum orçamento encontrado.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5450,7 +5509,7 @@ const App = () => {
               <p className="text-2xl font-bold text-risk-ink tabular-nums leading-tight mt-0.5">
                 {(agendaStats.overdue || 0).toLocaleString('pt-BR')}
               </p>
-              <span className="text-[11px] font-semibold text-brand-600">Ver na lista →</span>
+              <span className="text-[11px] font-semibold text-brand-ink">Ver na lista →</span>
             </button>
             <div className="bg-surface-card px-4 py-3">
               <p className="text-[10px] uppercase tracking-[0.09em] font-bold text-ink-faint">Novos sem contato</p>
@@ -5476,7 +5535,7 @@ const App = () => {
           </div>
           <button
             onClick={() => setShowStats((prev) => !prev)}
-            className="mt-2 text-[11px] font-semibold text-brand-600 hover:underline"
+            className="mt-2 text-[11px] font-semibold text-brand-ink hover:underline"
           >
             {showStats ? 'Ocultar os outros números' : 'Ver todos os números (perfis, empresas, perdidos)'} ▾
           </button>
@@ -5555,7 +5614,7 @@ const App = () => {
                 {agendaPane === 'agenda' && agendaBase.length > 5 && (
                   <button
                     onClick={() => setShowAllAgenda((v) => !v)}
-                    className="text-xs text-brand-600 hover:underline whitespace-nowrap"
+                    className="text-xs text-brand-ink hover:underline whitespace-nowrap"
                   >
                     {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
                   </button>
@@ -5565,7 +5624,7 @@ const App = () => {
             {agendaPane === 'agenda' && (
             <div className="max-h-64 overflow-y-auto">
               {agendaLeads.length === 0 && (
-                <p className="text-xs text-slate-500">Nenhum contato agendado.</p>
+                <p className="text-xs text-ink-faint">Nenhum contato agendado.</p>
               )}
               {agendaLeads.map((lead) => {
                 const now = new Date();
@@ -5607,14 +5666,14 @@ const App = () => {
                         {lead.company || lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                       </p>
                       {responsible && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-ink-faint">
                           Responsável: {responsible}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-xs text-slate-600">
+                        <p className="text-xs text-ink-soft">
                           {lead.next_contact
                             ? formatFollowupBR(lead.next_contact)
                             : '-'}
@@ -5629,7 +5688,7 @@ const App = () => {
                               : lead.followup_status === 'done'
                                 ? 'bg-ok text-ok-ink'
                                 : lead.followup_status === 'dismissed'
-                                  ? 'bg-slate-100 text-slate-600'
+                                  ? 'bg-surface-mid text-ink-soft'
                                   : 'bg-risk text-risk-ink'
                           }`}>
                             {lead.followup_status}
@@ -5637,10 +5696,10 @@ const App = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                        <label className="inline-flex items-center gap-1 text-[11px] text-ink-soft">
                           <input
                             type="checkbox"
-                            className="h-3 w-3 text-brand-600 border-slate-300 rounded"
+                            className="h-3 w-3 text-brand-ink border-line rounded"
                             onChange={() => handleAgendaContactDone(lead)}
                             checked={agendaUpdatingId === lead.id ? true : false}
                             disabled={agendaUpdatingId === lead.id}
@@ -5650,14 +5709,14 @@ const App = () => {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleAgendaReschedule(lead, 1)}
-                            className="text-[11px] text-brand-600 hover:underline disabled:opacity-50"
+                            className="text-[11px] text-brand-ink hover:underline disabled:opacity-50"
                             disabled={agendaUpdatingId === lead.id}
                           >
                             +1d
                           </button>
                           <button
                             onClick={() => handleAgendaReschedule(lead, 3)}
-                            className="text-[11px] text-brand-600 hover:underline disabled:opacity-50"
+                            className="text-[11px] text-brand-ink hover:underline disabled:opacity-50"
                             disabled={agendaUpdatingId === lead.id}
                           >
                             +3d
@@ -5676,7 +5735,7 @@ const App = () => {
             {agendaPane === 'followup' && (
             <div className="max-h-64 overflow-y-auto">
               {followUpLeads.length === 0 && (
-                <p className="text-xs text-slate-500">Nenhum lead pendente de follow-up.</p>
+                <p className="text-xs text-ink-faint">Nenhum lead pendente de follow-up.</p>
               )}
               {followUpLeads.map((lead) => (
                 <div
@@ -5770,7 +5829,7 @@ const App = () => {
                     setOwnerFilter(val);
                     setAgendaOwnerFilter(val === 'all' ? 'todos' : val);
                   }}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                 >
                   <option value="all">Todos os responsáveis</option>
                   <option value="unassigned">Sem proprietário</option>
@@ -5783,7 +5842,7 @@ const App = () => {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                 >
                   <option value="todos">Todos os status</option>
                   {STATUS_OPTIONS.map((s) => (
@@ -5796,7 +5855,7 @@ const App = () => {
                   <select
                     value={urgencyFilter}
                     onChange={(e) => setUrgencyFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                    className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                   >
                     <option value="all">Toda agenda</option>
                     <option value="overdue">Vencidos</option>
@@ -5806,7 +5865,7 @@ const App = () => {
                   <select
                     value={channelFilter}
                     onChange={(e) => setChannelFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                    className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                   >
                     <option value="all">Todos os canais</option>
                     {channels.map((c) => (
@@ -5820,7 +5879,7 @@ const App = () => {
                   <select
                     value={temperatureFilter}
                     onChange={(e) => setTemperatureFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                    className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                   >
                     <option value="all">Toda temperatura</option>
                     {LEAD_TEMPERATURE_OPTIONS.map((option) => (
@@ -5832,7 +5891,7 @@ const App = () => {
                   <select
                     value={slaFilter}
                     onChange={(e) => setSlaFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                    className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                   >
                     <option value="all">Todo SLA</option>
                     {SLA_STATUS_OPTIONS.map((option) => (
@@ -5844,7 +5903,7 @@ const App = () => {
                   <select
                     value={emailEngagementFilter}
                     onChange={(e) => setEmailEngagementFilter(e.target.value)}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full sm:w-auto"
+                    className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full sm:w-auto"
                   >
                     <option value="all">Mailrelay: todos</option>
                     <option value="engaged">Com engajamento</option>
@@ -5860,19 +5919,19 @@ const App = () => {
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Buscar por nome, email, telefone, campanha..."
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="flex-1 px-3 py-2 border border-line rounded-lg text-sm"
                 />
                 <input
                   type="text"
                   value={campaignFilter}
                   onChange={(e) => setCampaignFilter(e.target.value)}
                   placeholder="Filtrar campanha"
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="flex-1 px-3 py-2 border border-line rounded-lg text-sm"
                 />
                 <select
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card"
                 >
                   <option value="id">ID (mais novo/antigo)</option>
                   <option value="created_at">Data (se houver) / ID</option>
@@ -5884,7 +5943,7 @@ const App = () => {
                 <select
                   value={segmentFilter}
                   onChange={(e) => setSegmentFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full"
                 >
                   <option value="all">Todos os perfis</option>
                   {CLIENT_SEGMENT_OPTIONS.filter((s) => s.value !== '').map((s) => (
@@ -5896,7 +5955,7 @@ const App = () => {
                 <select
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white w-full"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card w-full"
                 >
                   <option value="all">Todos (prospects e clientes)</option>
                   <option value="prospect">Somente prospects</option>
@@ -5905,7 +5964,7 @@ const App = () => {
                 <select
                   value={sortDir}
                   onChange={(e) => setSortDir(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  className="px-3 py-2 border border-line rounded-lg text-sm bg-surface-card"
                 >
                   <option value="desc">Mais novo</option>
                   <option value="asc">Mais antigo</option>
@@ -5914,18 +5973,18 @@ const App = () => {
             </div>
           </div>
 
-          <div className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-3 bg-surface-low border border-line rounded-lg p-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3 text-sm flex-wrap">
               <span className={UI_STRONG}>Selecionados: {selectedCount}</span>
-              <span className="text-slate-500 text-xs">Disponíveis: {selectableLeadIds.length}</span>
+              <span className="text-ink-faint text-xs">Disponíveis: {selectableLeadIds.length}</span>
             </div>
             <div className="flex flex-wrap md:flex-nowrap items-center gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Status</span>
+                <span className="text-[10px] uppercase font-bold text-ink-faint">Status</span>
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value)}
-                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="px-2 py-1.5 border border-line rounded-lg text-sm bg-surface-card focus:ring-2 focus:ring-brand-500 outline-none"
                 >
                   <option value="">Status...</option>
                   {STATUS_OPTIONS.map((option) => (
@@ -5943,10 +6002,10 @@ const App = () => {
                 </button>
               </div>
 
-              <div className="w-[1px] h-6 bg-slate-200 hidden md:block flex-shrink-0"></div>
+              <div className="w-[1px] h-6 bg-surface-high hidden md:block flex-shrink-0"></div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Dono</span>
+                <span className="text-[10px] uppercase font-bold text-ink-faint">Dono</span>
                 <select
                   value={bulkOwnerId}
                   onChange={(e) => setBulkOwnerId(e.target.value)}
@@ -5968,7 +6027,7 @@ const App = () => {
                 </button>
               </div>
 
-              <div className="w-[1px] h-6 bg-slate-200 hidden md:block flex-shrink-0"></div>
+              <div className="w-[1px] h-6 bg-surface-high hidden md:block flex-shrink-0"></div>
 
               <button
                 onClick={bulkMarkContactDone}
@@ -5985,7 +6044,7 @@ const App = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b text-left text-slate-500">
+                    <tr className="border-b text-left text-ink-faint">
                       <th className="py-2 px-2 w-10">
                         <input
                           type="checkbox"
@@ -6064,7 +6123,7 @@ const App = () => {
                             </div>
                           </td>
                           <td className={UI_TD}>{lead.owner || lead.responsible_name || '-'}</td>
-                          <td className="py-2 px-2 text-xs text-slate-500">
+                          <td className="py-2 px-2 text-xs text-ink-faint">
                             {lead.next_contact
                               ? formatFollowupBR(lead.next_contact)
                               : '-'}
@@ -6075,13 +6134,13 @@ const App = () => {
                             <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                               <button
                                 onClick={() => openEditLeadModal(lead)}
-                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-600"
+                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-ink"
                               >
                                 Editar
                               </button>
                               <button
                                 onClick={() => copyToClipboard(buildWhatsappText(lead))}
-                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-600"
+                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-ink"
                                 title="Copiar texto de WhatsApp"
                               >
                                 WhatsApp
@@ -6102,7 +6161,7 @@ const App = () => {
                       <tr>
                         <td
                           colSpan={9}
-                          className="py-4 text-center text-slate-500 text-xs"
+                          className="py-4 text-center text-ink-faint text-xs"
                         >
                           Nenhum lead cadastrado
                         </td>
@@ -6132,13 +6191,13 @@ const App = () => {
                 return (
                   <div
                     key={col.value}
-                    className="border border-slate-200 rounded-xl p-3 bg-slate-50/70"
+                    className="border border-line rounded-xl p-3 bg-surface-low/70"
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => handleDropStatus(col.value)}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-slate-800">{col.label}</h3>
-                      <span className="text-xs px-2 py-1 rounded-full bg-white border border-slate-200">
+                      <h3 className="text-sm font-semibold text-ink">{col.label}</h3>
+                      <span className="text-xs px-2 py-1 rounded-full bg-surface-card border border-line">
                         {colLeads.length}
                       </span>
                     </div>
@@ -6156,17 +6215,17 @@ const App = () => {
                             <div className="absolute top-2 right-2 w-3 h-3 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
                           )}
                           <div className="flex items-center justify-between">
-                            <p className="font-semibold text-slate-900 text-sm">{lead.name}</p>
-                            <span className="text-xs text-slate-500">
+                            <p className="font-semibold text-ink text-sm">{lead.name}</p>
+                            <span className="text-xs text-ink-faint">
                               {lead.value ? `R$ ${Number(lead.value).toLocaleString('pt-BR')}` : ''}
                             </span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-600 mt-1">
+                          <div className="flex flex-wrap items-center gap-1 text-[11px] text-ink-soft mt-1">
                             {lead.company && (
                               <span className="text-ink-faint">{lead.company}</span>
                             )}
                             {lead.segment && (
-                              <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100">
+                              <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-ink border border-brand-100">
                                 {
                                   SEGMENT_OPTIONS.find((s) => s.value === lead.segment)?.label ||
                                   lead.segment
@@ -6183,8 +6242,8 @@ const App = () => {
                               {Number(lead.interactions_count || 0)} int.
                             </span>
                           </div>
-                          <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                          <p className="text-xs text-ink-soft mt-1">{lead.owner || lead.responsible_name || '-'}</p>
+                          <div className="flex items-center justify-between text-[11px] text-ink-faint mt-1">
                             <span>{lead.email || lead.phone || '-'}</span>
                             <div className="flex items-center gap-2">
                               <span>
@@ -6192,7 +6251,7 @@ const App = () => {
                                   ? formatFollowupBR(lead.next_contact)
                                   : '-'}
                               </span>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-ink-faint">
                                 {lead.created_at
                                   ? new Date(lead.created_at).toLocaleDateString('pt-BR')
                                   : '-'}
@@ -6211,7 +6270,7 @@ const App = () => {
                         </div>
                       ))}
                       {colLeads.length === 0 && (
-                        <p className="text-xs text-slate-500">Nenhum lead</p>
+                        <p className="text-xs text-ink-faint">Nenhum lead</p>
                       )}
                     </div>
                     {/* Reatribuição em massa por coluna removida para simplificar Kanban; drag-and-drop já atualiza */}
@@ -6225,62 +6284,62 @@ const App = () => {
         </div>
 
         {showLeadModal && (
-          <div className="fixed inset-0 bg-ink/45 z-50 scrim-enter">
+          <div className="fixed inset-0 bg-black/55 z-50 scrim-enter">
             {/* Drawer: entra pela direita. Largura mantida em max-w-lg (512px),
                 nao nos 400px do DESIGN.md, porque o formulario usa grade de 2
                 colunas dimensionada para essa largura — estreitar exigiria
                 refluir os 34 campos, que e outra tarefa. */}
             <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-surface-card border-l border-line shadow-2xl overflow-y-auto drawer-enter">
-              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">
+              <div className="p-4 border-b border-line flex items-start justify-between">
+                <h2 className="text-lg font-semibold text-ink">
                   {editingLead ? 'Editar Lead' : 'Novo Lead'}
                 </h2>
                 <button
                   onClick={closeLeadModal}
-                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
+                  className="text-sm text-ink-soft hover:text-ink px-2 py-1 rounded-lg border border-line"
                   aria-label="Fechar"
                 >
                   Fechar
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold mb-2">Termômetro comercial</p>
+                <div className="rounded-xl border border-line bg-surface-card px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold mb-2">Termômetro comercial</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <LeadTemperatureBadge value={leadForm.temperature} />
                     <LeadSlaBadge value={leadForm.sla_status} remainingMinutes={editingLead?.sla_remaining_minutes} />
                   </div>
-                  <div className="mt-2 text-xs text-slate-500 space-y-1">
+                  <div className="mt-2 text-xs text-ink-faint space-y-1">
                     <p>SLA esperado para este lead: {SLA_TARGET_LABELS[normalizeOptionValue(leadForm.temperature)] || '-'}</p>
                     <p>Última atividade: {leadForm.last_activity_at ? formatDateTimeBR(leadForm.last_activity_at) : '-'}</p>
                     <p>Prazo alvo: {leadForm.sla_due_at ? formatDateTimeBR(leadForm.sla_due_at) : '-'}</p>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold mb-2">Engajamento por email</p>
+                <div className="rounded-xl border border-line bg-surface-card px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold mb-2">Engajamento por email</p>
                   <div className="flex flex-wrap gap-2 mb-2 text-[11px]">
-                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                    <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                       Aberturas: {leadForm.email_open_count || 0}
                     </span>
-                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                    <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                       Cliques: {leadForm.email_click_count || 0}
                     </span>
                     <span className={`px-2 py-1 rounded-full ${leadForm.email_unsubscribed ? 'bg-risk text-risk-ink' : 'bg-ok text-ok-ink'}`}>
                       {leadForm.email_unsubscribed ? 'Descadastrado' : 'Ativo'}
                     </span>
                   </div>
-                  <div className="space-y-1 text-xs text-slate-500">
+                  <div className="space-y-1 text-xs text-ink-faint">
                     <p>Última abertura: {leadForm.last_email_open_at ? formatDateTimeBR(leadForm.last_email_open_at) : '-'}</p>
                     <p>Último clique: {leadForm.last_email_click_at ? formatDateTimeBR(leadForm.last_email_click_at) : '-'}</p>
                     <p>Última campanha: {leadForm.last_email_campaign || '-'}</p>
                     <p>Último evento: {leadForm.last_email_event_at ? formatDateTimeBR(leadForm.last_email_event_at) : '-'}</p>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="rounded-xl border border-line bg-surface-card px-3 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Interações manuais</p>
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold">Interações manuais</p>
+                      <p className="text-xs text-ink-faint mt-1">
                         Registre cada contato manualmente. O histórico fica oculto por padrão.
                       </p>
                     </div>
@@ -6295,7 +6354,7 @@ const App = () => {
                             notes: '',
                           });
                         }}
-                        className="px-3 py-2 rounded-lg text-xs font-semibold border border-slate-200 text-slate-700 bg-white"
+                        className="px-3 py-2 rounded-lg text-xs font-semibold border border-line text-ink-soft bg-surface-card"
                       >
                         Limpar
                       </button>
@@ -6320,7 +6379,7 @@ const App = () => {
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      <label className="block text-[11px] font-semibold text-ink-soft mb-1">
                         Data e hora
                       </label>
                       <input
@@ -6333,7 +6392,7 @@ const App = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      <label className="block text-[11px] font-semibold text-ink-soft mb-1">
                         Canal
                       </label>
                       <input
@@ -6357,7 +6416,7 @@ const App = () => {
                       </datalist>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      <label className="block text-[11px] font-semibold text-ink-soft mb-1">
                         Observação
                       </label>
                       <textarea
@@ -6375,34 +6434,34 @@ const App = () => {
                     <button
                       type="button"
                       onClick={() => setLeadInteractionsExpanded((value) => !value)}
-                      className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-slate-900"
+                      className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft hover:text-ink"
                     >
                       <span aria-hidden="true">{leadInteractionsExpanded ? '▴' : '▾'}</span>
                       <span>{leadInteractionsExpanded ? 'Ocultar Histórico' : 'Ver Histórico'}</span>
                     </button>
                   </div>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Total</p>
+                    <div className="rounded-lg border border-surface-mid bg-surface-low px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-ink-faint">Total</p>
                       <p className={UI_STRONG}>{leadForm.interactions_count || 0}</p>
                     </div>
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Última interação</p>
+                    <div className="rounded-lg border border-surface-mid bg-surface-low px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-ink-faint">Última interação</p>
                       <p className={UI_STRONG}>
                         {leadForm.last_interaction_at ? formatDateTimeBR(leadForm.last_interaction_at) : '-'}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Canal</p>
+                    <div className="rounded-lg border border-surface-mid bg-surface-low px-3 py-2">
+                      <p className="text-[10px] uppercase font-bold text-ink-faint">Canal</p>
                       <p className={UI_STRONG}>
                         {leadForm.last_interaction_channel || '-'}
                       </p>
                     </div>
                   </div>
                   {leadInteractionsExpanded && (
-                    <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="mt-3 border-t border-surface-mid pt-3">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold">
                           Histórico recente
                         </p>
                         {leadInteractionsLoading ? (
@@ -6411,13 +6470,13 @@ const App = () => {
                       </div>
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                         {leadInteractions.length === 0 ? (
-                          <p className="text-xs text-slate-500">Nenhuma interação registrada ainda.</p>
+                          <p className="text-xs text-ink-faint">Nenhuma interação registrada ainda.</p>
                         ) : (
                           leadInteractions.slice(0, 12).map((item) => (
-                            <div key={item.id} className="rounded-lg border border-slate-100 bg-white px-3 py-2">
+                            <div key={item.id} className="rounded-lg border border-surface-mid bg-surface-card px-3 py-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <p className="text-xs font-semibold text-slate-800">
+                                  <p className="text-xs font-semibold text-ink">
                                     {item.channel || 'Canal não informado'}
                                   </p>
                                   <p className={UI_META}>
@@ -6429,7 +6488,7 @@ const App = () => {
                                   <button
                                     type="button"
                                     onClick={() => editLeadInteraction(item)}
-                                    className="text-[11px] text-brand-600 hover:underline"
+                                    className="text-[11px] text-brand-ink hover:underline"
                                   >
                                     Editar
                                   </button>
@@ -6443,7 +6502,7 @@ const App = () => {
                                 </div>
                               </div>
                               {item.notes ? (
-                                <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
+                                <p className="text-xs text-ink-soft mt-1 whitespace-pre-wrap">
                                   {item.notes}
                                 </p>
                               ) : null}
@@ -6668,7 +6727,7 @@ const App = () => {
                         ? new Date(editingLead.created_at).toLocaleDateString('pt-BR')
                         : '-'
                     }
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-sm bg-surface-low text-ink-soft"
                     readOnly
                   />
                 </div>
@@ -6683,11 +6742,11 @@ const App = () => {
                         is_customer: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-ink border-line rounded"
                   />
                   <label
                     htmlFor="lead-customer"
-                    className="text-xs font-semibold text-slate-700"
+                    className="text-xs font-semibold text-ink-soft"
                   >
                     Já é cliente
                   </label>
@@ -6703,18 +6762,18 @@ const App = () => {
                         is_out_of_scope: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-ink border-line rounded"
                   />
                   <label
                     htmlFor="lead-out-of-scope"
-                    className="text-xs font-semibold text-slate-700"
+                    className="text-xs font-semibold text-ink-soft"
                   >
                     Fora do perfil
                   </label>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                <div className="pt-2 border-t border-surface-mid">
+                  <label className="block text-xs font-semibold text-ink-soft mb-2">
                     Tipo de Cliente
                   </label>
                   <div className="flex gap-2">
@@ -6725,7 +6784,7 @@ const App = () => {
                         onClick={() => setLeadForm({ ...leadForm, customer_type: type })}
                         className={`flex-1 py-1 px-3 text-sm rounded-lg border transition ${leadForm.customer_type === type
                           ? 'bg-brand-600 text-white border-brand-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
+                          : 'bg-surface-card text-ink-soft border-line hover:border-brand-300'
                           }`}
                       >
                         {type}
@@ -6734,13 +6793,13 @@ const App = () => {
                   </div>
                 </div>
                 {leadForm.region && (
-                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Região Identificada (DDD)</p>
-                    <p className="text-sm font-semibold text-slate-700">{leadForm.region}</p>
+                  <div className="bg-surface-low p-2 rounded-lg border border-line">
+                    <p className="text-[10px] uppercase font-bold text-ink-faint">Região Identificada (DDD)</p>
+                    <p className="text-sm font-semibold text-ink-soft">{leadForm.region}</p>
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  <label className="block text-xs font-semibold text-ink-soft mb-2">
                     Categorias em destaque (marque o que se aplicar)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -6749,15 +6808,15 @@ const App = () => {
                       return (
                         <label
                           key={cat}
-                          className="flex items-center gap-2 text-sm text-slate-700"
+                          className="flex items-center gap-2 text-sm text-ink-soft"
                         >
                           <input
                             type="checkbox"
                             checked={selected}
                             onChange={() => toggleLeadListField('highlighted_categories', cat)}
-                            className="h-4 w-4 rounded text-emerald-600 border-slate-300"
+                            className="h-4 w-4 rounded text-emerald-600 border-line"
                           />
-                          <span className="text-sm text-slate-700">{cat}</span>
+                          <span className="text-sm text-ink-soft">{cat}</span>
                         </label>
                       );
                     })}
@@ -6765,7 +6824,7 @@ const App = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  <label className="block text-xs font-semibold text-ink-soft mb-2">
                     Motivo de esfriamento (marque o que se aplicar)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -6774,15 +6833,15 @@ const App = () => {
                       return (
                         <label
                           key={reason}
-                          className="flex items-center gap-2 text-sm text-slate-700"
+                          className="flex items-center gap-2 text-sm text-ink-soft"
                         >
                           <input
                             type="checkbox"
                             checked={selected}
                             onChange={() => toggleLeadListField('cooling_reason', reason)}
-                            className="h-4 w-4 rounded text-amber-600 border-slate-300"
+                            className="h-4 w-4 rounded text-amber-600 border-line"
                           />
-                          <span className="text-sm text-slate-700">{reason}</span>
+                          <span className="text-sm text-ink-soft">{reason}</span>
                         </label>
                       );
                     })}
@@ -6800,11 +6859,11 @@ const App = () => {
                         is_private: e.target.checked,
                       })
                     }
-                    className="h-4 w-4 text-brand-600 border-slate-300 rounded"
+                    className="h-4 w-4 text-brand-ink border-line rounded"
                   />
                   <label
                     htmlFor="lead-private"
-                    className="text-xs font-semibold text-slate-700"
+                    className="text-xs font-semibold text-ink-soft"
                   >
                     Visível apenas para mim
                   </label>
@@ -6816,7 +6875,7 @@ const App = () => {
                   <textarea
                     readOnly
                     value={leadForm.notes}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600 cursor-not-allowed"
+                    className="w-full px-3 py-2 border border-line rounded-lg text-sm bg-surface-low text-ink-soft cursor-not-allowed"
                     rows={3}
                     title="Campo bloqueado para preservar a observação importada da campanha"
                   />
@@ -6835,10 +6894,10 @@ const App = () => {
                   />
                 </div>
               </div>
-              <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
+              <div className="p-4 border-t border-line flex justify-end gap-2">
                 <button
                   onClick={closeLeadModal}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                  className="px-4 py-2 text-sm border border-line rounded-lg"
                 >
                   Cancelar
                 </button>
@@ -6859,8 +6918,8 @@ const App = () => {
               </div>
               {(savingLead || savingLeadInteraction) && (
                 <div className="px-4 pb-4 flex justify-end">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
-                    <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-slate-900 animate-spin" />
+                  <div className="inline-flex items-center gap-2 rounded-full border border-line bg-surface-low px-3 py-2 text-[11px] font-semibold text-ink-soft">
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-line border-t-slate-900 animate-spin" />
                     {savingLead ? 'Salvando lead...' : 'Salvando interação...'}
                   </div>
                 </div>
@@ -6871,9 +6930,9 @@ const App = () => {
 
         {showBudgetModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">
+            <div className="bg-surface-card rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-line flex items-start justify-between">
+                <h2 className="text-lg font-semibold text-ink">
                   {editingBudget ? 'Editar Orçamento' : 'Novo Orçamento'}
                 </h2>
                 <button
@@ -6881,7 +6940,7 @@ const App = () => {
                     setShowBudgetModal(false);
                     setEditingBudget(null);
                   }}
-                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
+                  className="text-sm text-ink-soft hover:text-ink px-2 py-1 rounded-lg border border-line"
                 >
                   Fechar
                 </button>
@@ -7101,13 +7160,13 @@ const App = () => {
                   <textarea value={budgetForm.notes} onChange={(e) => setBudgetForm({ ...budgetForm, notes: e.target.value })} className={UI_INPUT} rows={3} />
                 </div>
               </div>
-              <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
+              <div className="p-4 border-t border-line flex justify-end gap-2">
                 <button
                   onClick={() => {
                     setShowBudgetModal(false);
                     setEditingBudget(null);
                   }}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                  className="px-4 py-2 text-sm border border-line rounded-lg"
                 >
                   Cancelar
                 </button>
@@ -7125,9 +7184,9 @@ const App = () => {
 
         {showAdSpendModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-slate-200 flex items-start justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">
+            <div className="bg-surface-card rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-line flex items-start justify-between">
+                <h2 className="text-lg font-semibold text-ink">
                   {editingAdSpend ? 'Editar lançamento de Ads' : 'Novo lançamento de Ads'}
                 </h2>
                 <button
@@ -7135,7 +7194,7 @@ const App = () => {
                     setShowAdSpendModal(false);
                     setEditingAdSpend(null);
                   }}
-                  className="text-sm text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200"
+                  className="text-sm text-ink-soft hover:text-ink px-2 py-1 rounded-lg border border-line"
                 >
                   Fechar
                 </button>
@@ -7205,13 +7264,13 @@ const App = () => {
                   />
                 </div>
               </div>
-              <div className="p-4 border-t border-slate-200 flex justify-end gap-2">
+              <div className="p-4 border-t border-line flex justify-end gap-2">
                 <button
                   onClick={() => {
                     setShowAdSpendModal(false);
                     setEditingAdSpend(null);
                   }}
-                  className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                  className="px-4 py-2 text-sm border border-line rounded-lg"
                 >
                   Cancelar
                 </button>
@@ -7229,12 +7288,12 @@ const App = () => {
 
         {showProfileModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="bg-surface-card rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-4 border-b border-line flex items-center justify-between">
                 <div className="flex gap-2">
                   <button
                     onClick={() => setProfileTab('me')}
-                    className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'me' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'
+                    className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'me' ? 'bg-brand-600 text-white' : 'bg-surface-mid text-ink-soft'
                       }`}
                   >
                     Meu perfil
@@ -7255,7 +7314,7 @@ const App = () => {
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'users'
                         ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-700'
+                        : 'bg-surface-mid text-ink-soft'
                         }`}
                     >
                       Usuários
@@ -7269,7 +7328,7 @@ const App = () => {
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'mailrelay'
                         ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-700'
+                        : 'bg-surface-mid text-ink-soft'
                         }`}
                     >
                       Mailrelay
@@ -7283,7 +7342,7 @@ const App = () => {
                       }}
                       className={`px-3 py-2 text-sm rounded-lg ${profileTab === 'omnichat'
                         ? 'bg-brand-600 text-white'
-                        : 'bg-slate-100 text-slate-700'
+                        : 'bg-surface-mid text-ink-soft'
                         }`}
                     >
                       Omnichat
@@ -7292,7 +7351,7 @@ const App = () => {
                 </div>
                 <button
                   onClick={() => setShowProfileModal(false)}
-                  className="text-sm text-slate-500 hover:text-slate-800"
+                  className="text-sm text-ink-faint hover:text-ink"
                 >
                   Fechar
                 </button>
@@ -7341,10 +7400,10 @@ const App = () => {
                       placeholder="Deixe em branco para manter"
                     />
                   </div>
-                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                  <div className="flex justify-end gap-2 pt-2 border-t border-line">
                     <button
                       onClick={() => setShowProfileModal(false)}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                      className="px-4 py-2 text-sm border border-line rounded-lg"
                     >
                       Cancelar
                     </button>
@@ -7361,12 +7420,12 @@ const App = () => {
               {profileTab === 'users' && isAdmin && (
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-800">
+                    <h3 className="text-sm font-semibold text-ink">
                       {userForm.id ? 'Editar usuário' : 'Novo usuário'}
                     </h3>
                     <button
                       onClick={startNewUser}
-                      className="text-xs text-brand-600 hover:underline"
+                      className="text-xs text-brand-ink hover:underline"
                     >
                       Novo
                     </button>
@@ -7439,7 +7498,7 @@ const App = () => {
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => setShowProfileModal(false)}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                      className="px-4 py-2 text-sm border border-line rounded-lg"
                     >
                       Fechar
                     </button>
@@ -7450,12 +7509,12 @@ const App = () => {
                       {userForm.id ? 'Salvar alterações' : 'Criar usuário'}
                     </button>
                   </div>
-                  <div className="border-t border-slate-200 pt-4">
-                    <h4 className="text-xs font-semibold text-slate-600 mb-2">Usuários</h4>
+                  <div className="border-t border-line pt-4">
+                    <h4 className="text-xs font-semibold text-ink-soft mb-2">Usuários</h4>
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b text-left text-slate-500">
+                          <tr className="border-b text-left text-ink-faint">
                             <th className={UI_TD}>Nome</th>
                             <th className={UI_TD}>Email</th>
                             <th className={UI_TD}>Telefone</th>
@@ -7473,7 +7532,7 @@ const App = () => {
                               <td className="py-2 px-2 text-right space-x-2">
                                 <button
                                   onClick={() => editExistingUser(u)}
-                                  className="text-brand-600 text-xs"
+                                  className="text-brand-ink text-xs"
                                 >
                                   Editar
                                 </button>
@@ -7490,7 +7549,7 @@ const App = () => {
                             <tr>
                               <td
                                 colSpan={5}
-                                className="py-3 text-center text-slate-500 text-xs"
+                                className="py-3 text-center text-ink-faint text-xs"
                               >
                                 Nenhum usuário cadastrado
                               </td>
@@ -7505,47 +7564,47 @@ const App = () => {
 
               {profileTab === 'mailrelay' && isAdmin && (
                 <div className="p-4 space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                    <h3 className="text-sm font-semibold text-slate-800">Integração Mailrelay</h3>
-                    <p className="text-xs text-slate-600">
+                  <div className="rounded-xl border border-line bg-surface-low p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-ink">Integração Mailrelay</h3>
+                    <p className="text-xs text-ink-soft">
                       Configure a URL base da API e a chave de acesso. O CRM usa essa conexão para sincronizar aberturas, cliques e descadastros.
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       <span className={`px-2 py-1 rounded-full ${mailrelaySettings.configured ? 'bg-ok text-ok-ink' : 'bg-warn text-warn-ink'}`}>
                         {mailrelaySettings.configured ? 'Configurado' : 'Não configurado'}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                         Origem: {mailrelaySettings.source === 'crm' ? 'CRM' : mailrelaySettings.source === 'env' ? '.env' : 'Nenhuma'}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                         Chave salva: {mailrelaySettings.has_api_key ? 'Sim' : 'Não'}
                       </span>
                     </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
-                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-ink-soft">
+                    <div className="rounded-lg bg-surface-card border border-line px-3 py-2">
                       Leads com engajamento: <span className={UI_STRONG}>{mailrelaySettings.leads_with_engagement || 0}</span>
                     </div>
-                    <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                    <div className="rounded-lg bg-surface-card border border-line px-3 py-2">
                       Eventos gravados: <span className={UI_STRONG}>{mailrelaySettings.email_events || 0}</span>
                     </div>
                   </div>
                   {mailrelaySettings.last_sync && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 text-xs text-slate-600">
+                    <div className="rounded-xl border border-line bg-surface-card p-3 space-y-2 text-xs text-ink-soft">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={UI_STRONG}>Última sincronização:</span>
                         <span>{mailrelaySettings.last_sync.synced_at ? formatDateTimeBR(mailrelaySettings.last_sync.synced_at) : '-'}</span>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Campanhas: <span className={UI_STRONG}>{mailrelaySettings.last_sync.campaigns_processed || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Eventos: <span className={UI_STRONG}>{mailrelaySettings.last_sync.events_processed || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Casados: <span className={UI_STRONG}>{mailrelaySettings.last_sync.leads_updated || 0}</span></div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">Sem match: <span className={UI_STRONG}>{mailrelaySettings.last_sync.unmatched_leads_count || 0}</span></div>
+                        <div className="rounded-lg bg-surface-low px-2 py-2">Campanhas: <span className={UI_STRONG}>{mailrelaySettings.last_sync.campaigns_processed || 0}</span></div>
+                        <div className="rounded-lg bg-surface-low px-2 py-2">Eventos: <span className={UI_STRONG}>{mailrelaySettings.last_sync.events_processed || 0}</span></div>
+                        <div className="rounded-lg bg-surface-low px-2 py-2">Casados: <span className={UI_STRONG}>{mailrelaySettings.last_sync.leads_updated || 0}</span></div>
+                        <div className="rounded-lg bg-surface-low px-2 py-2">Sem match: <span className={UI_STRONG}>{mailrelaySettings.last_sync.unmatched_leads_count || 0}</span></div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">
+                        <div className="rounded-lg bg-surface-low px-2 py-2">
                           Duplicados ignorados: <span className={UI_STRONG}>{mailrelaySettings.last_sync.duplicate_events_skipped || 0}</span>
                         </div>
-                        <div className="rounded-lg bg-slate-50 px-2 py-2">
+                        <div className="rounded-lg bg-surface-low px-2 py-2">
                           Sem identidade: <span className={UI_STRONG}>{mailrelaySettings.last_sync.missing_identity_skipped || 0}</span>
                         </div>
                       </div>
@@ -7554,7 +7613,7 @@ const App = () => {
                           <p className="font-semibold text-amber-800 mb-1">Exemplos sem match no CRM</p>
                           <div className="flex flex-wrap gap-1">
                             {mailrelaySettings.last_sync.unmatched_emails_sample.map((email) => (
-                              <span key={email} className="px-2 py-1 rounded-full bg-white border border-amber-200 text-amber-800">
+                              <span key={email} className="px-2 py-1 rounded-full bg-surface-card border border-amber-200 text-amber-800">
                                 {email}
                               </span>
                             ))}
@@ -7591,13 +7650,13 @@ const App = () => {
                     <button
                       onClick={syncMailrelayEngagement}
                       disabled={syncingMailrelay || !mailrelaySettings.configured}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg disabled:opacity-50"
+                      className="px-4 py-2 text-sm border border-line rounded-lg disabled:opacity-50"
                     >
                       {syncingMailrelay ? 'Sincronizando...' : 'Sincronizar agora'}
                     </button>
                     <button
                       onClick={() => setShowProfileModal(false)}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                      className="px-4 py-2 text-sm border border-line rounded-lg"
                     >
                       Fechar
                     </button>
@@ -7614,22 +7673,22 @@ const App = () => {
 
               {profileTab === 'omnichat' && isAdmin && (
                 <div className="p-4 space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                    <h3 className="text-sm font-semibold text-slate-800">Integração Omnichat</h3>
-                    <p className="text-xs text-slate-600">
+                  <div className="rounded-xl border border-line bg-surface-low p-4 space-y-2">
+                    <h3 className="text-sm font-semibold text-ink">Integração Omnichat</h3>
+                    <p className="text-xs text-ink-soft">
                       Configure a URL base da API e a chave x-api-key para agendar os lembretes de follow-up no OmniChat.
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       <span className={`px-2 py-1 rounded-full ${omnichatSettings.configured ? 'bg-ok text-ok-ink' : 'bg-warn text-warn-ink'}`}>
                         {omnichatSettings.configured ? 'Configurado' : 'Não configurado'}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                         Origem: {omnichatSettings.source === 'crm' ? 'CRM' : omnichatSettings.source === 'env' ? '.env' : 'Nenhuma'}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                         Chave salva: {omnichatSettings.has_api_key ? 'Sim' : 'Não'}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                      <span className="px-2 py-1 rounded-full bg-surface-mid text-ink-soft">
                         Auto follow-up: {omnichatSettings.enabled ? 'Ativo' : 'Desativado'}
                       </span>
                     </div>
@@ -7683,7 +7742,7 @@ const App = () => {
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <label className="flex items-center gap-2 text-sm text-ink-soft">
                     <input
                       type="checkbox"
                       checked={!!omnichatSettings.enabled}
@@ -7698,13 +7757,13 @@ const App = () => {
                     <button
                       onClick={runFollowupDispatchNow}
                       disabled={runningFollowupDispatch}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg disabled:opacity-50"
+                      className="px-4 py-2 text-sm border border-line rounded-lg disabled:opacity-50"
                     >
                       {runningFollowupDispatch ? 'Executando...' : 'Executar agora'}
                     </button>
                     <button
                       onClick={() => setShowProfileModal(false)}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                      className="px-4 py-2 text-sm border border-line rounded-lg"
                     >
                       Fechar
                     </button>
@@ -7724,9 +7783,9 @@ const App = () => {
 
         {showChannelModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-4 border-b border-slate-200">
-                  <h2 className="text-lg font-semibold text-slate-900">Canais</h2>
+              <div className="bg-surface-card rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b border-line">
+                  <h2 className="text-lg font-semibold text-ink">Canais</h2>
                 </div>
                 <div className="p-4 space-y-4">
                   <div>
@@ -7738,7 +7797,7 @@ const App = () => {
                         type="text"
                         value={newChannel}
                         onChange={(e) => setNewChannel(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        className="flex-1 px-3 py-2 border border-line rounded-lg text-sm"
                       />
                       <button
                         onClick={handleAddChannel}
@@ -7752,7 +7811,7 @@ const App = () => {
                     {channels.map((c) => (
                       <div
                         key={c.id}
-                        className="flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                        className="flex items-center justify-between px-3 py-2 border border-line rounded-lg text-sm"
                       >
                         <span>{c.name}</span>
                         <button
@@ -7764,16 +7823,16 @@ const App = () => {
                       </div>
                     ))}
                     {channels.length === 0 && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-ink-faint">
                         Nenhum canal cadastrado
                       </p>
                     )}
                   </div>
                 </div>
-                <div className="p-4 border-t border-slate-200 flex justify-end">
+                <div className="p-4 border-t border-line flex justify-end">
                   <button
                     onClick={() => setShowChannelModal(false)}
-                    className="px-4 py-2 text-sm border border-slate-300 rounded-lg"
+                    className="px-4 py-2 text-sm border border-line rounded-lg"
                   >
                     Fechar
                   </button>

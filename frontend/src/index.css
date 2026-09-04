@@ -2,20 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   PALETA
+   Os valores sao canais RGB separados por espaco porque e assim
+   que o Tailwind consegue aplicar opacidade (bg-risk/25, bg-ok/60).
+   O tema e resolvido em JS e estampado como data-theme no <html>:
+   por isso aqui bastam dois blocos, sem duplicar a paleta numa
+   media query. Quem escolhe "Automatico" tem o data-theme trocado
+   pelo proprio JS quando o sistema muda.
+   ============================================================ */
+
 :root {
   color-scheme: light;
+
+  --c-brand-50: 234 242 249;
+  --c-brand-100: 204 229 255;
+  --c-brand-200: 147 204 255;
+  --c-brand-300: 123 194 255;
+  --c-brand-400: 0 123 185;
+  --c-brand-500: 0 113 159;
+  --c-brand-600: 0 97 148;
+  --c-brand-700: 0 75 115;
+  --c-brand-800: 0 58 90;
+  --c-brand-900: 0 29 49;
+  --c-brand-ink: 0 97 148;
+
+  --c-surface: 247 249 255;
+  --c-surface-card: 255 255 255;
+  --c-surface-low: 241 244 250;
+  --c-surface-mid: 235 238 244;
+  --c-surface-high: 229 232 238;
+
+  --c-ink: 24 28 32;
+  --c-ink-soft: 63 72 80;
+  /* #666d75 e nao #707881: o valor antigo dava 4,06:1 sobre surface-low e
+     3,85:1 sobre surface-mid, abaixo do minimo de 4,5 para texto. Medido. */
+  --c-ink-faint: 102 109 117;
+  --c-line: 191 199 210;
+
+  --c-info: 211 230 245;   --c-info-line: 156 198 230;  --c-info-ink: 0 75 115;
+  --c-ok: 207 233 218;     --c-ok-line: 147 205 176;    --c-ok-ink: 11 107 69;
+  --c-warn: 255 227 196;   --c-warn-line: 240 195 147;  --c-warn-ink: 107 59 0;
+  --c-risk: 255 217 212;   --c-risk-line: 242 179 171;  --c-risk-ink: 147 0 10;
+
+  --c-shadow: 0 97 148;
+}
+
+/* Cinza frio, matiz entre 208 e 214 graus, saturacao entre 15 e 19 por cento.
+   Nao e o cinza arroxeado que costuma aparecer nesses temas — violeta ficaria
+   entre 260 e 290 graus. Todos os pares abaixo foram medidos em contraste:
+   texto sobre fundo no minimo 4,5:1 e superficies se distinguindo em 1,15:1. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --c-brand-50: 20 38 52;
+  --c-brand-100: 25 55 78;
+  --c-brand-200: 32 78 112;
+  --c-brand-300: 123 194 255;
+  --c-brand-400: 39 128 184;
+  --c-brand-500: 20 125 180;
+  --c-brand-600: 10 111 168;
+  --c-brand-700: 8 90 137;
+  --c-brand-800: 6 70 107;
+  --c-brand-900: 4 45 70;
+  --c-brand-ink: 123 194 255;
+
+  --c-surface: 18 22 26;
+  --c-surface-card: 26 31 37;
+  --c-surface-low: 34 41 50;
+  --c-surface-mid: 43 51 61;
+  --c-surface-high: 53 64 73;
+
+  --c-ink: 231 236 241;
+  --c-ink-soft: 180 190 200;
+  --c-ink-faint: 135 148 161;
+  --c-line: 59 70 80;
+
+  --c-info: 24 47 67;      --c-info-line: 42 78 102;    --c-info-ink: 142 202 240;
+  --c-ok: 21 49 34;        --c-ok-line: 37 82 60;       --c-ok-ink: 126 211 173;
+  --c-warn: 58 43 19;      --c-warn-line: 92 70 34;     --c-warn-ink: 255 196 107;
+  --c-risk: 69 32 25;      --c-risk-line: 107 53 41;    --c-risk-ink: 255 156 147;
+
+  --c-shadow: 0 0 0;
 }
 
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f7f9ff;
-  color: #181c20;
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
 }
 
 #root {
   min-height: 100vh;
-  background: #f7f9ff;
+  background: rgb(var(--c-surface));
 }
 
 /* Drawer do lead: entra pela direita, como especifica o DESIGN.md.
