@@ -15,6 +15,60 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-04 — Claude (via Cowork) — Modo escuro
+
+**O quê:** Tema escuro no sistema inteiro, com controle de três estados (Claro / Escuro / Automático) no menu do usuário. Quatro arquivos: `frontend/tailwind.config.js`, `frontend/src/index.css`, `frontend/public/index.html` e `frontend/src/App.js`.
+
+**Como funciona:** as cores do tema deixaram de ser hexadecimais fixos no `tailwind.config.js` e passaram a ser **variáveis CSS** no formato `rgb(var(--c-x) / <alpha-value>)`. O formato de canais separados por espaço é o que preserva os usos com opacidade que já existiam (`bg-risk/25`, `bg-ok/60`, `bg-warn-line/60`). Assim o tema é uma troca de valores no `index.css`, não uma segunda classe em cada elemento — os **326 usos de token que já existiam viraram tema escuro sem uma única edição**.
+
+O tema é resolvido em JavaScript e estampado como `data-theme` no `<html>`. Por isso o CSS precisa apenas de um bloco claro e um escuro, sem duplicar a paleta numa media query. Quem escolhe "Automático" tem o `data-theme` trocado pelo próprio JS quando o sistema operacional muda, via listener em `matchMedia`. A escolha é guardada em `localStorage`, por navegador — decisão do usuário, para não mexer no backend.
+
+Há um script curto em `public/index.html` que aplica o tema **antes do primeiro desenho**. Sem ele, quem usa o modo escuro veria a tela clara por uma fração de segundo a cada carregamento, porque o React só roda depois. Fica fora do bundle exatamente por causa dessa ordem.
+
+**Varredura:** havia **394 cores cruas** fora do sistema de tokens (`bg-white`, `text-slate-900`, `border-slate-200` e afins). O perigo não era ficarem claras — era o oposto: um `text-slate-900` dentro de um contêiner que vira escuro dá texto preto em fundo preto. Foram convertidas **349** delas para tokens, no arquivo inteiro e não só na tela de Leads, porque meia varredura é a situação perigosa: o usuário abriria o drawer de edição e o encontraria ilegível. As que sobraram (botões escuros sólidos com texto branco, véus de modal em preto, alguns verdes) são legíveis nos dois temas.
+
+**Separação de `brand-600` em dois papéis:** a marca era usada tanto como **preenchimento de botão** quanto como **cor de texto e link** (21 lugares). No escuro os dois papéis puxam para lados opostos: o preenchimento precisa escurecer para o texto branco em cima continuar legível, e o texto precisa clarear para ser legível sobre o fundo escuro. Criado o token `brand-ink` só para texto/link — no claro é o mesmo `#006194`, no escuro vira `#7bc2ff`.
+
+**A paleta escura:** cinza de viés frio, matiz medida entre **208 e 214 graus** e saturação entre 15 e 19 por cento — a pedido explícito do usuário, que não queria o cinza arroxeado comum nesses temas (violeta ficaria entre 260 e 290 graus). Fundo `#12161a`, cartão `#1a1f25`, linha `#3b4650`.
+
+**Correção de acessibilidade encontrada no caminho:** o token `ink-faint`, usado no texto secundário, era `#707881` e dava **4,06:1** sobre `surface-low` e 3,85:1 sobre `surface-mid` — abaixo do mínimo de 4,5 para texto. **Isso já estava errado antes do modo escuro.** Passou para `#666d75`, que dá 4,51:1 no pior caso.
+
+**Defeito corrigido:** o véu do drawer de lead usava `bg-ink/45`. No tema claro isso dá um véu preto, correto; no escuro a tinta é quase branca e o véu **clareava a tela inteira**. Passou para `bg-black/55`, como os outros quatro modais do sistema. Só foi encontrado porque a verificação varreu o DOM procurando fundos claros no tema escuro, em vez de confiar na inspeção visual do print.
+
+**Impacto:** apresentação apenas. Nenhuma chamada de API, regra de negócio ou campo alterado. Backend intocado. Quem não mexer em nada continua vendo o tema claro, porque o padrão é "Automático" e a maioria das máquinas está em claro.
+
+**Ordem de publicação — importante para a próxima vez:** os quatro arquivos moram em quatro pastas diferentes e o editor web do GitHub publica uma pasta por vez, o que obriga a quatro commits e quatro deploys. Foram feitos **em sequência, esperando cada deploy terminar**, porque dois deploys simultâneos executariam `git reset --hard` e `npm run build` ao mesmo tempo na mesma pasta do VPS. E o `tailwind.config.js` recebeu **valores de reserva** em cada variável (`var(--c-x, 247 249 255)`) para que, chegando antes do `index.css`, o sistema continuasse idêntico ao que já estava no ar em vez de ficar sem cor nenhuma até o deploy seguinte.
+
+**Rollback:** `git revert` dos quatro commits, ou reenvio dos arquivos anteriores. O `App.js` anterior a esta data está em `App.js.2026-09-04-pre-redesign.backup`, na raiz de `crmnew-temp`.
+
+**Validação:** `react-scripts build` completo; verificação automatizada de **contraste WCAG elemento por elemento, nas quatro abas e nos dois temas**. Resultado na tela de Leads: **zero reprovações em ambos**. Restam 13 reprovações nas outras três abas, todas anteriores a esta alteração: rótulos com hexadecimal cravado no código (`#0b6b45` em "Valor Convertido", `#ba1a1a` em "Leads quentes", `#ac6200` em "Pipeline Ativo"), que não sabem trocar de tema; e os botões verdes "Importar planilha" e "Baixar relatório em Excel", que dão 3,77:1 com texto branco e **reprovam nos dois temas, desde antes**.
+
+**Pendente:** aplicar às abas Dashboard, Orçamentos e E-mail marketing a mesma regra de cor da tela de Leads, o que resolveria essas 13 reprovações. Não feito — são abas ainda não revisadas com o usuário.
+
+## 2026-09-04 — Claude (via Cowork) — Reformulação da tela principal (Leads)
+
+**O quê:** Reformulação visual completa da aba CRM em `frontend/src/App.js`, aprovada por mockup antes da execução. Seis decisões:
+
+1. **Temperatura deixou de usar matiz.** `LeadTemperatureBadge` usava vermelho para "Quente" e âmbar para "Morno" — exatamente as cores que `LeadSlaBadge` usa para atraso, na mesma célula. Vermelho significava "lead bom" e "prazo estourado" ao mesmo tempo. A temperatura virou um medidor de 3 barras em tinta neutra; o SLA passou a ser a única coisa colorida da linha. O SLA "no prazo" também perdeu o verde: é o estado esperado e não precisa disputar atenção.
+2. **Fundo cheio virou tarja lateral de 3px.** No card de follow-up **toda** linha era `bg-warn` — fixo no código, sem condição — com 425 itens. Na agenda, os 1.201 vencidos pintavam a linha inteira de `bg-risk`. Agora: tarja de 3px e data em vermelho, fundo neutro.
+3. **Cabeçalho enxuto.** O hero com gradiente, título de 4xl, saudação, quatro botões e as abas em segunda faixa ocupava cerca de 200px. Virou uma barra de 52px: marca, abas sublinhadas e menu do usuário. Perfil, Canais, Unificar Meta Ads e Sair entraram no menu — o Sair perdeu o vermelho sólido, que era a cor mais forte da tela. O menu usa `<details>` nativo, sem estado novo no componente.
+4. **Painel de números.** A barra escura com três pílulas coloridas e os 15 cards em quatro cores viraram quatro KPIs (vencidos, novos sem contato, em negociação, conversão) com um só recebendo cor — o de vencidos, que é clicável e filtra a lista. O resto ficou atrás de "ver todos os números", reaproveitando o estado `showStats` que já existia.
+5. **Tabela.** Removido o fundo `bg-ok/60` que pintava de verde toda linha com empresa preenchida (2.226 de 2.244 leads, ou seja, a tabela inteira). Nome e Empresa viraram uma coluna só; a empresa só aparece quando difere do nome, e o perfil só quando existe (antes "Sem perfil" era texto em quase toda linha). "Interações: N" deixou de ser pílula. As ações viraram botões com alvo maior, e **Excluir saiu de junto de Editar**, separado por divisória e vermelho apenas no hover.
+6. **Um estilo de botão por papel.** Havia seis estilos na mesma tela (preto, azul, verde, azul claro, cinza, vermelho). Agora: um azul sólido por área para a ação principal, contorno para o resto, Lista/Kanban como chave de dois estados, e vermelho reservado para destruir.
+
+**Correções de defeito incluídas:**
+
+- **Centavos truncados.** Os cards de estatística usavam `.toLocaleString('pt-BR')` sem casas decimais, mostrando `R$ 156.647,2`. Passaram a usar `formatCurrencyBR`, que já existia no arquivo e já fazia isso certo.
+- **Minutos ilegíveis.** O SLA mostrava `1160 min atrasado`. Nova função `formatSlaDuration`: acima de 60 minutos vira hora, acima de 24 horas vira dia.
+
+**Impacto:** camada de apresentação apenas. Nenhuma chamada de API, regra de negócio ou campo foi alterado. Backend intocado. Todas as funções da tela foram preservadas — os 12 filtros, seleção em massa, Lista/Kanban, exportar, novo lead, copiar WhatsApp, ações rápidas da agenda (Feito/+1d/+3d), selos de e-mail, os 15 números do painel, e as quatro abas.
+
+**Rollback:** `git revert` do commit correspondente, ou reenvio de `App.js.2026-09-04-pre-redesign.backup` (md5 `986f835d9867ebe4fd67d1f631dafb85`, blob sha `6bc633a0e765bc40dd2612f26ed58e18b6c258ef`), guardado na raiz de `crmnew-temp` — a extensão `.backup` já é ignorada pelo `.gitignore`. Commit base: `32e489a`.
+
+**Validação:** `react-scripts build` completo rodado no container (compilou, mesmas quatro advertências de lint que já existiam antes — `stats`, `agendaOwnerFilter`, `canEdit` e uma dependência de `useMemo`; nenhuma nova). Tela renderizada e conferida com API simulada, em Lista e em Kanban, sem erro de página nem de console. Publicação feita fora do horário comercial, a pedido, porque **todo** deploy reinicia o PM2 e reescreve a pasta `build`.
+
+**Limite conhecido:** na coluna "Situação", linhas com SLA estourado quebram em duas alturas porque a pílula de atraso é larga. Legível, mas deixa a altura das linhas irregular. Corrigir exigiria uma coluna separada para as interações — não feito.
+
 ## 2026-09-03 — Claude (via Cowork) — Cache de leitura das planilhas: 2s -> 25s
 
 **O quê:** Em `backend/server.js`, `CACHE_TTL_MS` passou de 2000 para 25000 ms. Uma linha, com o override por variável de ambiente `SHEETS_CACHE_TTL_MS` mantido.
