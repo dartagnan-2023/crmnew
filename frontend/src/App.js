@@ -592,28 +592,50 @@ const MiniLineChart = ({ data, color = CHART_COLORS.volume, emptyLabel = 'Sem hi
   );
 };
 
+// Minutos crus nao se leem: "1160 min atrasado" exige conta de cabeca.
+// Acima de 60 vira hora, acima de 24h vira dia.
+const formatSlaDuration = (minutes) => {
+  const total = Math.abs(Math.round(Number(minutes) || 0));
+  if (total < 60) return `${total} min`;
+  if (total < 60 * 24) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  }
+  const d = Math.floor(total / (60 * 24));
+  const h = Math.floor((total % (60 * 24)) / 60);
+  return h ? `${d}d ${h}h` : `${d}d`;
+};
+
+const NAV_TABS = [
+  { value: 'crm', label: 'Leads' },
+  { value: 'dashboard', label: 'Dashboard' },
+  { value: 'orcamentos', label: 'Orçamentos' },
+  { value: 'emkt', label: 'E-mail mkt' },
+];
+
 const LeadTemperatureBadge = ({ value }) => {
   const normalized = normalizeOptionValue(value);
   const label = LEAD_TEMPERATURE_OPTIONS.find((item) => item.value === normalized)?.label || 'Sem temperatura';
   const targetLabel = SLA_TARGET_LABELS[normalized] || '-';
-  const toneClasses = {
-    frio: 'border-info-line bg-info text-info-ink',
-    morno: 'border-warn-line bg-warn text-warn-ink',
-    quente: 'border-risk-line bg-risk text-risk-ink',
-  };
-  const dotClasses = {
-    frio: 'bg-info-ink',
-    morno: 'bg-warn-ink',
-    quente: 'bg-risk-ink',
-  };
+  // Temperatura NAO usa matiz. Antes, 'quente' era vermelho e 'morno' ambar —
+  // as mesmas cores que o SLA usa para atraso, na mesma celula. Vermelho
+  // significava "lead bom" e "prazo estourado" ao mesmo tempo. Agora a
+  // temperatura e um medidor de 3 barras em tinta neutra e o SLA e a unica
+  // coisa colorida da linha.
+  const filled = { frio: 1, morno: 2, quente: 3 }[normalized] || 1;
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] leading-none whitespace-nowrap ${toneClasses[normalized] || toneClasses.frio}`}
+      className="inline-flex items-center gap-1.5 text-[11px] leading-none whitespace-nowrap text-ink-soft"
+      title={`Temperatura: ${label} | SLA alvo: ${targetLabel}`}
     >
-      <span className={`h-2 w-2 rounded-full ${dotClasses[normalized] || dotClasses.frio}`} />
-      <span className="font-semibold">{label}</span>
-      <span className="text-[10px] font-medium opacity-70">SLA {targetLabel}</span>
+      <span className="inline-flex items-end gap-[2px] h-3" aria-hidden>
+        <span className={`w-[3px] h-[5px] rounded-[1px] ${filled >= 1 ? 'bg-ink' : 'bg-line'}`} />
+        <span className={`w-[3px] h-[9px] rounded-[1px] ${filled >= 2 ? 'bg-ink' : 'bg-line'}`} />
+        <span className={`w-[3px] h-3 rounded-[1px] ${filled >= 3 ? 'bg-ink' : 'bg-line'}`} />
+      </span>
+      <span className="font-medium">{label}</span>
     </span>
   );
 };
@@ -621,21 +643,22 @@ const LeadTemperatureBadge = ({ value }) => {
 const LeadSlaBadge = ({ value, remainingMinutes }) => {
   const normalized = normalizeOptionValue(value);
   const label = SLA_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'No prazo';
+  // 'No prazo' e o estado esperado: fica neutro. Cor so quando ha algo a fazer.
   const toneClasses = {
-    normal: 'border-ok-line bg-ok text-ok-ink',
+    normal: 'border-line bg-surface-low text-ink-soft',
     warning: 'border-warn-line bg-warn text-warn-ink',
     overdue: 'border-risk-line bg-risk text-risk-ink',
   };
   const dotClasses = {
-    normal: 'bg-ok-ink',
+    normal: 'bg-ink-faint',
     warning: 'bg-warn-ink',
     overdue: 'bg-risk-ink',
   };
   const helper =
     typeof remainingMinutes === 'number'
       ? remainingMinutes >= 0
-        ? `${remainingMinutes} min`
-        : `${Math.abs(remainingMinutes)} min atrasado`
+        ? formatSlaDuration(remainingMinutes)
+        : `${formatSlaDuration(remainingMinutes)} atrasado`
       : '';
 
   return (
@@ -926,6 +949,9 @@ const App = () => {
   const [showAllAgenda, setShowAllAgenda] = useState(false);
   const [agendaOwnerFilter, setAgendaOwnerFilter] = useState('todos');
   const [showStats, setShowStats] = useState(false);
+  // Agenda e follow-up dividem um card so: lado a lado eles competiam, e o de
+  // follow-up e cronico (nao muda de um dia para o outro).
+  const [agendaPane, setAgendaPane] = useState('agenda');
   const [users, setUsers] = useState([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileTab, setProfileTab] = useState('me');
@@ -4319,82 +4345,63 @@ const App = () => {
           </div>
         )}
 
-        <header className="relative overflow-hidden rounded-[28px] border border-brand-900/30 bg-[linear-gradient(135deg,_#002c45_0%,_#004b73_55%,_#006194_100%)] p-5 md:p-6 shadow-[0_24px_80px_-28px_rgba(0,44,69,0.45)]">
-          <div className="absolute -top-20 right-0 h-56 w-56 rounded-full bg-cyan-300/20 blur-3xl" />
-          <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-emerald-300/10 blur-3xl" />
-          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.26em] text-cyan-100/80 font-bold">BHS CRM</p>
-            <h1 className="mt-2 text-3xl md:text-4xl font-black text-white">Leads - BHS Eletronica</h1>
-            <p className="mt-2 text-sm text-slate-200">Bem-vindo(a), {user.name}</p>
-            <div className="mt-4 inline-flex rounded-2xl border border-white/10 bg-white/10 p-1.5 backdrop-blur">
-              <button
-                onClick={() => setActiveTab('crm')}
-                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'crm'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-                  }`}
-              >
-                CRM
-              </button>
-              <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'dashboard'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-                  }`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => setActiveTab('orcamentos')}
-                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'orcamentos'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-                  }`}
-              >
-                Orçamentos
-              </button>
-              <button
-                onClick={() => setActiveTab('emkt')}
-                className={`px-4 py-2 text-sm rounded-xl transition ${activeTab === 'emkt'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-200 hover:text-white'
-                  }`}
-              >
-                Emkt
-              </button>
+        <header className="rounded-2xl border border-line bg-surface-card shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4">
+            <div className="flex items-center gap-6 min-w-0">
+              <span className="text-[13px] font-bold tracking-[0.1em] text-brand-600 whitespace-nowrap">BHS CRM</span>
+              <nav className="flex items-center -mb-px overflow-x-auto scrollbar-hide">
+                {NAV_TABS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setActiveTab(tab.value)}
+                    className={`px-3 h-[52px] text-sm whitespace-nowrap border-b-2 transition ${activeTab === tab.value
+                      ? 'border-brand-600 text-brand-600 font-semibold'
+                      : 'border-transparent text-ink-soft hover:text-ink'
+                      }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
             </div>
-          </div>
-          <div className="flex gap-3 flex-wrap justify-end">
-            <button
-              onClick={() => openProfileSettings('me')}
-              className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
-              title="Configurações e perfil"
-            >
-              Perfil
-            </button>
+            <details className="relative group">
+              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-soft hover:bg-surface-low">
+                <span className="grid h-6 w-6 place-items-center rounded-full border border-brand-100 bg-brand-50 text-[10px] font-bold text-brand-700">
+                  {(user.name || '?').trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="max-w-[160px] truncate">{user.name}</span>
+                <span aria-hidden className="text-ink-faint">▾</span>
+              </summary>
+              <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-xl border border-line bg-surface-card py-1 shadow-lift">
+                <button
+                  onClick={() => openProfileSettings('me')}
+                  className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
+                  title="Configurações e perfil"
+                >
+                  Perfil e configurações
+                </button>
                 <button
                   onClick={() => setShowChannelModal(true)}
-                  className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
+                  className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                 >
                   Canais
                 </button>
                 {isAdmin && (
                   <button
                     onClick={unifyMetaAdsChannel}
-                    className="px-4 py-2.5 text-sm bg-white/10 text-white rounded-xl border border-white/10 backdrop-blur hover:bg-white/15 transition"
+                    className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                   >
                     Unificar Meta Ads
                   </button>
                 )}
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2.5 text-sm bg-risk-ink text-white rounded-xl shadow hover:bg-[#7a0008] transition"
+                  className="mt-1 block w-full border-t border-surface-mid px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                 >
-              Sair
-            </button>
-          </div>
+                  Sair
+                </button>
+              </div>
+            </details>
           </div>
         </header>
 
@@ -5430,36 +5437,48 @@ const App = () => {
 
         <div className={activeTab === 'crm' ? '' : 'hidden'}>
         <section className="mb-3">
+          {/* Quatro numeros que pedem acao. So o vencido recebe cor: e o unico
+              que muda o que a pessoa faz agora. O resto (perfis, empresas,
+              perdidos) e referencia e fica atras do "ver todos os numeros". */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-line border border-line rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setUrgencyFilter('overdue')}
+              className="text-left bg-surface-card hover:bg-risk/30 transition px-4 py-3 border-l-[3px] border-l-risk-ink"
+              title="Filtrar a lista pelos contatos vencidos"
+            >
+              <p className="text-[10px] uppercase tracking-[0.09em] font-bold text-risk-ink">Contatos vencidos</p>
+              <p className="text-2xl font-bold text-risk-ink tabular-nums leading-tight mt-0.5">
+                {(agendaStats.overdue || 0).toLocaleString('pt-BR')}
+              </p>
+              <span className="text-[11px] font-semibold text-brand-600">Ver na lista →</span>
+            </button>
+            <div className="bg-surface-card px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.09em] font-bold text-ink-faint">Novos sem contato</p>
+              <p className="text-2xl font-bold text-ink tabular-nums leading-tight mt-0.5">
+                {(localStats.novos || 0).toLocaleString('pt-BR')}
+              </p>
+              <p className="text-[11px] text-ink-faint">de {(localStats.total || 0).toLocaleString('pt-BR')} leads</p>
+            </div>
+            <div className="bg-surface-card px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.09em] font-bold text-ink-faint">Em negociação</p>
+              <p className="text-2xl font-bold text-ink tabular-nums leading-tight mt-0.5">
+                {(localStats.qtdNegociacao || 0).toLocaleString('pt-BR')}
+              </p>
+              <p className="text-[11px] text-ink-faint">{formatCurrencyBR(localStats.valorNegociacao || 0)}</p>
+            </div>
+            <div className="bg-surface-card px-4 py-3">
+              <p className="text-[10px] uppercase tracking-[0.09em] font-bold text-ink-faint">Conversão</p>
+              <p className="text-2xl font-bold text-ink tabular-nums leading-tight mt-0.5">
+                {localStats.taxaConversao || 0}%
+              </p>
+              <p className="text-[11px] text-ink-faint">{formatCurrencyBR(localStats.valorTotal || 0)} convertidos</p>
+            </div>
+          </div>
           <button
             onClick={() => setShowStats((prev) => !prev)}
-            className="w-full flex items-center justify-between px-5 py-4 bg-[linear-gradient(135deg,_#002c45_0%,_#005886_100%)] text-white rounded-[24px] text-sm shadow-[0_18px_40px_-20px_rgba(0,44,69,0.55)] hover:shadow-[0_24px_46px_-20px_rgba(0,44,69,0.6)] transition group"
+            className="mt-2 text-[11px] font-semibold text-brand-600 hover:underline"
           >
-            <div className="flex items-center gap-2">
-              <span className="text-lg" aria-hidden>
-                📊
-              </span>
-              <div className="text-left">
-                <span className="block leading-tight">Estatísticas</span>
-                <span className="block text-[11px] text-slate-200 opacity-90">Toque para ver resumo</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] bg-white/10 px-3 py-1 rounded-full border border-white/20">
-                Total: {localStats.total || 0}
-              </span>
-              <span className="text-[11px] bg-emerald-400/20 text-emerald-100 px-3 py-1 rounded-full border border-ok-line/20">
-                Novos: {localStats.novos || 0}
-              </span>
-              <span className="text-[11px] bg-cyan-400/20 text-cyan-100 px-3 py-1 rounded-full border border-cyan-200/20">
-                Tx: {localStats.taxaConversao || 0}%
-              </span>
-              <span
-                className={`transform transition duration-200 ${showStats ? 'rotate-180' : ''} group-hover:scale-110`}
-                aria-hidden
-              >
-                ▾
-              </span>
-            </div>
+            {showStats ? 'Ocultar os outros números' : 'Ver todos os números (perfis, empresas, perdidos)'} ▾
           </button>
           {showStats && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -5468,35 +5487,35 @@ const App = () => {
                 <p className="text-xl font-bold text-ink">{localStats.total || 0}</p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Novos</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Novos</p>
                 <p className="text-xl font-bold text-ink">{localStats.novos || 0}</p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Em contato</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Em contato</p>
                 <p className="text-xl font-bold text-ink">{localStats.emContato || 0}</p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-brand-600">Taxa de Conversão</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Taxa de Conversão</p>
                 <p className="text-xl font-bold text-ink">{localStats.taxaConversao || 0}%</p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#0b6b45]">Valor Convertido</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Valor Convertido</p>
                 <p className="text-xl font-bold text-ink">
-                  R$ {(localStats.valorTotal || 0).toLocaleString('pt-BR')}
+                  {formatCurrencyBR(localStats.valorTotal || 0)}
                 </p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#ba1a1a]">Perdidos</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Perdidos</p>
                 <p className="text-xl font-bold text-ink">{localStats.perdidos || 0}</p>
                 <p className="text-[11px] text-ink-soft mt-1">
-                  Valor perdido: R$ {(localStats.valorPerdido || 0).toLocaleString('pt-BR')}
+                  Valor perdido: {formatCurrencyBR(localStats.valorPerdido || 0)}
                 </p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#ac6200]">Em negociação</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-ink-faint">Em negociação</p>
                 <p className="text-xl font-bold text-ink">{localStats.qtdNegociacao || 0}</p>
                 <p className="text-[11px] text-ink-soft mt-1">
-                  Valor em neg.: R$ {(localStats.valorNegociacao || 0).toLocaleString('pt-BR')}
+                  Valor em neg.: {formatCurrencyBR(localStats.valorNegociacao || 0)}
                 </p>
               </div>
               <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
@@ -5515,35 +5534,36 @@ const App = () => {
 
 
         <section className="mb-3">
-          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-4 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
-            <p className="text-xs text-slate-500 mb-2">Agenda</p>
-            <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="px-2 py-1 rounded-full bg-risk text-risk-ink">Vencidos: {agendaStats.overdue}</span>
-              <span className="px-2 py-1 rounded-full bg-warn text-warn-ink">Hoje: {agendaStats.today}</span>
-              <span className="px-2 py-1 rounded-full bg-brand-100 text-brand-700">Próx. 3 dias: {agendaStats.next3}</span>
-              <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Total: {agendaStats.total}</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
-            <div className="flex items-start justify-between mb-3 gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Agenda - Próximos contatos
-                </h2>
+          <div className="rounded-2xl border border-line bg-surface-card shadow-card overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-surface-mid">
+              <h2 className="text-[15px] font-semibold text-ink">Precisa de você</h2>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex rounded-lg border border-line overflow-hidden">
+                  <button
+                    onClick={() => setAgendaPane('agenda')}
+                    className={`px-3 py-1.5 text-[11px] border-r border-line ${agendaPane === 'agenda' ? 'bg-brand-600 text-white font-semibold' : 'bg-surface-card text-ink-soft hover:bg-surface-low'}`}
+                  >
+                    Agenda · {agendaStats.total}
+                  </button>
+                  <button
+                    onClick={() => setAgendaPane('followup')}
+                    className={`px-3 py-1.5 text-[11px] ${agendaPane === 'followup' ? 'bg-brand-600 text-white font-semibold' : 'bg-surface-card text-ink-soft hover:bg-surface-low'}`}
+                  >
+                    Follow-up · {followUpLeads.length}
+                  </button>
+                </div>
+                {agendaPane === 'agenda' && agendaBase.length > 5 && (
+                  <button
+                    onClick={() => setShowAllAgenda((v) => !v)}
+                    className="text-xs text-brand-600 hover:underline whitespace-nowrap"
+                  >
+                    {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
+                  </button>
+                )}
               </div>
-              {agendaBase.length > 5 && (
-                <button
-                  onClick={() => setShowAllAgenda((v) => !v)}
-                  className="text-xs text-brand-600 hover:underline"
-                >
-                  {showAllAgenda ? 'Mostrar menos' : 'Ver toda agenda'}
-                </button>
-              )}
             </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            {agendaPane === 'agenda' && (
+            <div className="max-h-64 overflow-y-auto">
               {agendaLeads.length === 0 && (
                 <p className="text-xs text-slate-500">Nenhum contato agendado.</p>
               )}
@@ -5553,7 +5573,7 @@ const App = () => {
                 const date = new Date(lead.next_contact);
                 const responsible = lead.owner || lead.responsible_name;
                 let rowClasses =
-                  'flex items-center justify-between px-3 py-2 border rounded-lg text-sm cursor-pointer ';
+                  'flex items-center justify-between gap-3 px-3 py-2 border-l-[3px] border-b border-b-surface-mid last:border-b-0 text-sm cursor-pointer ';
                 if (!Number.isNaN(date.getTime())) {
                   const today = now.getTime();
                   const day = new Date(
@@ -5563,15 +5583,17 @@ const App = () => {
                   ).getTime();
                   const isToday = day === today;
                   const isOverdue = day < today;
+                  // Tarja lateral em vez de fundo cheio: com 1.201 vencidos, o
+                  // fundo vermelho virava parede e parava de sinalizar.
                   if (isOverdue) {
-                    rowClasses += 'border-risk-line bg-risk hover:bg-risk-line/60';
+                    rowClasses += 'border-l-risk-ink bg-risk/25 hover:bg-risk/40';
                   } else if (isToday) {
-                    rowClasses += 'border-warn-line bg-warn hover:bg-warn-line/60';
+                    rowClasses += 'border-l-warn-ink hover:bg-surface-low';
                   } else {
-                    rowClasses += 'border-slate-200 hover:bg-slate-50';
+                    rowClasses += 'border-l-transparent hover:bg-surface-low';
                   }
                 } else {
-                  rowClasses += 'border-slate-200 hover:bg-slate-50';
+                  rowClasses += 'border-l-transparent hover:bg-surface-low';
                 }
 
                 return (
@@ -5650,33 +5672,25 @@ const App = () => {
                 );
               })}
             </div>
-          </div>
-
-          <div className="rounded-[24px] border border-white/70 bg-white/90 backdrop-blur p-5 shadow-[0_20px_55px_-28px_rgba(15,23,42,0.4)]">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Follow-up (10+ dias em Novo)
-              </h2>
-              <span className="px-3 py-1 text-xs rounded-full bg-warn text-warn-ink">
-                {followUpLeads.length} pendente(s)
-              </span>
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            )}
+            {agendaPane === 'followup' && (
+            <div className="max-h-64 overflow-y-auto">
               {followUpLeads.length === 0 && (
                 <p className="text-xs text-slate-500">Nenhum lead pendente de follow-up.</p>
               )}
               {followUpLeads.map((lead) => (
                 <div
                   key={lead.id}
-                  className="flex items-center justify-between px-3 py-2 border rounded-lg text-sm cursor-pointer border-warn-line bg-warn hover:bg-warn-line/60"
+                  className="flex items-center justify-between gap-3 px-3 py-2 border-l-[3px] border-l-transparent border-b border-b-surface-mid last:border-b-0 text-sm cursor-pointer hover:bg-surface-low"
                   onClick={() => openEditLeadModal(lead)}
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className={UI_STRONG}>
                       {lead.name} {lead.contact ? `- ${lead.contact}` : ''}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-[11px] text-ink-faint">
                       {lead.owner || lead.responsible_name || 'Sem responsável'}
+                      {lead.status ? ` · ${lead.status}` : ''}
                     </p>
                     {lead.first_contact && (
                       <p className={UI_META}>
@@ -5684,63 +5698,69 @@ const App = () => {
                       </p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-600">{lead._daysSince || 0} dias</p>
-                    <p className={UI_META}>{lead.status || '-'}</p>
+                  <div className="text-right whitespace-nowrap">
+                    <p className="text-xs text-ink-soft tabular-nums">{lead._daysSince || 0} dias parado</p>
                   </div>
                 </div>
               ))}
             </div>
+            )}
           </div>
         </section>
 
-        <section className="bg-white/85 backdrop-blur rounded-[28px] shadow-[0_24px_60px_-28px_rgba(15,23,42,0.45)] p-5 border border-white/70">
+        <section className="rounded-2xl border border-line bg-surface-card shadow-card p-4">
+          {/* Um azul solido por area (a acao principal); tudo mais e contorno.
+              Lista/Kanban vira o que sempre foi: uma chave de dois estados. */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-bold">Operação</p>
-              <h2 className="text-2xl font-black text-slate-900">Leads</h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-lg font-bold text-ink">Leads</h2>
+              <span className="text-[11px] text-ink-faint tabular-nums">
+                {displayedLeads.length.toLocaleString('pt-BR')} na lista
+              </span>
+              <div className="inline-flex rounded-lg border border-line overflow-hidden">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 text-xs border-r border-line ${viewMode === 'list'
+                    ? 'bg-brand-600 text-white font-semibold'
+                    : 'bg-surface-card text-ink-soft hover:bg-surface-low'
+                    }`}
+                >
+                  Lista
+                </button>
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  className={`px-3 py-1.5 text-xs ${viewMode === 'kanban'
+                    ? 'bg-brand-600 text-white font-semibold'
+                    : 'bg-surface-card text-ink-soft hover:bg-surface-low'
+                    }`}
+                >
+                  Kanban
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-2 rounded-xl border text-xs font-semibold ${viewMode === 'list'
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200'
-                  }`}
-              >
-                Lista
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`px-4 py-2 rounded-xl border text-xs font-semibold ${viewMode === 'kanban'
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200'
-                  }`}
-              >
-                Kanban
-              </button>
-              <button
                 onClick={exportCsv}
-                className="px-4 py-2 bg-white text-slate-800 rounded-xl text-sm border border-slate-200 shadow-sm"
+                className="px-3 py-2 bg-surface-card text-ink-soft rounded-lg text-sm border border-line hover:bg-surface-low transition-colors"
               >
-                Exportar contatos limpos
+                Exportar
               </button>
               <button
                 onClick={clearFilters}
-                className="px-4 py-2 bg-white text-slate-700 rounded-xl text-sm border border-slate-200 shadow-sm"
+                className="px-3 py-2 bg-surface-card text-ink-soft rounded-lg text-sm border border-line hover:bg-surface-low transition-colors"
               >
                 Limpar filtros
               </button>
               <button
                 onClick={openNewLeadModal}
-                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-full text-sm font-semibold shadow-card transition-colors"
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold transition-colors"
               >
-                Novo Lead
+                Novo lead
               </button>
             </div>
           </div>
 
-          <div className="mb-4 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,_rgba(248,250,252,0.95)_0%,_rgba(241,245,249,0.92)_100%)] p-4 flex flex-col gap-3 shadow-inner">
+          <div className="mb-4 rounded-xl border border-line bg-surface-low p-3 flex flex-col gap-3">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                 <select
@@ -5930,7 +5950,7 @@ const App = () => {
                 <select
                   value={bulkOwnerId}
                   onChange={(e) => setBulkOwnerId(e.target.value)}
-                  className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none min-w-[140px]"
+                  className="px-2 py-1.5 border border-line rounded-lg text-sm bg-surface-card focus:ring-2 focus:ring-brand-500 outline-none min-w-[140px]"
                 >
                   <option value="">Responsável...</option>
                   {users.map((u) => (
@@ -5942,7 +5962,7 @@ const App = () => {
                 <button
                   onClick={bulkReassignOwner}
                   disabled={!selectedCount || !bulkOwnerId}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors whitespace-nowrap"
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-line bg-surface-card text-ink-soft hover:bg-surface-low disabled:opacity-40 transition-colors whitespace-nowrap"
                 >
                   Mover
                 </button>
@@ -5953,7 +5973,7 @@ const App = () => {
               <button
                 onClick={bulkMarkContactDone}
                 disabled={!selectedEditableCount}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
+                className="px-4 py-1.5 text-sm font-medium rounded-lg border border-line bg-surface-card text-ink-soft hover:bg-surface-low disabled:opacity-40 transition-colors flex items-center gap-2 whitespace-nowrap flex-shrink-0"
               >
                 <span>Contato feito</span>
               </button>
@@ -5974,12 +5994,11 @@ const App = () => {
                           onChange={toggleSelectAll}
                         />
                       </th>
-                      <th className={UI_TD}>Nome</th>
-                      <th className={UI_TD}>Empresa</th>
+                      <th className={UI_TD}>Lead</th>
                       <th className={UI_TD}>Canal</th>
-                      <th className={UI_TD}>Região</th>
+                      <th className={UI_TD}>UF</th>
                       <th className={UI_TD}>Status</th>
-                      <th className={UI_TD}>Termômetro</th>
+                      <th className={UI_TD}>Situação</th>
                       <th className={UI_TD}>Responsável</th>
                       <th className={UI_TD}>Próximo contato</th>
                       <th className="py-2 px-2 text-right">Ações</th>
@@ -5991,11 +6010,17 @@ const App = () => {
                       const canEdit = canEditLead(lead);
                       const canSelect = canReassignLead(lead);
                       const hasCompany = !!lead.company;
-                      const rowClass =
-                        'border-b last:border-none hover:bg-slate-50 ' +
-                        (hasCompany ? 'bg-ok/60' : '');
-                      const segmentLabel =
-                        SEGMENT_OPTIONS.find((s) => s.value === (lead.segment || ''))?.label || null;
+                      // O fundo verde marcava "tem empresa preenchida" — e 2.226
+                      // dos 2.244 leads tem. Pintava a tabela inteira sem separar
+                      // nada. A empresa agora aparece como segunda linha do nome.
+                      const rowClass = 'border-b border-surface-mid last:border-none hover:bg-surface-low';
+                      const segmentLabel = lead.segment
+                        ? SEGMENT_OPTIONS.find((s) => s.value === lead.segment)?.label || null
+                        : null;
+                      const companyLine =
+                        hasCompany && String(lead.company).trim() !== String(lead.name || '').trim()
+                          ? lead.company
+                          : null;
                       return (
                         <tr key={lead.id} className={rowClass}>
                           <td className={UI_TD}>
@@ -6008,35 +6033,23 @@ const App = () => {
                             />
                           </td>
                           <td className={UI_TD}>
-                            <div className="flex items-center gap-1">
-                              {lead.name}
-                              {hasCompany && (
-                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-ok text-ok-ink border border-ok-line">
-                                  Empresa
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className={UI_TD}>
-                            <div className="flex items-center gap-1">
-                              {lead.company || '-'}
-                              {segmentLabel && (
-                                <span className="text-[10px] px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100">
-                                  {segmentLabel}
-                                </span>
-                              )}
-                            </div>
+                            <div className="font-semibold text-ink leading-tight">{lead.name}</div>
+                            {(companyLine || segmentLabel) && (
+                              <div className="text-[11px] text-ink-faint leading-tight">
+                                {[companyLine, segmentLabel].filter(Boolean).join(' · ')}
+                              </div>
+                            )}
                           </td>
                           <td className={UI_TD}>{lead.channel_name || '-'}</td>
                           <td className={UI_TD}>
                             {lead.region ? (
-                              <span className="px-2 py-[2px] rounded-full text-[10px] bg-slate-100 text-slate-600 border border-slate-200 uppercase font-bold">
+                              <span className="text-[11px] uppercase font-semibold text-ink-soft">
                                 {lead.region}
                               </span>
-                            ) : '-'}
+                            ) : <span className="text-ink-faint">—</span>}
                           </td>
                           <td className={UI_TD}>
-                            <span className="px-2 py-[2px] rounded-full text-[11px] border bg-slate-50 text-slate-700 border-slate-200">
+                            <span className="px-2 py-[2px] rounded-full text-[11px] border bg-surface-low text-ink-soft border-line">
                               {lead.status}
                             </span>
                           </td>
@@ -6045,8 +6058,8 @@ const App = () => {
                               <LeadTemperatureBadge value={lead.temperature} />
                               <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
                               <LeadEmailEngagementBadges lead={lead} />
-                              <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-semibold">
-                                Interações: {Number(lead.interactions_count || 0)}
+                              <span className="text-[11px] text-ink-faint tabular-nums whitespace-nowrap">
+                                {Number(lead.interactions_count || 0)} int.
                               </span>
                             </div>
                           </td>
@@ -6056,25 +6069,31 @@ const App = () => {
                               ? formatFollowupBR(lead.next_contact)
                               : '-'}
                           </td>
-                          <td className="py-2 px-2 text-right space-x-2">
-                            <button
-                              onClick={() => openEditLeadModal(lead)}
-                              className="text-brand-600 text-xs"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => copyToClipboard(buildWhatsappText(lead))}
-                              className="text-emerald-600 text-xs"
-                            >
-                              Copiar WhatsApp
-                            </button>
-                            <button
-                              onClick={() => deleteLead(lead.id)}
-                              className="text-red-600 text-xs"
-                            >
-                              Excluir
-                            </button>
+                          <td className="py-2 px-2">
+                            {/* Excluir sai de junto de Editar: separador visual e
+                                vermelho so no hover, para nao competir com o SLA. */}
+                            <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                              <button
+                                onClick={() => openEditLeadModal(lead)}
+                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-600"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(buildWhatsappText(lead))}
+                                className="px-2 py-1 rounded-md border border-line text-[11px] text-ink-soft hover:bg-surface-low hover:text-brand-600"
+                                title="Copiar texto de WhatsApp"
+                              >
+                                WhatsApp
+                              </button>
+                              <span className="mx-1 h-4 w-px bg-line" aria-hidden />
+                              <button
+                                onClick={() => deleteLead(lead.id)}
+                                className="px-2 py-1 rounded-md border border-transparent text-[11px] text-ink-faint hover:border-risk-line hover:bg-risk hover:text-risk-ink"
+                              >
+                                Excluir
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -6082,7 +6101,7 @@ const App = () => {
                     {filteredLeads.length === 0 && (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={9}
                           className="py-4 text-center text-slate-500 text-xs"
                         >
                           Nenhum lead cadastrado
@@ -6096,7 +6115,7 @@ const App = () => {
                 <div className="flex justify-center py-3">
                   <button
                     onClick={() => setVisibleCount((v) => v + 20)}
-                    className="px-4 py-2 text-sm bg-slate-200 rounded-lg"
+                    className="px-4 py-2 text-sm rounded-lg border border-line bg-surface-card text-ink-soft hover:bg-surface-low"
                   >
                     + Ver mais
                   </button>
@@ -6127,8 +6146,7 @@ const App = () => {
                       {colLeadsSorted.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`relative p-3 rounded-lg border shadow-sm cursor-pointer hover:border-brand-200 ${lead.company ? 'border-ok-line bg-ok' : 'border-slate-200 bg-white'
-                            }`}
+                          className="relative p-3 rounded-lg border border-line bg-surface-card shadow-sm cursor-pointer hover:border-brand-300"
                           onClick={() => openEditLeadModal(lead)}
                           draggable
                           onDragStart={() => handleCardDragStart(lead.id)}
@@ -6145,9 +6163,7 @@ const App = () => {
                           </div>
                           <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-600 mt-1">
                             {lead.company && (
-                              <span className="px-2 py-[2px] rounded-full bg-ok text-ok-ink border border-ok-line">
-                                {lead.company}
-                              </span>
+                              <span className="text-ink-faint">{lead.company}</span>
                             )}
                             {lead.segment && (
                               <span className="px-2 py-[2px] rounded-full bg-brand-50 text-brand-700 border border-brand-100">
@@ -6158,15 +6174,13 @@ const App = () => {
                               </span>
                             )}
                             {lead.region && (
-                              <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-bold">
-                                {lead.region}
-                              </span>
+                              <span className="uppercase font-semibold text-ink-soft">{lead.region}</span>
                             )}
                             <LeadTemperatureBadge value={lead.temperature} />
                             <LeadSlaBadge value={lead.sla_status} remainingMinutes={lead.sla_remaining_minutes} />
                             <LeadEmailEngagementBadges lead={lead} />
-                            <span className="px-2 py-[2px] rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-semibold">
-                              Interações: {Number(lead.interactions_count || 0)}
+                            <span className="text-ink-faint tabular-nums">
+                              {Number(lead.interactions_count || 0)} int.
                             </span>
                           </div>
                           <p className="text-xs text-slate-600 mt-1">{lead.owner || lead.responsible_name || '-'}</p>
@@ -6184,7 +6198,7 @@ const App = () => {
                                   : '-'}
                               </span>
                               <button
-                                className="text-red-500 hover:underline"
+                                className="text-ink-faint hover:text-risk-ink hover:underline"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   deleteLead(lead.id);
