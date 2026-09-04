@@ -969,6 +969,14 @@ const App = () => {
       return 'auto';
     }
   });
+  // O menu do usuario e um <details> nativo — nao precisa de estado para abrir,
+  // mas tambem nao fecha sozinho ao clicar fora, que e o comportamento que
+  // qualquer pessoa espera de um menu. Estas duas pecas cobrem isso.
+  const userMenuRef = useRef(null);
+  const fecharMenuUsuario = useCallback(() => {
+    if (userMenuRef.current) userMenuRef.current.open = false;
+  }, []);
+
   const [users, setUsers] = useState([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileTab, setProfileTab] = useState('me');
@@ -1071,6 +1079,24 @@ const App = () => {
     setUsers([]);
     setShowProfileModal(false);
   };
+
+  useEffect(() => {
+    const cliqueFora = (event) => {
+      const menu = userMenuRef.current;
+      if (menu && menu.open && !menu.contains(event.target)) menu.open = false;
+    };
+    const tecla = (event) => {
+      if (event.key === 'Escape') fecharMenuUsuario();
+    };
+    // 'mousedown' e nao 'click': fecha assim que o botao desce, antes de o
+    // clique chegar em outro elemento da tela.
+    document.addEventListener('mousedown', cliqueFora);
+    document.addEventListener('keydown', tecla);
+    return () => {
+      document.removeEventListener('mousedown', cliqueFora);
+      document.removeEventListener('keydown', tecla);
+    };
+  }, [fecharMenuUsuario]);
 
   useEffect(() => {
     const media =
@@ -4403,7 +4429,7 @@ const App = () => {
                 ))}
               </nav>
             </div>
-            <details className="relative group">
+            <details ref={userMenuRef} className="relative group">
               <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-soft hover:bg-surface-low">
                 <span className="grid h-6 w-6 place-items-center rounded-full border border-brand-100 bg-brand-50 text-[10px] font-bold text-brand-ink">
                   {(user.name || '?').trim().charAt(0).toUpperCase()}
@@ -4413,21 +4439,30 @@ const App = () => {
               </summary>
               <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-xl border border-line bg-surface-card py-1 shadow-lift">
                 <button
-                  onClick={() => openProfileSettings('me')}
+                  onClick={() => {
+                    fecharMenuUsuario();
+                    openProfileSettings('me');
+                  }}
                   className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                   title="Configurações e perfil"
                 >
                   Perfil e configurações
                 </button>
                 <button
-                  onClick={() => setShowChannelModal(true)}
+                  onClick={() => {
+                    fecharMenuUsuario();
+                    setShowChannelModal(true);
+                  }}
                   className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                 >
                   Canais
                 </button>
                 {isAdmin && (
                   <button
-                    onClick={unifyMetaAdsChannel}
+                    onClick={() => {
+                      fecharMenuUsuario();
+                      unifyMetaAdsChannel();
+                    }}
                     className="block w-full px-3 py-2 text-left text-sm text-ink-soft hover:bg-surface-low"
                   >
                     Unificar Meta Ads
@@ -4441,7 +4476,10 @@ const App = () => {
                     {THEME_OPTIONS.map((option) => (
                       <button
                         key={option.value}
-                        onClick={() => setTheme(option.value)}
+                        onClick={() => {
+                          setTheme(option.value);
+                          fecharMenuUsuario();
+                        }}
                         className={`flex-1 border-r border-line px-2 py-1.5 text-[11px] last:border-r-0 ${theme === option.value
                           ? 'bg-brand-600 font-semibold text-white'
                           : 'bg-surface-card text-ink-soft hover:bg-surface-low'
