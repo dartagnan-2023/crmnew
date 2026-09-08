@@ -58,6 +58,8 @@ Escolha do dono do produto entre quatro opções. As descartadas:
 **Validação executada:**
 
 - `npm run build`: **exit 0**, os mesmos 4 warnings pré-existentes, comparados linha a linha. Nenhum warning novo.
+
+**Publicação:** o deploy do commit `52af4da` (execução #199) **falhou no passo "Aguardar SSH do VPS responder"** — a porta 22 do VPS não respondeu em 6 tentativas. O passo de publicação foi pulado e **produção não foi alterada**, continuando no `4cfa224`. É a terceira ocorrência do mesmo problema intermitente (as duas primeiras em 02/09/2026, que motivaram a criação desse próprio passo de espera). Não tem relação com o código desta alteração. Reenviado em seguida.
 - **Teste de ponta a ponta pelo navegador**, com backend real (camada do Sheets substituída por duplo em memória) e base semeada com 49 leads e 18 orçamentos distribuídos em 6 meses:
   - **Período 30 dias x 12 meses:** os cartões mudaram (17 leads / R$ 11.000 contra 49 leads / R$ 21.000) e os três gráficos de evolução ficaram **idênticos**, com os seis meses preenchidos. É exatamente o comportamento pretendido.
   - **Filtro que não é de data ainda vale:** filtrando por campanha, "Entradas por mês" foi de 5/7/9/11/13/4 para 3/4/5/6/7/2 e o pipeline caiu pela metade em todos os meses. O cartão foi de 17 para 9. Ou seja, a separação **não** desligou os outros filtros.
