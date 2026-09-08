@@ -459,33 +459,78 @@ const UI_GRID2 = 'grid grid-cols-1 md:grid-cols-2 gap-3';
 // distinguindo os grupos de metrica sem transformar a tela num vitral.
 // Os 5 tons foram conferidos em contraste sobre branco (pior caso 4,67:1,
 // acima do minimo 4,5 para texto pequeno).
-const StatCard = ({ label, value, helper, tone = 'slate' }) => {
-  const toneClasses = {
-    slate: 'text-ink-soft',
-    blue: 'text-brand-ink',
-    emerald: 'text-[#0b6b45]',
-    amber: 'text-[#ac6200]',
-    rose: 'text-[#ba1a1a]',
-  };
-  return (
-    <div className="rounded-2xl bg-surface-card border border-line p-4 shadow-card">
-      <p className={`text-[11px] uppercase tracking-[0.18em] font-bold ${toneClasses[tone] || toneClasses.slate}`}>{label}</p>
-      <p className="mt-3 text-3xl font-bold text-ink">{value}</p>
-      {helper && <p className="mt-2 text-xs text-ink-soft">{helper}</p>}
-    </div>
-  );
-};
+// O rotulo era pintado por um `tone` com hexadecimal cravado. Media contra o
+// cartao escuro #1a1f25: verde 2,53:1, vermelho 2,57:1, ambar 3,55:1 — todos
+// abaixo do minimo de 4,5 para texto. E, mesmo no claro, aquela cor era
+// decoracao: verde, ambar e vermelho nao queriam dizer bom, atencao e ruim,
+// eram so variacao. Agora o rotulo e neutro sempre. `alerta` e a unica
+// excecao: pinta o cartao e poe tarja lateral, o mesmo recurso da tela de
+// Leads, e vale para UM cartao por painel — o que exige acao hoje.
+const StatCard = ({ label, value, helper, tone = 'slate', alerta = false }) => (
+  <div
+    className={`rounded-2xl bg-surface-card border border-line p-4 shadow-card ${
+      alerta ? 'border-l-[3px] border-l-risk-ink' : ''
+    }`}
+  >
+    <p className={`text-[11px] uppercase tracking-[0.18em] font-bold ${alerta ? 'text-risk-ink' : 'text-ink-faint'}`}>
+      {label}
+    </p>
+    <p className={`mt-3 text-3xl font-bold ${alerta ? 'text-risk-ink' : 'text-ink'}`}>{value}</p>
+    {helper && <p className="mt-2 text-xs text-ink-faint">{helper}</p>}
+  </div>
+);
 
 // Paleta dos graficos, por FUNCAO do dado e nao por decoracao.
 // Os quatro tons passaram no validador de paleta (faixa de luminosidade,
 // piso de croma, separacao para daltonismo protan/deutan/tritan e contraste
 // contra a superficie do card). Nao trocar por gosto sem revalidar.
+// Os valores agora vivem em index.css, um conjunto por tema, porque os tons
+// claros REPROVAM contra o fundo escuro: o azul #006194 dava 2,48:1 e o
+// vermelho #a4262c dava 2,28:1 contra o cartao #1a1f25, sendo 3:1 o minimo
+// para uma marca de grafico. Usando var(), a troca de tema leva os graficos
+// junto sem nenhuma mudanca aqui.
 const CHART_COLORS = {
-  volume: '#006194',    // contagem, quantidade, neutro (mesma familia da marca)
-  positivo: '#0f8a5f',  // resultado concretizado: ganho, fechado, aprovado
-  risco: '#a4262c',     // perda e risco: SLA estourado, perdido, reprovado
-  atencao: '#b26a00',   // em andamento e custo: pipeline, investimento
+  volume: 'var(--c-chart-volume)',    // contagem, quantidade, neutro
+  positivo: 'var(--c-chart-positivo)',// resultado concretizado: ganho, fechado, aprovado
+  risco: 'var(--c-chart-risco)',      // perda e risco: SLA estourado, perdido, reprovado
+  atencao: 'var(--c-chart-atencao)',  // em andamento e custo: pipeline, investimento
 };
+
+// Alterna entre o grafico e a mesma informacao em texto. Existe por dois
+// motivos: acessibilidade (quem nao distingue as cores, ou usa leitor de
+// tela, chega ao valor) e uso real (o comercial copia para planilha).
+const ChartTableToggle = ({ aberto, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="mt-2 text-[11px] font-semibold text-brand-ink hover:underline"
+  >
+    {aberto ? 'ver como gráfico' : 'ver como tabela'}
+  </button>
+);
+
+const ChartDataTable = ({ linhas, formatValue, rotuloCategoria = 'Item' }) => (
+  <div className="mt-1 max-h-56 overflow-y-auto">
+    <table className="w-full text-[11px]">
+      <thead>
+        <tr className="text-ink-faint">
+          <th className="text-left font-semibold py-1 pr-2 border-b border-line">{rotuloCategoria}</th>
+          <th className="text-right font-semibold py-1 border-b border-line">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map((item) => (
+          <tr key={item.label}>
+            <td className="py-1 pr-2 text-ink-soft border-b border-surface-mid">{item.label}</td>
+            <td className="py-1 text-right text-ink font-medium tabular-nums border-b border-surface-mid">
+              {formatValue(item.value)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
 
 // `limit` corta a lista, mas o que sobra NAO some: vira uma barra "Outros"
 // somada, e o rodape declara quantos itens existem no total. Antes o
@@ -512,29 +557,58 @@ const MiniBarChart = ({
     ? [...visiveis, { label: `Outros (${ocultos.length})`, value: somaOcultos }]
     : visiveis;
   const max = Math.max(...linhas.map((item) => Number(item.value)), 1);
+  return <MiniBarChartView
+    linhas={linhas} max={max} color={color} formatValue={formatValue}
+    rodape={ocultos.length > 0
+      ? (aggregateRest
+        ? `Os ${limit} maiores estão detalhados; os outros ${ocultos.length} estão somados em "Outros". Total de ${todos.length} itens.`
+        : `Mostrando ${limit} de ${todos.length} itens.`)
+      : ''}
+  />;
+};
+
+const MiniBarChartView = ({ linhas, max, color, formatValue, rodape }) => {
+  const [tabela, setTabela] = useState(false);
+  if (tabela) {
+    return (
+      <div>
+        <ChartDataTable linhas={linhas} formatValue={formatValue} />
+        <ChartTableToggle aberto onToggle={() => setTabela(false)} />
+      </div>
+    );
+  }
   return (
-    <div className="space-y-3">
-      {linhas.map((item) => (
-        <div key={item.label} className="space-y-1">
-          <div className="flex items-center justify-between text-xs text-ink-soft gap-3">
-            <span className="font-medium truncate">{item.label}</span>
-            <span className={UI_STRONG}>{formatValue(item.value)}</span>
+    <div>
+      <div className="space-y-2">
+        {linhas.map((item) => (
+          <div
+            key={item.label}
+            className="grid grid-cols-[minmax(0,38%)_1fr_auto] items-center gap-2.5 text-xs group"
+            title={`${item.label}: ${formatValue(item.value)}`}
+          >
+            <span className="text-ink-soft truncate">{item.label}</span>
+            {/* Ponta esquerda RETA: ancora a barra na linha de base. Com
+                rounded-full nas duas pontas, a borda impunha largura minima
+                igual a altura e valores pequenos saiam todos do mesmo
+                tamanho — 0,7% e 1,6% viravam a mesma barra. */}
+            <span className="block h-2.5 bg-surface-low rounded-sm overflow-hidden group-hover:bg-surface-mid">
+              <span
+                className="block h-full rounded-r-sm"
+                style={{
+                  width: `${Math.max((Number(item.value) / max) * 100, Number(item.value) > 0 ? 0.6 : 0)}%`,
+                  minWidth: Number(item.value) > 0 ? '2px' : 0,
+                  backgroundColor: color,
+                }}
+              />
+            </span>
+            <span className="text-ink font-semibold tabular-nums text-right min-w-[42px]">
+              {formatValue(item.value)}
+            </span>
           </div>
-          <div className="h-2 rounded-full bg-surface-mid overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${(Number(item.value) / max) * 100}%`, backgroundColor: color }}
-            />
-          </div>
-        </div>
-      ))}
-      {ocultos.length > 0 && (
-        <p className="text-[11px] text-ink-faint">
-          {aggregateRest
-            ? `Os ${limit} maiores estão detalhados; os outros ${ocultos.length} estão somados em "Outros". Total de ${todos.length} itens.`
-            : `Mostrando ${limit} de ${todos.length} itens.`}
-        </p>
-      )}
+        ))}
+      </div>
+      {rodape && <p className="mt-2 text-[11px] text-ink-faint">{rodape}</p>}
+      <ChartTableToggle aberto={false} onToggle={() => setTabela(true)} />
     </div>
   );
 };
@@ -549,45 +623,81 @@ const ChartSeriesLabel = ({ color, text }) => (
   </div>
 );
 
+// A versao anterior desenhava num viewBox "0 0 100 100" — um quadrado — sem
+// preserveAspectRatio. O navegador encaixava o quadrado na ALTURA e
+// centralizava: medido em producao, o desenho ocupava 112px dentro de um svg
+// de 355px, ou seja, 32% da largura disponivel. Agora o viewBox tem a
+// proporcao do espaco real, preserveAspectRatio="none" estica de verdade, e
+// vector-effect mantem o traco com espessura constante mesmo esticado.
+const LINE_W = 320;
+const LINE_H = 96;
+const LINE_PAD = 6;
+
 const MiniLineChart = ({ data, color = CHART_COLORS.volume, emptyLabel = 'Sem histórico suficiente', formatValue = (value) => value }) => {
-  const safeData = (data || []).slice(-6);
-  const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
+  const [tabela, setTabela] = useState(false);
+  const safeData = (data || []).slice(-8);
   if (!safeData.length) {
     return <p className="text-sm text-ink-faint">{emptyLabel}</p>;
   }
-  const points = safeData
-    .map((item, index) => {
-      const x = (index / Math.max(safeData.length - 1, 1)) * 100;
-      const y = 100 - (Number(item.value || 0) / max) * 100;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const max = Math.max(...safeData.map((item) => Number(item.value || 0)), 1);
+  const pontos = safeData.map((item, index) => {
+    const x = LINE_PAD + (index / Math.max(safeData.length - 1, 1)) * (LINE_W - LINE_PAD * 2);
+    const y = (LINE_H - LINE_PAD) - (Number(item.value || 0) / max) * (LINE_H - LINE_PAD * 2);
+    return { x, y, label: item.label, value: Number(item.value || 0) };
+  });
+  const linha = pontos.map((pt) => `${pt.x},${pt.y}`).join(' ');
+  const area = `M ${pontos[0].x},${LINE_H - LINE_PAD} ${pontos.map((pt) => `L ${pt.x},${pt.y}`).join(' ')} L ${pontos[pontos.length - 1].x},${LINE_H - LINE_PAD} Z`;
+  // Rotulo direto so no pico e no ultimo ponto. Um numero em cada ponto vira
+  // ruido e ninguem le; o resto fica no hover e na tabela.
+  const idxPico = pontos.reduce((melhor, pt, i) => (pt.value > pontos[melhor].value ? i : melhor), 0);
+  const idxFim = pontos.length - 1;
+
+  if (tabela) {
+    return (
+      <div>
+        <ChartDataTable linhas={safeData} formatValue={formatValue} rotuloCategoria="Período" />
+        <ChartTableToggle aberto onToggle={() => setTabela(false)} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <svg viewBox="0 0 100 100" className="w-full h-28 overflow-visible">
-        <polyline
-          fill="none"
-          stroke={color}
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          points={points}
-        />
-        {safeData.map((item, index) => {
-          const x = (index / Math.max(safeData.length - 1, 1)) * 100;
-          const y = 100 - (Number(item.value || 0) / max) * 100;
-          return <circle key={item.label} cx={x} cy={y} r="2.5" fill={color} />;
-        })}
+    <div>
+      <svg
+        viewBox={`0 0 ${LINE_W} ${LINE_H}`}
+        preserveAspectRatio="none"
+        className="w-full h-24 block"
+        role="img"
+        aria-label={`Evolução: ${pontos.map((pt) => `${pt.label} ${formatValue(pt.value)}`).join(', ')}`}
+      >
+        <line x1="0" y1={LINE_PAD} x2={LINE_W} y2={LINE_PAD} stroke="currentColor" strokeWidth="1"
+          vectorEffect="non-scaling-stroke" className="text-line" />
+        <line x1="0" y1={LINE_H - LINE_PAD} x2={LINE_W} y2={LINE_H - LINE_PAD} stroke="currentColor" strokeWidth="1"
+          vectorEffect="non-scaling-stroke" className="text-line" />
+        <path d={area} fill={color} opacity="0.12" />
+        <polyline fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke" points={linha} />
+        {[idxPico, idxFim].map((i) => (
+          <circle key={`m-${i}`} cx={pontos[i].x} cy={pontos[i].y} r="3" fill={color}
+            stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" className="text-surface-card" />
+        ))}
+        {pontos.map((pt, i) => (
+          <rect key={`h-${pt.label}-${i}`} x={pt.x - (LINE_W / pontos.length) / 2} y="0"
+            width={LINE_W / pontos.length} height={LINE_H} fill="transparent">
+            <title>{`${pt.label}: ${formatValue(pt.value)}`}</title>
+          </rect>
+        ))}
       </svg>
-      <div className="grid grid-cols-3 gap-2 text-[11px] text-ink-faint">
-        {safeData.map((item) => (
-          <div key={item.label} className="rounded-lg bg-surface-low px-2 py-1 text-center">
-            <div className="font-semibold text-ink-soft">{formatValue(item.value)}</div>
-            <div>{item.label}</div>
-          </div>
+      <div className="flex text-[10px] text-ink-faint mt-1">
+        {pontos.map((pt) => (
+          <span key={`x-${pt.label}`} className="flex-1 text-center truncate">{pt.label}</span>
         ))}
       </div>
+      <p className="mt-1.5 text-[11px] text-ink-soft">
+        Máximo {formatValue(pontos[idxPico].value)} em {pontos[idxPico].label}
+        {idxFim !== idxPico ? ` · ${formatValue(pontos[idxFim].value)} em ${pontos[idxFim].label}` : ''}
+      </p>
+      <ChartTableToggle aberto={false} onToggle={() => setTabela(true)} />
     </div>
   );
 };
@@ -611,6 +721,12 @@ const THEME_OPTIONS = [
   { value: 'light', label: 'Claro', hint: 'Sempre claro' },
   { value: 'dark', label: 'Escuro', hint: 'Sempre escuro' },
   { value: 'auto', label: 'Automático', hint: 'Segue o tema do sistema operacional' },
+];
+
+const DASHBOARD_PANES_BASE = [
+  { value: 'leads', label: 'Leads' },
+  { value: 'orcamentos', label: 'Orçamentos' },
+  { value: 'midia', label: 'Mídia paga' },
 ];
 
 const NAV_TABS = [
@@ -888,7 +1004,11 @@ const App = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [viewMode, setViewMode] = useState('kanban'); // 'list' | 'kanban'
   const [activeTab, setActiveTab] = useState('crm'); // 'crm' | 'dashboard' | 'orcamentos' | 'emkt'
-  const [dashboardPeriod, setDashboardPeriod] = useState('90d');
+  const [dashboardPeriod, setDashboardPeriod] = useState('30d');
+  // Sub-abas do dashboard. Antes as tres areas eram secoes empilhadas numa
+  // pagina so, e chegar em Midia paga exigia rolar por 22 cartoes e 10
+  // graficos de Leads.
+  const [dashboardPane, setDashboardPane] = useState('leads');
   const [dashboardStartDate, setDashboardStartDate] = useState('');
   const [dashboardEndDate, setDashboardEndDate] = useState('');
   const [dashboardOwnerFilter, setDashboardOwnerFilter] = useState('all');
@@ -923,8 +1043,24 @@ const App = () => {
   const [editingBudget, setEditingBudget] = useState(null);
   const [budgetForm, setBudgetForm] = useState(emptyBudget);
   const [savingBudget, setSavingBudget] = useState(false);
+  // Interacoes do orcamento. Mesmo desenho do bloco que ja existe no lead, mas
+  // com armazenamento proprio: um orcamento pode nao ter lead vinculado, e mesmo
+  // quando tem, a conversa da proposta nao e a mesma coisa que a da captacao.
+  const [budgetInteractions, setBudgetInteractions] = useState([]);
+  // Historico do lead vinculado. Somente leitura, para dar contexto.
+  const [budgetLeadInteractions, setBudgetLeadInteractions] = useState([]);
+  const [budgetInteractionsLoading, setBudgetInteractionsLoading] = useState(false);
+  const [savingBudgetInteraction, setSavingBudgetInteraction] = useState(false);
+  const [budgetInteractionForm, setBudgetInteractionForm] = useState({
+    id: null,
+    interaction_at: '',
+    channel: '',
+    notes: '',
+  });
+  const [budgetInteractionsExpanded, setBudgetInteractionsExpanded] = useState(false);
+  const [budgetLeadHistoryExpanded, setBudgetLeadHistoryExpanded] = useState(false);
   const [importingBudgets, setImportingBudgets] = useState(false);
-  const [budgetPeriod, setBudgetPeriod] = useState('90d');
+  const [budgetPeriod, setBudgetPeriod] = useState('30d');
   const [budgetStartDate, setBudgetStartDate] = useState('');
   const [budgetEndDate, setBudgetEndDate] = useState('');
   const [budgetStatusFilter, setBudgetStatusFilter] = useState('all');
@@ -2342,6 +2478,17 @@ const App = () => {
     };
   }, [dashboardAdSpendFiltered, dashboardFilteredLeads, dashboardMediaBudgets]);
 
+  // O contador ao lado do nome da sub-aba diz o volume daquela area, para a
+  // pessoa saber onde tem coisa antes de clicar.
+  const DASHBOARD_PANES = useMemo(() => {
+    const contadores = {
+      leads: (dashboardLocalStats.total || 0).toLocaleString('pt-BR'),
+      orcamentos: (dashboardBudgetStats.total || 0).toLocaleString('pt-BR'),
+      midia: formatCurrencyBR(dashboardMediaData.investment || 0),
+    };
+    return DASHBOARD_PANES_BASE.map((pane) => ({ ...pane, contador: contadores[pane.value] }));
+  }, [dashboardLocalStats, dashboardBudgetStats, dashboardMediaData]);
+
   const emktFilteredEvents = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -2686,7 +2833,7 @@ const App = () => {
       mapa.set(chave, atual);
     };
 
-    budgetFilteredItems.forEach((budget) => {
+    dashboardMediaBudgets.forEach((budget) => {
       const status = budget.status || 'sem_status';
       const lossReason = budget.loss_reason || 'sem_motivo';
       const owner = budget.owner_name || 'Sem vendedor';
@@ -2783,7 +2930,7 @@ const App = () => {
       estimatedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: estimatedMonthlyMap.get(key) || 0 })),
       closedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: closedMonthlyMap.get(key) || 0 })),
     };
-  }, [budgetFilteredItems]);
+  }, [dashboardMediaBudgets]);
 
   const exportDashboardExcel = () => {
     const workbook = buildExcelWorkbook([
@@ -3301,6 +3448,155 @@ const App = () => {
     }
   };
 
+  const resetBudgetInteractionForm = () => {
+    setBudgetInteractionForm({
+      id: null,
+      interaction_at: toDateTimeLocalInput(new Date().toISOString()),
+      channel: '',
+      notes: '',
+    });
+  };
+
+  // Aplica o resumo devolvido pela API no orcamento aberto e na linha da lista,
+  // para o contador "N int." mudar na hora, sem recarregar a tabela inteira.
+  const applyBudgetInteractionSummary = (budgetId, summary) => {
+    if (!budgetId || !summary) return;
+    const patch = {
+      interactions_count: Number(summary.interactions_count || 0),
+      last_interaction_at: summary.last_interaction_at || '',
+      last_interaction_channel: summary.last_interaction_channel || '',
+      last_interaction_notes: summary.last_interaction_notes || '',
+    };
+    setBudgets((prev) =>
+      prev.map((item) => (String(item.id) === String(budgetId) ? { ...item, ...patch } : item))
+    );
+    setEditingBudget((prev) =>
+      prev && String(prev.id) === String(budgetId) ? { ...prev, ...patch } : prev
+    );
+  };
+
+  const loadBudgetInteractions = async (budgetId) => {
+    if (!budgetId) {
+      setBudgetInteractions([]);
+      setBudgetLeadInteractions([]);
+      return;
+    }
+    try {
+      setBudgetInteractionsLoading(true);
+      const res = await fetch(`${API_URL}/budgets/${budgetId}/interactions`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = res.ok ? await res.json().catch(() => ({})) : {};
+      setBudgetInteractions(Array.isArray(data?.items) ? data.items : []);
+      setBudgetLeadInteractions(Array.isArray(data?.lead_items) ? data.lead_items : []);
+    } catch (err) {
+      console.error('Erro ao carregar interações do orçamento:', err);
+      setBudgetInteractions([]);
+      setBudgetLeadInteractions([]);
+    } finally {
+      setBudgetInteractionsLoading(false);
+    }
+  };
+
+  const saveBudgetInteraction = async () => {
+    if (savingBudgetInteraction || !editingBudget?.id) return;
+    const interactionId = budgetInteractionForm.id ? String(budgetInteractionForm.id) : '';
+    const interactionAt = budgetInteractionForm.interaction_at || toDateTimeLocalInput(new Date().toISOString());
+    const channel = (budgetInteractionForm.channel || '').trim();
+    const notes = (budgetInteractionForm.notes || '').trim();
+    if (!channel) {
+      showToast('Informe o canal da interação', 'error');
+      return;
+    }
+
+    try {
+      setSavingBudgetInteraction(true);
+      const res = await fetch(
+        `${API_URL}/budgets/${editingBudget.id}/interactions${interactionId ? `/${interactionId}` : ''}`,
+        {
+          method: interactionId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            interaction_at: interactionAt,
+            channel,
+            notes,
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao salvar interação', 'error');
+        return;
+      }
+
+      const nextInteraction = data?.interaction || null;
+      if (nextInteraction) {
+        setBudgetInteractions((prev) => {
+          const semAntiga = prev.filter((item) => String(item.id) !== String(nextInteraction.id));
+          return [nextInteraction, ...semAntiga].sort(
+            (a, b) =>
+              new Date(b.interaction_at || b.created_at || 0).getTime() -
+              new Date(a.interaction_at || a.created_at || 0).getTime()
+          );
+        });
+      }
+      applyBudgetInteractionSummary(editingBudget.id, data?.summary);
+      resetBudgetInteractionForm();
+      setBudgetInteractionsExpanded(true);
+      showToast(interactionId ? 'Interação atualizada' : 'Interação registrada', 'success');
+    } catch (err) {
+      console.error('Erro ao salvar interação do orçamento:', err);
+      showToast('Erro ao salvar interação', 'error');
+    } finally {
+      setSavingBudgetInteraction(false);
+    }
+  };
+
+  const editBudgetInteraction = (interaction) => {
+    if (!interaction) return;
+    setBudgetInteractionsExpanded(true);
+    setBudgetInteractionForm({
+      id: interaction.id || null,
+      interaction_at: toDateTimeLocalInput(interaction.interaction_at || interaction.created_at || new Date().toISOString()),
+      channel: interaction.channel || '',
+      notes: interaction.notes || '',
+    });
+  };
+
+  const deleteBudgetInteraction = async (interaction) => {
+    if (!editingBudget?.id || !interaction?.id) return;
+    if (!window.confirm('Deseja excluir esta interação?')) return;
+
+    try {
+      setSavingBudgetInteraction(true);
+      const res = await fetch(`${API_URL}/budgets/${editingBudget.id}/interactions/${interaction.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error || 'Erro ao excluir interação', 'error');
+        return;
+      }
+
+      setBudgetInteractions((prev) => prev.filter((item) => String(item.id) !== String(interaction.id)));
+      applyBudgetInteractionSummary(editingBudget.id, data?.summary);
+      resetBudgetInteractionForm();
+      showToast('Interação excluída', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir interação do orçamento:', err);
+      showToast('Erro ao excluir interação', 'error');
+    } finally {
+      setSavingBudgetInteraction(false);
+    }
+  };
+
   const openNewBudgetModal = () => {
     setEditingBudget(null);
     setBudgetForm({
@@ -3309,6 +3605,13 @@ const App = () => {
       owner_name: user?.name || '',
       requested_at: toDateInput(new Date().toISOString()),
     });
+    // Orcamento ainda nao existe: nao ha onde pendurar interacao. O bloco nem
+    // chega a ser renderizado (ver o modal), mas o estado fica limpo assim mesmo.
+    setBudgetInteractions([]);
+    setBudgetLeadInteractions([]);
+    setBudgetInteractionsExpanded(false);
+    setBudgetLeadHistoryExpanded(false);
+    resetBudgetInteractionForm();
     setShowBudgetModal(true);
   };
 
@@ -3342,6 +3645,12 @@ const App = () => {
       notes: budget.notes || '',
       representante: budget.representante || '',
     });
+    setBudgetInteractions([]);
+    setBudgetLeadInteractions([]);
+    setBudgetInteractionsExpanded(false);
+    setBudgetLeadHistoryExpanded(false);
+    resetBudgetInteractionForm();
+    void loadBudgetInteractions(budget.id);
     setShowBudgetModal(true);
   };
 
@@ -4515,13 +4824,13 @@ const App = () => {
                 </div>
                 <button
                   onClick={openNewAdSpendModal}
-                  className="px-4 py-3 rounded-2xl bg-slate-900 text-white font-semibold shadow hover:bg-slate-800 transition"
+                  className="px-4 py-3 rounded-2xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition"
                 >
                   Lançar Ads
                 </button>
                 <button
                   onClick={exportDashboardExcel}
-                  className="px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition"
+                  className="px-4 py-3 rounded-2xl border border-line bg-surface-card text-ink-soft font-semibold hover:bg-surface-low transition"
                 >
                   Baixar relatório em Excel
                 </button>
@@ -4638,24 +4947,42 @@ const App = () => {
               </div>
             </div>
 
-            <div className="pt-2">
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className={UI_EYEBROW}>Comercial</p>
-                  <h3 className="mt-1 text-xl font-black text-ink">Leads</h3>
-                </div>
-                <div className="flex-1 h-px bg-line" />
-              </div>
-              <p className="mt-1 text-xs text-ink-soft">Base de contatos, conversão e pipeline.</p>
-            </div>
+          {/* Sub-abas. Os filtros ficam ACIMA desta barra porque valem para as
+              tres — trocar de sub-aba nao deve obrigar ninguem a refiltrar. */}
+          <div className="flex gap-1 border-b border-line px-0.5" role="tablist">
+            {DASHBOARD_PANES.map((pane) => (
+              <button
+                key={pane.value}
+                type="button"
+                role="tab"
+                aria-selected={dashboardPane === pane.value}
+                onClick={() => setDashboardPane(pane.value)}
+                className={`-mb-px flex items-center gap-2 rounded-t-lg px-4 py-2.5 text-sm border-b-2 transition ${dashboardPane === pane.value
+                  ? 'border-brand-ink text-brand-ink font-semibold'
+                  : 'border-transparent text-ink-soft hover:bg-surface-low hover:text-ink'
+                  }`}
+              >
+                {pane.label}
+                <span
+                  className={`rounded-full border px-2 py-[1px] text-[10.5px] tabular-nums ${dashboardPane === pane.value
+                    ? 'border-brand-100 bg-brand-50 text-brand-ink'
+                    : 'border-line bg-surface-low text-ink-faint'
+                    }`}
+                >
+                  {pane.contador}
+                </span>
+              </button>
+            ))}
+          </div>
 
+          {dashboardPane === 'leads' && (
+          <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Leads Totais" value={dashboardLocalStats.total || 0} helper={`${dashboardData.leadsThisMonth || 0} no mês`} tone="slate" />
               <StatCard label="Taxa de Conversão" value={`${dashboardLocalStats.taxaConversao || 0}%`} helper={`${dashboardLocalStats.ganhos || 0} ganhos`} tone="blue" />
               <StatCard label="Valor Convertido" value={formatCurrencyBR(dashboardLocalStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
               <StatCard label="Pipeline Ativo" value={formatCurrencyBR(dashboardLocalStats.valorNegociacao || 0)} helper={`${dashboardLocalStats.qtdNegociacao || 0} em negociação`} tone="amber" />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Prospects</p>
@@ -4675,65 +5002,12 @@ const App = () => {
                 <p className={UI_STAT}>{dashboardData.overdueFollowups || 0}</p>
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Leads quentes" value={dashboardData.byTemperature.find((item) => item.label === 'Quente')?.value || 0} helper="Prioridade máxima" tone="rose" />
               <StatCard label="Leads mornos" value={dashboardData.byTemperature.find((item) => item.label === 'Morno')?.value || 0} helper="Em evolução" tone="amber" />
               <StatCard label="Leads frios" value={dashboardData.byTemperature.find((item) => item.label === 'Frio')?.value || 0} helper="Base de prospecção" tone="slate" />
               <StatCard label="SLA estourado" value={dashboardData.overdueByOwner.reduce((sum, item) => sum + Number(item.value || 0), 0)} helper="Leads fora do prazo" tone="blue" />
             </div>
-
-            <div className="pt-2">
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className={UI_EYEBROW}>Orçamentação</p>
-                  <h3 className="mt-1 text-xl font-black text-ink">Orçamentos</h3>
-                </div>
-                <div className="flex-1 h-px bg-line" />
-              </div>
-              <p className="mt-1 text-xs text-ink-soft">Produção de orçamentos e valores aprovados.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Orçamentos" value={dashboardBudgetStats.total || 0} helper={`${dashboardBudgetStats.enviados || 0} enviados`} tone="slate" />
-              <StatCard label="Taxa de Aprovação" value={`${dashboardBudgetStats.taxaAprovacao || 0}%`} helper={`${dashboardBudgetStats.aprovados || 0} aprovados`} tone="blue" />
-              <StatCard label="Valor Orçado" value={formatCurrencyBR(dashboardBudgetStats.valorOrcado || 0)} helper={`${dashboardBudgetStats.reprovados || 0} reprovados`} tone="emerald" />
-              <StatCard label="Valor Fechado" value={formatCurrencyBR(dashboardBudgetStats.valorFechado || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardBudgetStats.ticketMedio || 0)}`} tone="amber" />
-            </div>
-
-            <div className="pt-2">
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className={UI_EYEBROW}>Marketing</p>
-                  <h3 className="mt-1 text-xl font-black text-ink">Mídia paga</h3>
-                </div>
-                <div className="flex-1 h-px bg-line" />
-              </div>
-              <p className="mt-1 text-xs text-ink-soft">Investimento em campanhas e retorno sobre o gasto.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-              <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
-              <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
-              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
-              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
-              {/* Os cards "CPL" e "Orçamento estimado" foram removidos por duplicidade:
-                  CPL ja aparece no rodape de "Leads gerados" e o orcamento estimado
-                  ja e o rodape de "ROAS estimado". Nenhum calculo foi alterado. */}
-              <StatCard
-                label="Estimado por lead"
-                value={formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}
-                helper="Orçado ÷ leads gerados"
-                tone="blue"
-              />
-              <StatCard
-                label="Fechado por lead"
-                value={formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}
-                helper="Fechado ÷ leads gerados"
-                tone="emerald"
-              />
-            </div>
-
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               <div className={UI_CARD}>
                 <div className="flex items-center justify-between mb-4">
@@ -4757,7 +5031,176 @@ const App = () => {
                 <MiniLineChart data={dashboardData.pipelineEvolution} color={CHART_COLORS.atencao} formatValue={formatCurrencyBR} />
               </div>
             </div>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Prioridade</p>
+                <h3 className={UI_H2}>Temperatura da base</h3>
+                <MiniBarChart data={dashboardData.byTemperature} color={CHART_COLORS.volume} showZeros />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>SLA</p>
+                <h3 className={UI_H2}>Estourados por responsável</h3>
+                <MiniBarChart data={dashboardData.overdueByOwner} color={CHART_COLORS.risco} />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Conversão</p>
+                <h3 className={UI_H2}>Taxa por temperatura</h3>
+                <MiniBarChart data={dashboardData.conversionByTemperature} color={CHART_COLORS.positivo} showZeros aggregateRest={false} formatValue={(value) => `${value}%`} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Marketing</p>
+                <h3 className={UI_H2}>Leads por canal</h3>
+                <MiniBarChart data={dashboardData.byChannel} color={CHART_COLORS.volume} />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Marketing</p>
+                <h3 className={UI_H2}>Campanhas</h3>
+                <MiniBarChart data={dashboardData.byCampaign} color={CHART_COLORS.volume} />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Funil por status</h3>
+                <MiniBarChart data={dashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
+              </div>
+              <div className={UI_CARD}>
+                <p className={UI_EYEBROW}>Comercial</p>
+                <h3 className={UI_H2}>Perfis de cliente</h3>
+                <MiniBarChart data={dashboardData.bySegment} color={CHART_COLORS.volume} />
+              </div>
+            </div>
+          </div>
+          )}
 
+          {dashboardPane === 'orcamentos' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Orçamentos" value={dashboardBudgetStats.total || 0} helper={`${dashboardBudgetStats.enviados || 0} enviados`} tone="slate" />
+              <StatCard label="Taxa de Aprovação" value={`${dashboardBudgetStats.taxaAprovacao || 0}%`} helper={`${dashboardBudgetStats.aprovados || 0} aprovados`} tone="blue" />
+              <StatCard label="Valor Orçado" value={formatCurrencyBR(dashboardBudgetStats.valorOrcado || 0)} helper={`${dashboardBudgetStats.reprovados || 0} reprovados`} tone="emerald" />
+              <StatCard label="Valor Fechado" value={formatCurrencyBR(dashboardBudgetStats.valorFechado || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardBudgetStats.ticketMedio || 0)}`} tone="amber" />
+            </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Onde trava</p>
+              <h3 className={UI_H2}>Funil de orçamentos</h3>
+              <MiniBarChart data={budgetDashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
+              <p className="mt-3 text-[11px] text-ink-faint">
+                Etapas em ordem de funil, não por tamanho. Etapa sem nenhum orçamento aparece com zero.
+              </p>
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Entra x fecha</p>
+              <h3 className={UI_H2}>Valor orçado e valor fechado por mês</h3>
+              <ChartSeriesLabel color={CHART_COLORS.volume} text="Valor orçado (mês da solicitação)" />
+              <MiniLineChart data={budgetDashboardData.estimatedEvolution} color={CHART_COLORS.volume} formatValue={formatCurrencyBR} />
+              <div className="mt-4">
+                <ChartSeriesLabel color={CHART_COLORS.positivo} text="Valor fechado (mês do fechamento)" />
+                <MiniLineChart data={budgetDashboardData.closedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
+              </div>
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Por que perdemos</p>
+              <h3 className={UI_H2}>Perdas por motivo</h3>
+              <MiniBarChart
+                data={budgetDashboardData.byLossReason}
+                color={CHART_COLORS.risco}
+                showZeros
+                formatValue={formatCurrencyBR}
+              />
+              <p className="mt-3 text-[11px] text-ink-faint">
+                Barra = valor orçado perdido. Entre parênteses, a quantidade de orçamentos.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Quem fecha</p>
+              <h3 className={UI_H2}>Aprovação por vendedor</h3>
+              <MiniBarChart
+                data={budgetDashboardData.aprovacaoPorVendedor}
+                color={CHART_COLORS.positivo}
+                showZeros
+                aggregateRest={false}
+                formatValue={(value) => `${value}%`}
+              />
+              <p className="mt-3 text-[11px] text-ink-faint">
+                Ordenado por volume, não pela taxa. Entre parênteses, quantos orçamentos a pessoa tem — 100% de 1 orçamento não é desempenho.
+              </p>
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Quem produz</p>
+              <h3 className={UI_H2}>Aprovação por orçamentista</h3>
+              <MiniBarChart
+                data={budgetDashboardData.aprovacaoPorOrcamentista}
+                color={CHART_COLORS.positivo}
+                showZeros
+                aggregateRest={false}
+                formatValue={(value) => `${value}%`}
+              />
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Canal indireto</p>
+              <h3 className={UI_H2}>Aprovação por representante</h3>
+              <MiniBarChart
+                data={budgetDashboardData.aprovacaoPorRepresentante}
+                color={CHART_COLORS.positivo}
+                showZeros
+                aggregateRest={false}
+                formatValue={(value) => `${value}%`}
+                emptyLabel="Nenhum orçamento com representante registrado ainda."
+              />
+              <p className="mt-3 text-[11px] text-ink-faint">
+                Alimentado pelo campo Representante do orçamento. Enquanto ninguém preencher, aparece tudo em "Sem representante".
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Evolução</p>
+              <h3 className={UI_H2}>Solicitações por mês</h3>
+              <MiniLineChart data={budgetDashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Time Comercial</p>
+              <h3 className={UI_H2}>Orçamentos por vendedor</h3>
+              <MiniBarChart data={budgetDashboardData.byOwner} color={CHART_COLORS.volume} />
+            </div>
+            <div className={UI_CARD}>
+              <p className={UI_EYEBROW}>Time Técnico</p>
+              <h3 className={UI_H2}>Orçamentos por orçamentista</h3>
+              <MiniBarChart data={budgetDashboardData.byEstimator} color={CHART_COLORS.volume} />
+            </div>
+          </div>
+          </div>
+          )}
+
+          {dashboardPane === 'midia' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
+              <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
+              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
+              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
+              {/* Os cards "CPL" e "Orçamento estimado" foram removidos por duplicidade:
+                  CPL ja aparece no rodape de "Leads gerados" e o orcamento estimado
+                  ja e o rodape de "ROAS estimado". Nenhum calculo foi alterado. */}
+              <StatCard
+                label="Estimado por lead"
+                value={formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}
+                helper="Orçado ÷ leads gerados"
+                tone="blue"
+              />
+              <StatCard
+                label="Fechado por lead"
+                value={formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}
+                helper="Fechado ÷ leads gerados"
+                tone="emerald"
+              />
+            </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Marketing</p>
@@ -4796,48 +5239,6 @@ const App = () => {
                 </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Prioridade</p>
-                <h3 className={UI_H2}>Temperatura da base</h3>
-                <MiniBarChart data={dashboardData.byTemperature} color={CHART_COLORS.volume} showZeros />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>SLA</p>
-                <h3 className={UI_H2}>Estourados por responsável</h3>
-                <MiniBarChart data={dashboardData.overdueByOwner} color={CHART_COLORS.risco} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Conversão</p>
-                <h3 className={UI_H2}>Taxa por temperatura</h3>
-                <MiniBarChart data={dashboardData.conversionByTemperature} color={CHART_COLORS.positivo} showZeros aggregateRest={false} formatValue={(value) => `${value}%`} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Marketing</p>
-                <h3 className={UI_H2}>Leads por canal</h3>
-                <MiniBarChart data={dashboardData.byChannel} color={CHART_COLORS.volume} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Marketing</p>
-                <h3 className={UI_H2}>Campanhas</h3>
-                <MiniBarChart data={dashboardData.byCampaign} color={CHART_COLORS.volume} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Comercial</p>
-                <h3 className={UI_H2}>Funil por status</h3>
-                <MiniBarChart data={dashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Comercial</p>
-                <h3 className={UI_H2}>Perfis de cliente</h3>
-                <MiniBarChart data={dashboardData.bySegment} color={CHART_COLORS.volume} />
-              </div>
-            </div>
-
             <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
@@ -4890,7 +5291,6 @@ const App = () => {
                 </table>
               </div>
             </div>
-
             <div className={UI_CARD}>
               <div className="flex items-center justify-between mb-4 gap-3">
                 <div>
@@ -4932,7 +5332,7 @@ const App = () => {
                             <button onClick={() => openEditAdSpendModal(entry)} className="text-brand-ink text-xs">
                               Editar
                             </button>
-                            <button onClick={() => deleteAdSpend(entry.id)} className="text-red-600 text-xs">
+                            <button onClick={() => deleteAdSpend(entry.id)} className="text-risk-ink text-xs">
                               Excluir
                             </button>
                           </td>
@@ -4949,6 +5349,8 @@ const App = () => {
                 </table>
               </div>
             </div>
+          </div>
+          )}
           </section>
         )}
 
@@ -5208,7 +5610,7 @@ const App = () => {
                   <button
                     onClick={() => budgetImportInputRef.current?.click()}
                     disabled={importingBudgets}
-                    className="px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition disabled:opacity-60"
+                    className="px-4 py-3 rounded-2xl border border-line bg-surface-card text-ink-soft font-semibold hover:bg-surface-low transition disabled:opacity-60"
                   >
                     {importingBudgets ? 'Importando...' : 'Importar planilha'}
                   </button>
@@ -5366,100 +5768,6 @@ const App = () => {
               <StatCard label="Valor Fechado" value={formatCurrencyBR(budgetStats.valorFechado || 0)} helper={`${budgetStats.reprovados || 0} reprovados · ${formatCurrencyBR(budgetStats.valorReprovado || 0)}`} tone="amber" />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Onde trava</p>
-                <h3 className={UI_H2}>Funil de orçamentos</h3>
-                <MiniBarChart data={budgetDashboardData.byStatus} color={CHART_COLORS.volume} showZeros limit={9} />
-                <p className="mt-3 text-[11px] text-ink-faint">
-                  Etapas em ordem de funil, não por tamanho. Etapa sem nenhum orçamento aparece com zero.
-                </p>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Entra x fecha</p>
-                <h3 className={UI_H2}>Valor orçado e valor fechado por mês</h3>
-                <ChartSeriesLabel color={CHART_COLORS.volume} text="Valor orçado (mês da solicitação)" />
-                <MiniLineChart data={budgetDashboardData.estimatedEvolution} color={CHART_COLORS.volume} formatValue={formatCurrencyBR} />
-                <div className="mt-4">
-                  <ChartSeriesLabel color={CHART_COLORS.positivo} text="Valor fechado (mês do fechamento)" />
-                  <MiniLineChart data={budgetDashboardData.closedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
-                </div>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Por que perdemos</p>
-                <h3 className={UI_H2}>Perdas por motivo</h3>
-                <MiniBarChart
-                  data={budgetDashboardData.byLossReason}
-                  color={CHART_COLORS.risco}
-                  showZeros
-                  formatValue={formatCurrencyBR}
-                />
-                <p className="mt-3 text-[11px] text-ink-faint">
-                  Barra = valor orçado perdido. Entre parênteses, a quantidade de orçamentos.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Quem fecha</p>
-                <h3 className={UI_H2}>Aprovação por vendedor</h3>
-                <MiniBarChart
-                  data={budgetDashboardData.aprovacaoPorVendedor}
-                  color={CHART_COLORS.positivo}
-                  showZeros
-                  aggregateRest={false}
-                  formatValue={(value) => `${value}%`}
-                />
-                <p className="mt-3 text-[11px] text-ink-faint">
-                  Ordenado por volume, não pela taxa. Entre parênteses, quantos orçamentos a pessoa tem — 100% de 1 orçamento não é desempenho.
-                </p>
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Quem produz</p>
-                <h3 className={UI_H2}>Aprovação por orçamentista</h3>
-                <MiniBarChart
-                  data={budgetDashboardData.aprovacaoPorOrcamentista}
-                  color={CHART_COLORS.positivo}
-                  showZeros
-                  aggregateRest={false}
-                  formatValue={(value) => `${value}%`}
-                />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Canal indireto</p>
-                <h3 className={UI_H2}>Aprovação por representante</h3>
-                <MiniBarChart
-                  data={budgetDashboardData.aprovacaoPorRepresentante}
-                  color={CHART_COLORS.positivo}
-                  showZeros
-                  aggregateRest={false}
-                  formatValue={(value) => `${value}%`}
-                  emptyLabel="Nenhum orçamento com representante registrado ainda."
-                />
-                <p className="mt-3 text-[11px] text-ink-faint">
-                  Alimentado pelo campo Representante do orçamento. Enquanto ninguém preencher, aparece tudo em "Sem representante".
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Evolução</p>
-                <h3 className={UI_H2}>Solicitações por mês</h3>
-                <MiniLineChart data={budgetDashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Time Comercial</p>
-                <h3 className={UI_H2}>Orçamentos por vendedor</h3>
-                <MiniBarChart data={budgetDashboardData.byOwner} color={CHART_COLORS.volume} />
-              </div>
-              <div className={UI_CARD}>
-                <p className={UI_EYEBROW}>Time Técnico</p>
-                <h3 className={UI_H2}>Orçamentos por orçamentista</h3>
-                <MiniBarChart data={budgetDashboardData.byEstimator} color={CHART_COLORS.volume} />
-              </div>
-            </div>
 
             <div className="bg-surface-card rounded-2xl shadow p-5 border border-line overflow-x-auto">
               <div className="flex items-center justify-between gap-3 mb-4">
@@ -5471,7 +5779,7 @@ const App = () => {
                   <button
                     onClick={() => budgetImportInputRef.current?.click()}
                     disabled={importingBudgets}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium disabled:opacity-60"
+                    className="px-4 py-2 rounded-xl border border-line bg-surface-card text-ink-soft text-sm font-medium hover:bg-surface-low disabled:opacity-60"
                   >
                     {importingBudgets ? 'Importando...' : 'Importar'}
                   </button>
@@ -5503,7 +5811,23 @@ const App = () => {
                 <tbody>
                   {budgetFilteredItems.map((budget) => (
                     <tr key={budget.id} className="border-b border-surface-mid">
-                      <td className="py-3 pr-3 font-medium text-ink">{budget.client_name || '-'}</td>
+                      <td className="py-3 pr-3 font-medium text-ink">
+                        <span className="inline-flex items-baseline gap-2">
+                          <span>{budget.client_name || '-'}</span>
+                          {Number(budget.interactions_count || 0) > 0 ? (
+                            <span
+                              className="text-[11px] font-normal text-ink-faint tabular-nums whitespace-nowrap"
+                              title={
+                                budget.last_interaction_at
+                                  ? `Última interação: ${formatDateTimeBR(budget.last_interaction_at)}`
+                                  : undefined
+                              }
+                            >
+                              {Number(budget.interactions_count)} int.
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
                       <td className="py-3 pr-3 text-ink-soft">{budget.company || '-'}</td>
                       <td className="py-3 pr-3 text-ink-soft">{BUDGET_STATUS_OPTIONS.find((item) => item.value === budget.status)?.label || budget.status}</td>
                       <td className="py-3 pr-3 text-ink-soft">{budget.owner_name || '-'}</td>
@@ -6533,7 +6857,7 @@ const App = () => {
                                   <button
                                     type="button"
                                     onClick={() => deleteLeadInteraction(item)}
-                                    className="text-[11px] text-red-600 hover:underline"
+                                    className="text-[11px] text-risk-ink hover:underline"
                                   >
                                     Excluir
                                   </button>
@@ -6984,6 +7308,209 @@ const App = () => {
                 </button>
               </div>
               <div className="p-4 space-y-3">
+                {editingBudget?.id ? (
+                  <div className="rounded-xl border border-line bg-surface-low px-3 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold">
+                          Interações com o cliente
+                        </p>
+                        <p className="text-xs text-ink-faint mt-1">
+                          Registre cada contato sobre este orçamento. O histórico fica oculto por padrão.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={resetBudgetInteractionForm}
+                          className="px-3 py-2 rounded-lg text-xs font-semibold border border-line text-ink-soft bg-surface-card"
+                        >
+                          Limpar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveBudgetInteraction}
+                          disabled={savingBudgetInteraction}
+                          className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 text-white disabled:opacity-50"
+                        >
+                          {savingBudgetInteraction ? (
+                            <span className="inline-flex items-center gap-2">
+                              <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                              Salvando...
+                            </span>
+                          ) : budgetInteractionForm.id ? (
+                            'Atualizar interação'
+                          ) : (
+                            'Registrar interação'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-ink-soft mb-1">Data e hora</label>
+                        <input
+                          type="datetime-local"
+                          value={budgetInteractionForm.interaction_at || ''}
+                          onChange={(e) =>
+                            setBudgetInteractionForm({ ...budgetInteractionForm, interaction_at: e.target.value })
+                          }
+                          className={UI_INPUT_BG}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-ink-soft mb-1">Canal</label>
+                        <input
+                          list="budget-interaction-channel-options"
+                          type="text"
+                          value={budgetInteractionForm.channel || ''}
+                          onChange={(e) =>
+                            setBudgetInteractionForm({ ...budgetInteractionForm, channel: e.target.value })
+                          }
+                          placeholder="Ex.: WhatsApp, telefone, email, visita"
+                          className={UI_INPUT_BG}
+                        />
+                        <datalist id="budget-interaction-channel-options">
+                          {channels.map((channel) => (
+                            <option key={channel.id} value={channel.name} />
+                          ))}
+                          <option value="WhatsApp" />
+                          <option value="Telefone" />
+                          <option value="Email" />
+                          <option value="Visita" />
+                        </datalist>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-ink-soft mb-1">Observação</label>
+                        <textarea
+                          value={budgetInteractionForm.notes || ''}
+                          onChange={(e) =>
+                            setBudgetInteractionForm({ ...budgetInteractionForm, notes: e.target.value })
+                          }
+                          rows={3}
+                          placeholder="Resumo do contato, pedido, objeção, retorno..."
+                          className={UI_INPUT_BG}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setBudgetInteractionsExpanded((value) => !value)}
+                        className="inline-flex items-center gap-2 text-xs font-semibold text-ink-soft hover:text-ink"
+                      >
+                        <span aria-hidden="true">{budgetInteractionsExpanded ? '▴' : '▾'}</span>
+                        <span>{budgetInteractionsExpanded ? 'Ocultar Histórico' : 'Ver Histórico'}</span>
+                      </button>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div className="rounded-lg border border-surface-mid bg-surface-card px-3 py-2">
+                        <p className="text-[10px] uppercase font-bold text-ink-faint">Total</p>
+                        <p className={UI_STRONG}>{budgetInteractions.length}</p>
+                      </div>
+                      <div className="rounded-lg border border-surface-mid bg-surface-card px-3 py-2">
+                        <p className="text-[10px] uppercase font-bold text-ink-faint">Última interação</p>
+                        <p className={UI_STRONG}>
+                          {budgetInteractions[0]?.interaction_at
+                            ? formatDateTimeBR(budgetInteractions[0].interaction_at)
+                            : '-'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-surface-mid bg-surface-card px-3 py-2">
+                        <p className="text-[10px] uppercase font-bold text-ink-faint">Canal</p>
+                        <p className={UI_STRONG}>{budgetInteractions[0]?.channel || '-'}</p>
+                      </div>
+                    </div>
+                    {budgetInteractionsExpanded && (
+                      <div className="mt-3 border-t border-surface-mid pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold">
+                            Histórico recente
+                          </p>
+                          {budgetInteractionsLoading ? <span className={UI_META}>Carregando...</span> : null}
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {budgetInteractions.length === 0 ? (
+                            <p className="text-xs text-ink-faint">Nenhuma interação registrada ainda.</p>
+                          ) : (
+                            budgetInteractions.slice(0, 12).map((item) => (
+                              <div key={item.id} className="rounded-lg border border-surface-mid bg-surface-card px-3 py-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-xs font-semibold text-ink">
+                                      {item.channel || 'Canal não informado'}
+                                    </p>
+                                    <p className={UI_META}>
+                                      {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
+                                      {item.operator ? ` • ${item.operator}` : ''}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => editBudgetInteraction(item)}
+                                      className="text-[11px] text-brand-ink hover:underline"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteBudgetInteraction(item)}
+                                      className="text-[11px] text-risk-ink hover:underline"
+                                    >
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </div>
+                                {item.notes ? (
+                                  <p className="text-xs text-ink-soft mt-1 whitespace-pre-wrap">{item.notes}</p>
+                                ) : null}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+                {editingBudget?.id && budgetLeadInteractions.length > 0 ? (
+                  <div className="rounded-xl border border-line bg-surface-card px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setBudgetLeadHistoryExpanded((value) => !value)}
+                      className="w-full flex items-center justify-between gap-3 text-left"
+                    >
+                      <span>
+                        <span className="block text-[11px] uppercase tracking-[0.18em] text-ink-faint font-bold">
+                          Contatos do lead de origem
+                        </span>
+                        <span className="block text-xs text-ink-faint mt-1">
+                          {budgetLeadInteractions.length} registro(s) da captação. Somente leitura — para alterar,
+                          abra o lead.
+                        </span>
+                      </span>
+                      <span aria-hidden="true" className="text-ink-soft">
+                        {budgetLeadHistoryExpanded ? '▴' : '▾'}
+                      </span>
+                    </button>
+                    {budgetLeadHistoryExpanded && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1 mt-3 border-t border-surface-mid pt-3">
+                        {budgetLeadInteractions.slice(0, 12).map((item) => (
+                          <div key={`lead-${item.id}`} className="rounded-lg border border-surface-mid bg-surface-low px-3 py-2">
+                            <p className="text-xs font-semibold text-ink">{item.channel || 'Canal não informado'}</p>
+                            <p className={UI_META}>
+                              {item.interaction_at ? formatDateTimeBR(item.interaction_at) : '-'}
+                              {item.operator ? ` • ${item.operator}` : ''}
+                            </p>
+                            {item.notes ? (
+                              <p className="text-xs text-ink-soft mt-1 whitespace-pre-wrap">{item.notes}</p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
                 <div className={UI_GRID2}>
                   <div>
                     <label className={UI_LABEL}>ID externo (ERP)</label>
@@ -7576,7 +8103,7 @@ const App = () => {
                                 </button>
                                 <button
                                   onClick={() => deleteUser(u.id)}
-                                  className="text-red-600 text-xs"
+                                  className="text-risk-ink text-xs"
                                 >
                                   Excluir
                                 </button>
@@ -7854,7 +8381,7 @@ const App = () => {
                         <span>{c.name}</span>
                         <button
                           onClick={() => handleDeleteChannel(c.id)}
-                          className="text-xs text-red-600"
+                          className="text-xs text-risk-ink"
                         >
                           Excluir
                         </button>

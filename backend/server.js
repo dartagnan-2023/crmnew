@@ -373,17 +373,39 @@ const hydrateLeadAutomationState = (lead, now = new Date()) => {
 
 const isCompetitorLead = (lead) => normalizeName(lead?.segment) === 'concorrente';
 
-const hydrateBudgets = (budgets) =>
-  budgets.map((budget) => ({
-    ...budget,
-    budget_value: parseMoneyValue(budget.budget_value),
-    closed_value: parseMoneyValue(budget.closed_value),
-    created_at: toIsoStringOrEmpty(budget.created_at),
-    updated_at: toIsoStringOrEmpty(budget.updated_at || budget.created_at),
-    requested_at: toIsoStringOrEmpty(budget.requested_at),
-    sent_at: toIsoStringOrEmpty(budget.sent_at),
-    closed_at: toIsoStringOrEmpty(budget.closed_at),
-  }));
+// O segundo argumento e opcional DE PROPOSITO. As interacoes do orcamento nao
+// moram na aba `budgets`: o resumo (total, ultima data, ultimo canal) e
+// calculado aqui, na leitura, a partir da aba `budget_interactions`.
+//
+// Por que assim, e nao com colunas novas na aba `budgets`:
+//   1. acrescentar coluna faz o `ensureHeaders` REESCREVER a aba inteira no
+//      proximo boot — operacao cara e arriscada sobre dado de producao;
+//   2. sem coluna, a reimportacao do ERP (`POST /api/budgets/import`) nao tem
+//      como apagar o historico, nem por descuido;
+//   3. registrar uma interacao passa a ser UMA escrita (na aba de interacoes)
+//      em vez de duas.
+// Quem chama sem o segundo argumento continua recebendo o orcamento como antes,
+// so que com o contador zerado — nenhuma chamada existente quebra.
+const hydrateBudgets = (budgets, interactions = []) => {
+  const resumoPorOrcamento = buildBudgetInteractionSummaryMap(interactions);
+  return budgets.map((budget) => {
+    const resumo = resumoPorOrcamento.get(String(budget.id || '').trim()) || {};
+    return {
+      ...budget,
+      budget_value: parseMoneyValue(budget.budget_value),
+      closed_value: parseMoneyValue(budget.closed_value),
+      created_at: toIsoStringOrEmpty(budget.created_at),
+      updated_at: toIsoStringOrEmpty(budget.updated_at || budget.created_at),
+      requested_at: toIsoStringOrEmpty(budget.requested_at),
+      sent_at: toIsoStringOrEmpty(budget.sent_at),
+      closed_at: toIsoStringOrEmpty(budget.closed_at),
+      interactions_count: Number(resumo.interactions_count || 0),
+      last_interaction_at: resumo.last_interaction_at || '',
+      last_interaction_channel: resumo.last_interaction_channel || '',
+      last_interaction_notes: resumo.last_interaction_notes || '',
+    };
+  });
+};
 
 const hydrateBudget = (budget) => hydrateBudgets([budget])[0];
 const hydrateAdSpendItems = (items) =>
@@ -485,6 +507,13 @@ const SHEET_CHANNELS = process.env.SHEET_CHANNELS || 'channels';
 const SHEET_NEGATIVE_TERMS = process.env.SHEET_NEGATIVE_TERMS || 'negative_terms';
 const SHEET_EMAIL_EVENTS = process.env.SHEET_EMAIL_EVENTS || 'email_events';
 const SHEET_LEAD_INTERACTIONS = process.env.SHEET_LEAD_INTERACTIONS || 'lead_interactions';
+// Interacoes do ORCAMENTO. Aba propria, separada da do lead de proposito: um
+// orcamento pode existir sem lead vinculado (a importacao do ERP nao preenche
+// lead_id e nao ha rotina que ligue os dois), e mesmo quando ha vinculo as duas
+// historias sao diferentes — a do lead e a captacao, a do orcamento e a
+// negociacao daquela proposta. A aba e criada sozinha no primeiro registro
+// (ver ensureSheetExists, chamado por writeSheet).
+const SHEET_BUDGET_INTERACTIONS = process.env.SHEET_BUDGET_INTERACTIONS || 'budget_interactions';
 const SHEET_FOLLOWUP_NOTIFICATIONS = process.env.SHEET_FOLLOWUP_NOTIFICATIONS || 'followup_notifications';
 const SHEET_SETTINGS = process.env.SHEET_SETTINGS || 'settings';
 
@@ -587,6 +616,16 @@ const SHEETS_CONFIG = {
   lead_interactions: [
     'id',
     'lead_id',
+    'interaction_at',
+    'channel',
+    'operator',
+    'notes',
+    'created_at',
+    'updated_at',
+  ],
+  budget_interactions: [
+    'id',
+    'budget_id',
     'interaction_at',
     'channel',
     'operator',
@@ -830,6 +869,7 @@ const ensureHeaders = async () => {
     [SHEET_AD_SPEND]: SHEETS_CONFIG.ad_spend,
     [SHEET_EMAIL_EVENTS]: SHEETS_CONFIG.email_events,
     [SHEET_LEAD_INTERACTIONS]: SHEETS_CONFIG.lead_interactions,
+    [SHEET_BUDGET_INTERACTIONS]: SHEETS_CONFIG.budget_interactions,
     [SHEET_FOLLOWUP_NOTIFICATIONS]: SHEETS_CONFIG.followup_notifications,
     [SHEET_LEADS]: SHEETS_CONFIG.leads,
   };
@@ -2967,6 +3007,78 @@ const buildLeadInteractionSummaryForLead = (interactions = [], leadId = '') => {
   };
 };
 
+const normalizeBudgetInteraction = (item) => ({
+  id: String(item?.id || ''),
+  budget_id: String(item?.budget_id || '').trim(),
+  interaction_at: toIsoStringOrEmpty(item?.interaction_at || item?.created_at),
+  channel: String(item?.channel || '').trim(),
+  operator: String(item?.operator || '').trim(),
+  notes: String(item?.notes || '').trim(),
+  created_at: toIsoStringOrEmpty(item?.created_at || item?.interaction_at),
+  updated_at: toIsoStringOrEmpty(item?.updated_at || item?.created_at || item?.interaction_at),
+});
+
+const buildBudgetInteractionSummaryMap = (interactions = []) => {
+  const summary = new Map();
+
+  interactions.forEach((item) => {
+    const interaction = normalizeBudgetInteraction(item);
+    if (!interaction.budget_id) return;
+
+    const current = summary.get(interaction.budget_id) || {
+      interactions_count: 0,
+      last_interaction_at: '',
+      last_interaction_channel: '',
+      last_interaction_notes: '',
+      last_interaction_operator: '',
+      _lastTs: Number.NEGATIVE_INFINITY,
+    };
+
+    current.interactions_count += 1;
+    const interactionTs = new Date(interaction.interaction_at || interaction.created_at || '').getTime();
+    if (Number.isFinite(interactionTs) && interactionTs >= current._lastTs) {
+      current._lastTs = interactionTs;
+      current.last_interaction_at = interaction.interaction_at || interaction.created_at || '';
+      current.last_interaction_channel = interaction.channel || '';
+      current.last_interaction_notes = interaction.notes || '';
+      current.last_interaction_operator = interaction.operator || '';
+    }
+
+    summary.set(interaction.budget_id, current);
+  });
+
+  for (const [budgetId, item] of summary.entries()) {
+    delete item._lastTs;
+    summary.set(budgetId, item);
+  }
+
+  return summary;
+};
+
+const emptyBudgetInteractionSummary = () => ({
+  interactions_count: 0,
+  last_interaction_at: '',
+  last_interaction_channel: '',
+  last_interaction_notes: '',
+  last_interaction_operator: '',
+});
+
+const buildBudgetInteractionSummaryForBudget = (interactions = [], budgetId = '') => {
+  const normalizedBudgetId = String(budgetId || '').trim();
+  if (!normalizedBudgetId) return emptyBudgetInteractionSummary();
+
+  return buildBudgetInteractionSummaryMap(
+    interactions.filter((item) => String(item?.budget_id || '').trim() === normalizedBudgetId)
+  ).get(normalizedBudgetId) || emptyBudgetInteractionSummary();
+};
+
+const sortInteractionsDesc = (list) =>
+  list.sort(
+    (a, b) =>
+      new Date(b.interaction_at || b.created_at || 0).getTime() -
+      new Date(a.interaction_at || a.created_at || 0).getTime()
+  );
+
 const recalculateStoredLeadAutomation = (lead, channels, now = new Date()) => {
   const resolvedChannelName = lead.channel_name || resolveChannelName(lead, channels);
   const hydrated = hydrateLeadAutomationState(
@@ -4332,8 +4444,14 @@ app.delete('/api/leads/:id', authMiddleware, async (req, res) => {
 
 // ===================== BUDGETS =====================
 app.get('/api/budgets', authMiddleware, async (_req, res) => {
-  const { items: budgets } = await loadTable('budgets');
-  return res.json(hydrateBudgets(budgets));
+  // A leitura da aba de interacoes e tolerante a aba inexistente: `readSheet`
+  // devolve vazio no HTTP 400 do Sheets. Ou seja, antes do primeiro registro
+  // esta rota se comporta exatamente como antes.
+  const [{ items: budgets }, { items: interactions }] = await Promise.all([
+    loadTable('budgets'),
+    loadTable(SHEET_BUDGET_INTERACTIONS),
+  ]);
+  return res.json(hydrateBudgets(budgets, interactions));
 });
 
 app.post('/api/budgets', authMiddleware, async (req, res) => {
@@ -4501,6 +4619,151 @@ app.delete('/api/budgets/:id', authMiddleware, async (req, res) => {
     const filtered = budgets.filter((budget) => String(budget.id) !== String(req.params.id));
     await saveTable('budgets', filtered);
     return res.json({ success: true });
+  });
+});
+
+// ===================== INTERACOES DO ORCAMENTO =====================
+// Espelho do que ja existe em /api/leads/:id/interactions. Duas diferencas,
+// ambas deliberadas:
+//   1. o resumo NAO e gravado de volta na linha do orcamento (ver hydrateBudgets);
+//   2. o GET devolve tambem, em `lead_items`, o historico do lead vinculado —
+//      apenas para leitura, para o orcamentista ver o que foi conversado na
+//      captacao sem confundir onde se registra o contato da proposta.
+
+app.get('/api/budgets/:id/interactions', authMiddleware, async (req, res) => {
+  const budgetId = String(req.params.id || '').trim();
+  if (!budgetId) return res.status(400).json({ error: 'Orcamento obrigatorio' });
+
+  const [{ items }, { items: budgets }] = await Promise.all([
+    loadTable(SHEET_BUDGET_INTERACTIONS, true),
+    loadTable('budgets'),
+  ]);
+
+  const interactions = sortInteractionsDesc(
+    items.map(normalizeBudgetInteraction).filter((item) => item.budget_id === budgetId)
+  );
+
+  const budget = budgets.find((item) => String(item.id) === budgetId);
+  const leadId = String(budget?.lead_id || '').trim();
+
+  let leadItems = [];
+  if (leadId) {
+    const { items: leadRows } = await loadTable(SHEET_LEAD_INTERACTIONS);
+    leadItems = sortInteractionsDesc(
+      leadRows.map(normalizeLeadInteraction).filter((item) => item.lead_id === leadId)
+    );
+  }
+
+  return res.json({
+    budget_id: budgetId,
+    lead_id: leadId,
+    total: interactions.length,
+    items: interactions,
+    lead_items: leadItems,
+  });
+});
+
+app.post('/api/budgets/:id/interactions', authMiddleware, async (req, res) => {
+  const budgetId = String(req.params.id || '').trim();
+  const channel = String(req.body?.channel || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+  const interactionAt = toIsoStringOrEmpty(req.body?.interaction_at) || new Date().toISOString();
+
+  if (!budgetId) return res.status(400).json({ error: 'Orcamento obrigatorio' });
+  if (!channel) return res.status(400).json({ error: 'Canal obrigatorio' });
+
+  return withTableLock('budget_interactions', async () => {
+    const [{ items: interactions }, { items: budgets }] = await Promise.all([
+      loadTable(SHEET_BUDGET_INTERACTIONS, true),
+      loadTable('budgets', true),
+    ]);
+
+    if (!budgets.some((item) => String(item.id) === budgetId)) {
+      return res.status(404).json({ error: 'Orcamento nao encontrado' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const interaction = {
+      id: nextId(interactions),
+      budget_id: budgetId,
+      interaction_at: interactionAt,
+      channel,
+      operator: req.user?.name || req.user?.username || '',
+      notes,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    interactions.push(interaction);
+    await saveTable(SHEET_BUDGET_INTERACTIONS, interactions);
+
+    return res.json({
+      success: true,
+      interaction: normalizeBudgetInteraction(interaction),
+      summary: buildBudgetInteractionSummaryForBudget(interactions, budgetId),
+    });
+  });
+});
+
+app.put('/api/budgets/:id/interactions/:interactionId', authMiddleware, async (req, res) => {
+  const budgetId = String(req.params.id || '').trim();
+  const interactionId = String(req.params.interactionId || '').trim();
+  const channel = String(req.body?.channel || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+  const interactionAt = toIsoStringOrEmpty(req.body?.interaction_at) || new Date().toISOString();
+
+  if (!budgetId) return res.status(400).json({ error: 'Orcamento obrigatorio' });
+  if (!interactionId) return res.status(400).json({ error: 'Interacao obrigatoria' });
+  if (!channel) return res.status(400).json({ error: 'Canal obrigatorio' });
+
+  return withTableLock('budget_interactions', async () => {
+    const { items: interactions } = await loadTable(SHEET_BUDGET_INTERACTIONS, true);
+
+    const idx = interactions.findIndex(
+      (item) => String(item.id) === interactionId && String(item.budget_id) === budgetId
+    );
+    if (idx === -1) return res.status(404).json({ error: 'Interacao nao encontrada' });
+
+    interactions[idx] = {
+      ...interactions[idx],
+      interaction_at: interactionAt,
+      channel,
+      notes,
+      updated_at: new Date().toISOString(),
+    };
+
+    await saveTable(SHEET_BUDGET_INTERACTIONS, interactions);
+
+    return res.json({
+      success: true,
+      interaction: normalizeBudgetInteraction(interactions[idx]),
+      summary: buildBudgetInteractionSummaryForBudget(interactions, budgetId),
+    });
+  });
+});
+
+app.delete('/api/budgets/:id/interactions/:interactionId', authMiddleware, async (req, res) => {
+  const budgetId = String(req.params.id || '').trim();
+  const interactionId = String(req.params.interactionId || '').trim();
+
+  if (!budgetId) return res.status(400).json({ error: 'Orcamento obrigatorio' });
+  if (!interactionId) return res.status(400).json({ error: 'Interacao obrigatoria' });
+
+  return withTableLock('budget_interactions', async () => {
+    const { items: interactions } = await loadTable(SHEET_BUDGET_INTERACTIONS, true);
+
+    const idx = interactions.findIndex(
+      (item) => String(item.id) === interactionId && String(item.budget_id) === budgetId
+    );
+    if (idx === -1) return res.status(404).json({ error: 'Interacao nao encontrada' });
+
+    interactions.splice(idx, 1);
+    await saveTable(SHEET_BUDGET_INTERACTIONS, interactions);
+
+    return res.json({
+      success: true,
+      summary: buildBudgetInteractionSummaryForBudget(interactions, budgetId),
+    });
   });
 });
 

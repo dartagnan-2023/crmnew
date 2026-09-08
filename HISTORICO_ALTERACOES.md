@@ -15,6 +15,101 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-08 — Claude (via Cowork) — Interações do cliente no orçamento
+
+**O quê:** o orçamento passou a ter registro de interações, igual ao que o lead já tinha. Arquivos: `backend/server.js` e `frontend/src/App.js`.
+
+Antes desta data **não existia nada disso no orçamento**. Conferido: a tabela `budgets` tem 29 colunas e nenhuma guarda interação; o único campo livre é `notes` ("Observações"). Foi verificado também, nos 186 commits que já tocaram o `App.js`, que o card do orçamento **nunca** teve um bloco de interações — ou seja, não houve remoção; é funcionalidade nova.
+
+### O que foi feito
+
+**Backend**
+
+- Aba nova `budget_interactions` (`id`, `budget_id`, `interaction_at`, `channel`, `operator`, `notes`, `created_at`, `updated_at`), declarada em `SHEETS_CONFIG` e no `ensureHeaders`. É criada sozinha no boot, pelo `ensureSheetExists`.
+- Quatro rotas, espelho das do lead: `GET`, `POST`, `PUT` e `DELETE` em `/api/budgets/:id/interactions`. Todas com `authMiddleware`, mesma proteção das demais rotas de orçamento.
+- Helpers `normalizeBudgetInteraction`, `buildBudgetInteractionSummaryMap`, `buildBudgetInteractionSummaryForBudget` e `sortInteractionsDesc`, ao lado dos equivalentes do lead.
+- `hydrateBudgets` ganhou um **segundo argumento opcional** com as interações e passou a devolver `interactions_count`, `last_interaction_at`, `last_interaction_channel` e `last_interaction_notes`. Quem chama sem o segundo argumento continua funcionando, com contador zerado.
+- `GET /api/budgets` passou a ler as duas abas.
+
+**Frontend**
+
+- Bloco "Interações com o cliente" dentro do card do orçamento, com data e hora, canal (com sugestões), observação, totais e histórico recolhível — o mesmo desenho do bloco do lead.
+- O bloco **só aparece ao editar**. Em "Novo Orçamento" ele não é renderizado, porque não há onde pendurar a interação antes de o orçamento existir. É a mesma regra do lead.
+- Bloco separado "Contatos do lead de origem", **somente leitura**, quando o orçamento tem `lead_id` preenchido.
+- Contador discreto "N int." ao lado do nome do cliente na lista, exibido só quando há pelo menos uma interação. Sem coluna nova, sem mexer na largura da tabela.
+
+### Decisões e o porquê
+
+1. **Armazenamento próprio, não reaproveitar o do lead.** A importação do ERP não preenche `lead_id` e não existe nenhuma rotina que ligue orçamento a lead automaticamente — o campo é preenchido à mão. Reaproveitar o histórico do lead deixaria o bloco inútil na maioria dos orçamentos. Além disso, mesmo quando há vínculo, as duas conversas são coisas diferentes: a do lead é a captação, a do orçamento é a negociação daquela proposta.
+
+2. **O resumo NÃO virou coluna na aba `budgets`.** É calculado na leitura, a partir da aba de interações. Motivos, nesta ordem:
+   - acrescentar coluna faz o `ensureHeaders` **reescrever a aba `budgets` inteira** no próximo boot — operação cara e arriscada sobre dado de produção;
+   - sem coluna, a reimportação do ERP não tem como apagar o histórico, nem por descuido;
+   - registrar uma interação passa a ser **uma** escrita, e não duas.
+
+3. **Histórico do lead somente leitura.** Escolha do dono do produto entre três opções. A alternativa de gravar nos dois lugares foi descartada e não recomendada: inflaria o contador do lead e misturaria duas histórias de forma irreversível.
+
+4. **Publicar o backend antes do frontend.** As rotas novas passam a existir antes de a tela chamá-las. O caminho inverso deixaria uma janela em que a tela chamaria rota inexistente.
+
+**Impacto:** nenhuma coluna nova em aba existente; nenhuma rota existente mudou de contrato (apenas ganhou campos a mais na resposta de `GET /api/budgets`). A aba `budget_interactions` é criada na primeira subida do backend. Antes de existir, `GET /api/budgets` se comporta exatamente como antes — `readSheet` devolve vazio no HTTP 400 do Sheets.
+
+**Ressalva conhecida:** `saveTable`/`loadTable` procuram o schema por `SHEETS_CONFIG[nome]`. Se alguém definir a variável de ambiente `SHEET_BUDGET_INTERACTIONS` com um nome diferente de `budget_interactions`, a gravação quebra. É exatamente o mesmo comportamento que já existe para `SHEET_LEAD_INTERACTIONS` e demais abas; não foi alterado para não introduzir inconsistência. **Não definir essa variável.**
+
+**Rollback:** `git revert` dos dois commits. A aba `budget_interactions` pode ficar na planilha sem efeito nenhum — nada mais a lê. Nenhuma migração para desfazer, porque nenhuma coluna de aba existente foi tocada.
+
+**Validação executada:**
+
+- `npm run build` do frontend: **exit 0**, 4 warnings de ESLint — os mesmos 4 de antes, comparados linha a linha. **Nenhum warning novo**, o que confirma que todo estado e função criados estão em uso.
+- **Backend real executado**, com a camada do Google Sheets substituída por um duplo em memória. Onze verificações: GET vazio, POST sem canal (400), POST em orçamento inexistente (404), dois POSTs válidos, GET ordenado do mais recente para o mais antigo, contador em `GET /api/budgets`, PUT, DELETE, GET final e chamada sem token (401).
+- **Prova de que a reimportação do ERP não apaga nada:** com duas interações gravadas, foi rodado `POST /api/budgets/import` reenviando o mesmo `external_id` com valor e status diferentes. Resultado: valor atualizado de 7.500 para 8.900, `notes` sobrescrito pelo ERP, `representante` preservado e **as duas interações intactas**, com o contador ainda em 2.
+- **Prova de que a aba `budgets` não é reescrita:** com a planilha semeada com os 29 cabeçalhos exatos de produção, o boot **não** emitiu o aviso `[WARN] Headers da planilha budgets incompletos`. O único registro de criação foi `[INIT] Criando aba ausente: budget_interactions`.
+- **Teste de ponta a ponta pelo navegador** (Chromium/Playwright), com o frontend compilado falando com esse backend real, nos dois temas: o bloco aparece, o histórico expande, o bloco do lead vinculado aparece separado e rotulado, registrar uma interação pela tela levou o total de 2 para 3 e o contador da lista de "2 int." para "3 int." na hora. **Zero erros de console.**
+- Testes unitários dos helpers de resumo, incluindo data inválida, orçamento sem interação, interação órfã sem `budget_id` e chamada de `hydrateBudgets` sem o segundo argumento.
+
+**Observação levantada, não corrigida:** o botão "Registrar interação" usa `bg-slate-900 text-white`, copiado do bloco do lead. No tema escuro o botão quase não se separa do fundo — o texto continua legível, mas a borda do botão some. É um padrão que já existe no sistema inteiro (o "Cadastrar" da lista de orçamentos é igual). Não foi alterado aqui para manter o bloco idêntico ao do lead, como pedido. Corrigir é uma linha, e deve valer para os dois lugares ao mesmo tempo.
+
+## 2026-09-04 — Claude (via Cowork) — Dashboard em sub-abas e qualidade dos gráficos
+
+**O quê:** duas mudanças publicadas juntas, a pedido do usuário. Arquivos: `frontend/src/App.js` e `frontend/src/index.css`.
+
+### 1. Sub-abas no Dashboard
+
+O Dashboard tinha três seções empilhadas numa página só — Leads, Orçamentos e Mídia paga — e chegar em Mídia paga exigia rolar por 22 cartões e 10 gráficos. Viraram três sub-abas numa barra, com contador de volume ao lado de cada nome. Os filtros ficam **acima** da barra porque valem para as três: trocar de sub-aba não obriga ninguém a refiltrar.
+
+**Migração dos 9 gráficos de orçamento.** A seção Orçamentos do Dashboard tinha 4 cartões e **zero gráficos**, enquanto a aba Orçamentos tinha nove. Os nove migraram para a sub-aba (funil, orçado x fechado por mês, perdas por motivo, aprovação por vendedor, por orçamentista, por representante, solicitações por mês, orçamentos por vendedor e por orçamentista). A aba Orçamentos fica com filtros, os 4 cartões do próprio filtro, e a lista com cadastrar/editar/excluir. A regra que ficou: **Dashboard analisa, abas operacionais fazem.**
+
+Para os gráficos migrados responderem aos filtros do Dashboard e não aos da aba de origem, o memo `budgetDashboardData` passou a consumir `dashboardMediaBudgets` em vez de `budgetFilteredItems`. Conferido antes: os 10 usos de `budgetDashboardData` eram todos os gráficos migrados, nenhum outro consumidor.
+
+### 2. Qualidade dos gráficos
+
+**Geometria do gráfico de linha — o defeito mais grave.** `MiniLineChart` desenhava num `viewBox="0 0 100 100"` (um quadrado) sem `preserveAspectRatio`. O navegador encaixava o quadrado na altura e centralizava: medido em produção, o desenho ocupava **112px dentro de um svg de 355px**, ou seja **32%** da largura. Agora o viewBox tem a proporção do espaço real, `preserveAspectRatio="none"` estica de verdade e `vectorEffect="non-scaling-stroke"` mantém o traço com espessura constante. Medido depois: **96%**. Afeta 11 gráficos.
+
+Junto: os valores ficavam numa grade de três colunas, então com 6 pontos quebravam em duas linhas e "jul" caía embaixo de "abr" — não havia correspondência entre o ponto e o rótulo. Viraram **eixo**, um rótulo por ponto, alinhados. O rótulo direto passou a marcar só o **pico e o último ponto**; um número em cada ponto é ruído e não se lê.
+
+**Pontas da barra.** `MiniBarChart` usava `rounded-full`, arredondando também a ponta esquerda — o que descola a barra da linha de base e impõe largura mínima igual à altura. No funil, valores de 0,7% e 1,6% eram desenhados **do mesmo tamanho**: a barra superestimava o pequeno e apagava a diferença. Agora a ponta esquerda é reta, só a ponta do dado é arredondada, e há largura mínima de 2px para que valor diferente de zero sempre apareça. Rótulo e valor passaram para a mesma linha da barra, o que quase dobra quantas categorias cabem na mesma altura.
+
+**Paleta de gráficos por tema.** As cores estavam cravadas em `CHART_COLORS` e **reprovavam no tema escuro**: o azul `#006194` dava 2,48:1 e o vermelho `#a4262c` dava 2,28:1 contra o cartão `#1a1f25`, sendo 3:1 o mínimo para marca de gráfico. Isso passou na publicação do modo escuro porque naquele dia foi medido o contraste do **texto**, elemento por elemento, e não o das **barras**. Agora os quatro papéis são variáveis CSS com um conjunto por tema, buscado com o validador até passar: `#0067b7`, `#007c3d`, `#cc3336`, `#cb7a00`. Duas ressalvas medidas e aceitas: o azul fica em 2,86:1 e a separação risco/positivo para daltonismo fica em ΔE 7,2 — as duas só são aceitáveis **porque** todo gráfico agora traz o valor escrito e o nome no eixo, então a cor deixou de ser o único canal. Está anotado no `index.css`: se os rótulos saírem, isto vira reprovação.
+
+**Rótulos do StatCard.** O rótulo era pintado por um `tone` com hexadecimal cravado. Medido contra o cartão escuro: verde 2,53:1, vermelho 2,57:1, âmbar 3,55:1 — todos abaixo do mínimo de 4,5 para texto. E, mesmo no claro, aquela cor era decoração: verde, âmbar e vermelho não queriam dizer bom, atenção e ruim. Agora o rótulo é neutro sempre, e existe a variante `alerta` com tarja lateral para **um** cartão por painel — o mesmo recurso da tela de Leads.
+
+**Hover e visão em tabela.** Nenhum dos gráficos tinha as duas coisas. Cada barra e cada ponto ganhou `title` com categoria e valor, e cada gráfico ganhou um alternador **"ver como tabela"** que troca o desenho pela mesma informação em texto. Serve de acessibilidade (quem não distingue as cores chega ao valor) e de uso real (copiar para planilha).
+
+**Sobras de cor crua corrigidas de passagem:** `bg-emerald-600` com texto branco dava 3,77:1 e reprovava **nos dois temas, desde antes** — os três botões viraram contorno. `text-red-600` dava 3,43:1 no escuro e passou a usar o token `risk-ink`. E `bg-slate-900` no botão "Lançar Ads" era um preto fixo que quase encostava no fundo do cartão escuro; virou o azul da marca, já que é a ação principal daquele cabeçalho.
+
+### 3. Período padrão
+
+O padrão passou de 90 para **30 dias** nas duas telas (`dashboardPeriod` e `budgetPeriod`), por decisão do usuário. As demais opções continuam: 90 dias, 6 meses, 12 meses, personalizado e tudo.
+
+**Registro de um alarme falso meu:** eu havia relatado que "últimos 90 dias" devolvia 468 numa tela e 855 noutra, sugerindo inconsistência. Não havia. O seletor do Dashboard estava em **30 dias** e o 468 é a contagem correta de 30 dias — bate exatamente com o cálculo independente. As duas telas já usavam a mesma regra de campo de data (`requested_at` com queda para `created_at`). O erro foi meu, por comparar o cartão de 30 com uma conta de 90.
+
+**Impacto:** apresentação apenas. Nenhuma conta de indicador foi alterada, nenhuma chamada de API, nenhum campo. Backend intocado. Todos os 22 cartões e 23 gráficos continuam existindo — o que mudou foi onde ficam e como são desenhados.
+
+**Rollback:** `git revert` do commit. Cópia anterior a esta alteração guardada em `App.js.2026-09-04-pre-redesign.backup` (estado do início do dia) — para voltar só esta mudança, o revert é o caminho.
+
+**Validação:** `react-scripts build` completo (mesmas quatro advertências de lint anteriores, nenhuma nova). Geometria medida no navegador: uso da largura passou de **32% para 96%**. Contraste WCAG medido elemento por elemento, nas **três sub-abas e nos dois temas**: **zero reprovações** nas seis combinações — antes eram 4 no escuro e 1 no claro. Estrutura conferida: sub-aba Leads com 10 gráficos, Orçamentos com 9, Mídia paga com 4, e a aba Orçamentos mantendo a lista.
+
+**Limite conhecido:** o rótulo do eixo x é distribuído em faixas de largura igual, enquanto os pontos têm um respiro nas bordas. Nos extremos há um pequeno desalinhamento entre o rótulo e o ponto. Perceptível só se for procurado.
+
 ## 2026-09-04 — Claude (via Cowork) — Modo escuro
 
 **O quê:** Tema escuro no sistema inteiro, com controle de três estados (Claro / Escuro / Automático) no menu do usuário. Quatro arquivos: `frontend/tailwind.config.js`, `frontend/src/index.css`, `frontend/public/index.html` e `frontend/src/App.js`.
