@@ -15,6 +15,53 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-08 — Claude (via Cowork) — Rota para corrigir status de lead fora da lista
+
+**O quê:** rota nova `POST /api/leads/normalizar-status`, só para admin. Arquivo: `backend/server.js`. Nenhuma linha existente foi alterada — a mudança é 100% adição.
+
+### Por quê
+
+Medição em produção nesta data: a base tem **2.267 leads**, e **83 deles estão com status "Cadastrado"** — valor que **não existe na lista do sistema** (`novo, contato, proposta, negociacao, ganho, perdido`). Lead com status fora da lista cai em "sem status" e fica **invisível em todo gráfico de funil**.
+
+**Origem, apurada:** a palavra "Cadastrado" **não aparece em nenhum ponto do código**, nem no backend nem no frontend. Veio de fora, de uma importação única: todos os 83 têm `source` e `channel_name` = "Planilha Victor", dono "Victor", criados entre 15/12/2025 e 14/01/2026. Nenhum lead com esse status foi criado depois disso — **a origem está encerrada**, não é um vazamento contínuo. A mesma importação trouxe 384 leads no total: 192 com `Novo` (maiúscula), 108 com `contato`, 83 com `Cadastrado` e 1 com `proposta`.
+
+Os 192 com maiúscula funcionam — `normalizeOptionValue` passa para minúscula antes de agregar. São só inconsistência de gravação, da mesma origem, e entram no mesmo conserto.
+
+### Por que uma rota, e não os caminhos óbvios
+
+Os dois caminhos naturais foram descartados por motivo medido:
+
+1. **275 chamadas a `PUT /api/leads/:id`.** Esse endpoint chama `applyLeadAutomationOnWrite` (pode alterar temperatura e zerar SLA) e `syncFollowupSchedules` (aciona o OmniChat, que aceita 100 agendamentos pendentes por hora e devolve 429 no 101 — medido neste projeto em 31/08). Seriam efeitos colaterais não pedidos, mais risco real de estourar o teto do OmniChat, mais 275 leituras da planilha inteira em horário de trabalho.
+2. **Edição manual na planilha.** Funciona, mas é empurrar o trabalho para o usuário, e ele recusou — com razão.
+
+### O que a rota faz, e o que ela recusa fazer
+
+- Escreve **somente a coluna `status`**, célula a célula, numa **única** chamada `values.batchUpdate`. Nenhuma outra coluna é escrita. Isso é deliberado e importante: um `saveTable` reescreveria a planilha inteira usando apenas as colunas do `SHEETS_CONFIG` e **apagaria em silêncio qualquer coluna extra** que exista na planilha e não esteja na configuração.
+- **Não** chama `applyLeadAutomationOnWrite`. Temperatura e SLA ficam como estão.
+- **Não** chama `syncFollowupSchedules`. O OmniChat não é acionado.
+- **Não** mexe em `updated_at`. Esses leads não foram trabalhados; marcá-los como atualizados mentiria para quem olhar a lista depois.
+- **Simulação por padrão.** Sem `aplicar: true`, devolve o que faria e não escreve nada.
+- **Trava de concorrência:** para gravar, exige `esperado` igual ao total encontrado *naquele instante*. Se alguém mexeu na base entre a simulação e a gravação, os números divergem e a rota devolve 409 sem gravar.
+- Comparação **exata e sensível a maiúsculas** — `"Cadastrado "` com espaço no fim não é tocado.
+- Destino restrito aos 6 status válidos; origem e destino iguais são recusados; acima de 1.000 linhas recusa; só admin; roda dentro de `withTableLock('leads')`.
+
+**Impacto:** nenhuma rota existente mudou. A rota é inerte enquanto ninguém a chama.
+
+**Rollback:** `git revert <commit>` remove a rota. Para desfazer uma gravação já feita, o histórico de versões do Google Sheets, ou a própria rota no sentido inverso (`de: "novo", para: ...`) — cuidado, porque no sentido inverso ela não sabe distinguir os leads que já eram "novo".
+
+**Validação executada** (backend real, camada do Sheets substituída por duplo em memória, base semeada com 441 leads **e uma coluna extra `anotacao_do_victor` que não existe no `SHEETS_CONFIG`**):
+
+- Destino inválido, origem vazia e origem igual ao destino: recusados com 400.
+- Simulação encontrou 83 e **não gravou nada** — conferido relendo a base depois.
+- Gravação com `esperado` errado: **409, nada gravado** — conferido relendo a base.
+- Gravação correta: `Cadastrado` 83 → 0 e `Novo` 192 → 0; `novo` foi de 40 para **315** (40+83+192, exato). `contato` 108, `perdido` 12 e `ganho` 5 **intactos**.
+- O registro com `"Cadastrado "` (espaço no fim) **não foi tocado**, provando a comparação exata.
+- Nos 275 registros alterados: `owner`, `source`, `created_at` e a **coluna extra** intactos em todos os 275. **`updated_at` inalterado nos 441.**
+- Rodar de novo é idempotente: encontra 0 e devolve `gravado: false`.
+- `node --check`: OK. Diff contra a versão publicada: **0 linhas removidas**.
+
+**Registro de um erro meu durante o teste:** a primeira rodada indicou que a gravação não surtiu efeito. Era falha do **duplo de teste**, não da rota — o `values.batchUpdate` do stub ainda era um no-op porque o comando que o corrigiu foi interrompido antes de rodar. Corrigido o stub, todas as asserções passaram. Fica registrado para não parecer que houve um bug e ele sumiu sozinho.
+
 ## 2026-09-08 — Claude (via Cowork) — Gráficos de evolução mensal deixam de obedecer ao filtro de data
 
 **O quê:** os 6 gráficos de "por mês / evolução" do Dashboard passaram a olhar sempre os últimos 6 meses, ignorando o recorte de data. Arquivo: `frontend/src/App.js`.

@@ -4010,6 +4010,120 @@ app.delete('/api/leads/:id/interactions/:interactionId', authMiddleware, async (
   });
 });
 
+// ============ CORRECAO PONTUAL DE STATUS DE LEAD ============
+// Existe para consertar valores de status que entraram na base por importacao e
+// nao pertencem a lista do sistema. Lead com status fora da lista cai em
+// "sem status" e fica invisivel em todo grafico de funil.
+//
+// Caso conhecido, medido em 08/09/2026: a importacao "Planilha Victor"
+// (dez/2025 a jan/2026) trouxe 384 leads, dos quais 83 com "Cadastrado" — que
+// nao e um status do sistema — e 192 com "Novo" em maiuscula. A palavra
+// "Cadastrado" nao existe em nenhum ponto do codigo: veio de fora, de uma
+// importacao unica e ja encerrada.
+//
+// A rota e deliberadamente estreita, porque mexe em dado que ja existe:
+//   - escreve SO a coluna `status`, celula a celula, numa unica chamada
+//     values.batchUpdate. Nenhuma outra coluna e lida para gravacao, entao nao
+//     ha como perder campo — nem colunas que existam na planilha e nao estejam
+//     no SHEETS_CONFIG, que um saveTable apagaria silenciosamente;
+//   - NAO chama applyLeadAutomationOnWrite: temperatura e SLA ficam como estao;
+//   - NAO chama syncFollowupSchedules: o OmniChat nao e acionado. Ele aceita
+//     100 agendamentos pendentes por hora e devolve 429 no 101 (medido neste
+//     projeto), e uma correcao em lote estouraria esse teto;
+//   - NAO mexe em updated_at: esses leads nao foram trabalhados, e marca-los
+//     como atualizados mentiria para quem olhar a lista depois;
+//   - so grava com `aplicar: true` E `esperado` igual ao total encontrado
+//     naquele instante. Se alguem mexeu na base entre a simulacao e a
+//     gravacao, os numeros divergem e a rota recusa em vez de gravar em cima;
+//   - o destino tem de ser um status valido do sistema;
+//   - acima de LIMITE_LOTE_STATUS linhas, recusa.
+// Sem `aplicar`, e simulacao: devolve o que faria e nao escreve nada.
+const STATUS_DE_LEAD_VALIDOS = ['novo', 'contato', 'proposta', 'negociacao', 'ganho', 'perdido'];
+const LIMITE_LOTE_STATUS = 1000;
+
+app.post('/api/leads/normalizar-status', authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+
+  const de = String(req.body?.de ?? '');
+  const para = String(req.body?.para || '').trim();
+  const aplicar = req.body?.aplicar === true;
+  const esperado = Number(req.body?.esperado);
+
+  if (!de) return res.status(400).json({ error: 'Informe o status de origem em "de"' });
+  if (!STATUS_DE_LEAD_VALIDOS.includes(para)) {
+    return res.status(400).json({ error: `"para" deve ser um destes: ${STATUS_DE_LEAD_VALIDOS.join(', ')}` });
+  }
+  if (de === para) return res.status(400).json({ error: '"de" e "para" sao iguais' });
+
+  return withTableLock('leads', async () => {
+    const { headers, rows } = await readSheet(SHEET_LEADS, true);
+    if (!headers.length) return res.status(500).json({ error: 'Planilha de leads sem cabecalho' });
+
+    const idxStatus = headers.findIndex((h) => normalizeName(h) === 'status');
+    if (idxStatus === -1) return res.status(500).json({ error: 'Coluna "status" nao encontrada na planilha' });
+    const idxId = headers.findIndex((h) => normalizeName(h) === 'id');
+    const idxNome = headers.findIndex((h) => normalizeName(h) === 'name');
+    const colunaStatus = columnLetter(idxStatus);
+
+    const alvos = [];
+    rows.forEach((row, i) => {
+      if (String(row[headers[idxStatus]] ?? '') !== de) return;
+      alvos.push({
+        linha: i + 2, // a linha 1 e o cabecalho
+        id: idxId === -1 ? '' : String(row[headers[idxId]] ?? ''),
+        nome: idxNome === -1 ? '' : String(row[headers[idxNome]] ?? '').slice(0, 60),
+      });
+    });
+
+    const relatorio = {
+      de,
+      para,
+      coluna: `${colunaStatus} (${headers[idxStatus]})`,
+      total_de_linhas_na_planilha: rows.length,
+      encontrados: alvos.length,
+      linhas: alvos.map((item) => item.linha),
+      ids: alvos.map((item) => item.id),
+      amostra: alvos.slice(0, 10),
+    };
+
+    if (alvos.length > LIMITE_LOTE_STATUS) {
+      return res.status(400).json({
+        error: `Lote grande demais: ${alvos.length} linhas, limite ${LIMITE_LOTE_STATUS}. Nada foi gravado.`,
+        ...relatorio,
+      });
+    }
+
+    if (!aplicar) {
+      return res.json({ simulacao: true, gravado: false, ...relatorio });
+    }
+
+    if (!Number.isInteger(esperado) || esperado !== alvos.length) {
+      return res.status(409).json({
+        error: `Para gravar, envie "esperado" igual ao total encontrado agora (${alvos.length}). Recebido: ${JSON.stringify(req.body?.esperado)}. Nada foi gravado.`,
+        ...relatorio,
+      });
+    }
+
+    if (!alvos.length) {
+      return res.json({ simulacao: false, gravado: false, ...relatorio });
+    }
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data: alvos.map((item) => ({
+          range: `${SHEET_LEADS}!${colunaStatus}${item.linha}`,
+          values: [[para]],
+        })),
+      },
+    });
+    delete cache[SHEET_LEADS];
+
+    return res.json({ simulacao: false, gravado: true, ...relatorio });
+  });
+});
+
 app.post('/api/leads/recalculate-automation', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
 
