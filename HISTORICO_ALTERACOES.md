@@ -60,6 +60,25 @@ Os dois caminhos naturais foram descartados por motivo medido:
 - Rodar de novo é idempotente: encontra 0 e devolve `gravado: false`.
 - `node --check`: OK. Diff contra a versão publicada: **0 linhas removidas**.
 
+### Execução em produção — 08/09/2026
+
+A rota foi usada uma vez, com autorização explícita do usuário.
+
+**Simulação em produção:** 83 registros com `Cadastrado`, coluna `H (status)`. Gravação com a trava `esperado: 83`. Resposta: `gravado: true`, `encontrados: 83`. Releitura imediata: **0** registros com `Cadastrado`.
+
+| status | antes | depois |
+|---|---|---|
+| `Cadastrado` | 83 | **0** |
+| `novo` | 375 | **458** (375 + 83, exato) |
+| `Novo` (maiúsculo) | 128 | 128 — **não tocado** |
+| `contato` / `perdido` / `ganho` / `proposta` / `negociacao` | 1303 / 251 / 26 / 33 / 3 | idênticos |
+
+**Os 192 `Novo` em maiúscula NÃO foram normalizados**, contrariando o plano inicial. Motivo, decidido com o usuário durante a execução: a equipe está usando essa maiúscula como marcador para separar os leads da "Planilha Victor" numa limpeza em andamento. Normalizar teria misturado esses registros com os `novo` legítimos e **destruído a única forma de distinguir uns dos outros**. Fica pendente para quando a limpeza terminar.
+
+**Rollback:** os 83 são exatamente os registros com `source == "Planilha Victor"` e `status == "novo"` — condição conferida no momento, devolve exatamente 83. Antes da correção, nenhum lead dessa origem tinha `novo` minúsculo. A lista completa dos 83 IDs está em `correcao-status-cadastrado-2026-09-08.md`, na raiz do repositório.
+
+**Observação de contexto, para não confundir no futuro:** entre 15h20 e 17h35 desta data o total de leads caiu de 2.267 para 2.202 e o status `Novo` caiu de 192 para 128 — cerca de 65 exclusões. O usuário confirmou tratar-se de limpeza combinada da equipe. **Esta correção não excluiu nenhum lead.**
+
 **Registro de um erro meu durante o teste:** a primeira rodada indicou que a gravação não surtiu efeito. Era falha do **duplo de teste**, não da rota — o `values.batchUpdate` do stub ainda era um no-op porque o comando que o corrigiu foi interrompido antes de rodar. Corrigido o stub, todas as asserções passaram. Fica registrado para não parecer que houve um bug e ele sumiu sozinho.
 
 ## 2026-09-08 — Claude (via Cowork) — Gráficos de evolução mensal deixam de obedecer ao filtro de data
