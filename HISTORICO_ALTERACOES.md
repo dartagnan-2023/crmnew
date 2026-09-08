@@ -15,6 +15,55 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-08 — Claude (via Cowork) — Gráficos de evolução mensal deixam de obedecer ao filtro de data
+
+**O quê:** os 6 gráficos de "por mês / evolução" do Dashboard passaram a olhar sempre os últimos 6 meses, ignorando o recorte de data. Arquivo: `frontend/src/App.js`.
+
+São eles: **Entradas por mês**, **Evolução do valor convertido** e **Evolução do pipeline ativo** (sub-aba Leads); **Solicitações por mês**, **Valor orçado por mês** e **Valor fechado por mês** (sub-aba Orçamentos).
+
+### O defeito
+
+Esses gráficos montam **seis meses fixos, pré-preenchidos com zero**, e depois despejam neles apenas os registros que passaram pelo **filtro de período**. Com o padrão em 30 dias, só os dois meses mais recentes podiam ter número — os outros quatro apareciam como zero. **Não eram zero: eram mês filtrado para fora, exibido como se nada tivesse acontecido.**
+
+**Reportado pelo usuário**, que viu abril, maio, junho e julho zerados e perguntou se havia algo errado. Havia.
+
+**Origem, sem rodeios:** a construção é anterior a esta sessão — conferida em `f416ac0` e em `32e489a`, onde o padrão do período era `90d`. Com 90 dias o mesmo defeito escondia 2 meses em vez de 4, e por isso passava despercebido. A mudança do padrão para `30d`, feita nesta mesma data a pedido do usuário, **não criou o defeito, mas o tornou impossível de ignorar**. Deveria ter sido notado no momento em que o padrão foi alterado.
+
+### A correção
+
+O filtro do Dashboard foi partido em duas partes, porque os filtros são conjuntivos e separá-los não muda o resultado de quem aplica as duas:
+
+- `leadPassaFiltrosDoDashboard` e `orcamentoPassaFiltrosDoDashboard` (escopo de módulo) concentram tudo **menos** a regra de data: vendedor, canal, segmento, campanha e follow-up.
+- `dashboardLeadsBase` e `dashboardBudgetsBase` aplicam só essa parte. Alimentam os gráficos de evolução mensal.
+- `dashboardFilteredLeads` e `dashboardMediaBudgets` continuam sendo a base **com** o recorte de data, e continuam alimentando todos os cartões de número e todos os demais gráficos, exatamente como antes.
+
+Os três mapas mensais de cada memo saíram do laço filtrado por data e ganharam um laço próprio sobre a base sem data. O balde `monthlyMap.has(key)` já limita aos seis meses, então não é preciso nenhum filtro de data ali — e é justamente esse o ponto.
+
+**Aviso na tela.** Cada um dos 6 cartões ganhou a linha: *"Sempre os últimos 6 meses. Este gráfico não segue o filtro de período; os demais filtros valem."* Sem isso, o operador veria abril no gráfico e abril fora dos cartões e não saberia em quem confiar.
+
+### Decisão e alternativas descartadas
+
+Escolha do dono do produto entre quatro opções. As descartadas:
+
+- **Janela do gráfico acompanhar o período** (30 dias vira semanas, 90 vira 3 meses). Mais coerente, mas é uma reforma nos 6 gráficos.
+- **Só avisar na tela e não mexer no cálculo.** Rápido, mas o gráfico continuaria inútil no padrão de 30 dias.
+- **Voltar o padrão para 90 dias.** Uma linha, mas só troca 4 meses zerados por 2. Não corrige nada.
+
+**Impacto:** nenhuma mudança de dado, de rota ou de schema — só de agregação no frontend. Os cartões de número não mudaram de comportamento. Quem filtra por vendedor, canal, segmento ou campanha continua vendo o gráfico responder a esses filtros.
+
+**Rollback:** `git revert <commit>`.
+
+**Nota de apuração, sobre um segundo sintoma:** o "Evolução do valor convertido" aparecia zerado inclusive em agosto e setembro. **Não é defeito.** O cartão "Taxa de Conversão" da mesma tela mostrava **0% e "0 ganhos"** no período — conferido em captura do próprio usuário. O gráfico só soma lead com status "ganho", então R$ 0,00 era a verdade. Vale registrar, porém, que esse gráfico lança o valor no mês em que o lead foi **criado**, e não no mês em que fechou: num ciclo de venda longo, um lead criado em julho e ganho em setembro cai em julho. Isso não foi alterado nesta correção.
+
+**Validação executada:**
+
+- `npm run build`: **exit 0**, os mesmos 4 warnings pré-existentes, comparados linha a linha. Nenhum warning novo.
+- **Teste de ponta a ponta pelo navegador**, com backend real (camada do Sheets substituída por duplo em memória) e base semeada com 49 leads e 18 orçamentos distribuídos em 6 meses:
+  - **Período 30 dias x 12 meses:** os cartões mudaram (17 leads / R$ 11.000 contra 49 leads / R$ 21.000) e os três gráficos de evolução ficaram **idênticos**, com os seis meses preenchidos. É exatamente o comportamento pretendido.
+  - **Filtro que não é de data ainda vale:** filtrando por campanha, "Entradas por mês" foi de 5/7/9/11/13/4 para 3/4/5/6/7/2 e o pipeline caiu pela metade em todos os meses. O cartão foi de 17 para 9. Ou seja, a separação **não** desligou os outros filtros.
+  - **Sub-aba Orçamentos:** "Solicitações por mês" passou a mostrar os seis meses (3 por mês, batendo com a semente) e as três notas aparecem.
+  - Zero erros de console em todos os testes.
+
 ## 2026-09-08 — Claude (via Cowork) — Interações do cliente no orçamento
 
 **O quê:** o orçamento passou a ter registro de interações, igual ao que o lead já tinha. Arquivos: `backend/server.js` e `frontend/src/App.js`.

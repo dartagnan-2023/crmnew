@@ -943,6 +943,93 @@ const emptyLead = {
   last_email_event_at: '',
 };
 
+// A regra de DATA do Dashboard mora FORA destas duas funcoes, de proposito.
+//
+// Os graficos de evolucao mensal montam seis meses fixos e precisam dos MESMOS
+// filtros de vendedor, canal, segmento, campanha e follow-up — mas NAO do
+// recorte de data. Sem essa separacao, um grafico de 6 meses alimentado por um
+// filtro de 30 dias mostra quatro meses zerados que nao sao zero de verdade:
+// sao mes filtrado para fora, exibido como se nao tivesse acontecido nada.
+// Os filtros sao conjuntivos, entao partir em duas partes nao muda em nada o
+// resultado de quem aplica as duas.
+const leadPassaFiltrosDoDashboard = (lead, opts) => {
+  const { users, segmentFilter, ownerFilter, channelFilter, campaignFilter, followUpFilter, now } = opts;
+
+  if (normalizeOptionValue(lead.segment) === 'concorrente') return false;
+
+  if (segmentFilter !== 'all') {
+    const norm = normalizeOptionValue(lead.segment);
+    if (segmentFilter === 'montador') {
+      if (!norm.includes('montador')) return false;
+    } else if (segmentFilter === 'usuario_final') {
+      if (norm !== 'usuario final') return false;
+    } else if (norm !== segmentFilter) {
+      return false;
+    }
+  }
+
+  if (ownerFilter !== 'all') {
+    const targetUser = users.find((u) => String(u.id) === String(ownerFilter));
+    const targetName = normalizeOptionValue(targetUser?.name);
+    const oid = String(lead.ownerId || lead.user_id || lead.userId || lead.owner_id || '');
+    const oname = normalizeOptionValue(lead.owner || lead.responsible_name);
+    if (oid) {
+      if (oid !== String(ownerFilter)) return false;
+    } else if (targetName) {
+      if (!(oname === targetName || oname.includes(targetName) || targetName.includes(oname))) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+
+  if (channelFilter !== 'all' && String(lead.channel_id || '') !== String(channelFilter)) {
+    return false;
+  }
+
+  if (campaignFilter.trim()) {
+    const term = campaignFilter.toLowerCase();
+    const campaign = String(lead.campaign || '').toLowerCase();
+    if (!campaign.includes(term)) return false;
+  }
+
+  if (followUpFilter === 'overdue') {
+    const nextDate = parseLeadDate(lead.next_contact);
+    if (!nextDate) return false;
+    const leadDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate()).getTime();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const diffDays = (leadDate - todayDate) / (1000 * 60 * 60 * 24);
+    if (diffDays >= 0) return false;
+  }
+
+  return true;
+};
+
+const orcamentoPassaFiltrosDoDashboard = (budget, opts) => {
+  const { segmentFilter, ownerFilter, campaignFilter, channelFilter, selectedChannelName } = opts;
+
+  if (segmentFilter !== 'all' && normalizeOptionValue(budget.segment) !== normalizeOptionValue(segmentFilter)) {
+    return false;
+  }
+  if (ownerFilter !== 'all' && String(budget.owner_id || '') !== String(ownerFilter)) {
+    return false;
+  }
+  if (campaignFilter.trim()) {
+    const term = campaignFilter.toLowerCase();
+    if (!String(budget.campaign || '').toLowerCase().includes(term)) return false;
+  }
+  if (channelFilter !== 'all' && selectedChannelName) {
+    const haystack = `${budget.channel_name || ''} ${budget.campaign || ''}`.toLowerCase();
+    if (!haystack.includes(selectedChannelName.toLowerCase())) return false;
+  }
+  return true;
+};
+
+// Aviso curto embaixo de todo grafico que ignora o recorte de data. Sem ele, o
+// operador ve abril na linha e abril fora dos cartoes e nao sabe em quem confiar.
+const NOTA_SEIS_MESES = 'Sempre os últimos 6 meses. Este gráfico não segue o filtro de período; os demais filtros valem.';
+
 const emptyBudget = {
   external_id: '',
   representante: '',
@@ -2006,6 +2093,25 @@ const App = () => {
     return buildStatsSummary(filteredLeads);
   }, [filteredLeads]);
 
+  // Base do Dashboard SEM o recorte de data: todos os outros filtros aplicados.
+  // E o que alimenta os graficos de evolucao mensal.
+  const dashboardLeadsBase = useMemo(() => {
+    const now = new Date();
+    const opts = {
+      users,
+      segmentFilter: dashboardSegmentFilter,
+      ownerFilter: dashboardOwnerFilter,
+      channelFilter: dashboardChannelFilter,
+      campaignFilter: dashboardCampaignFilter,
+      followUpFilter: dashboardFollowUpFilter,
+      now,
+    };
+    return leads.filter((lead) => leadPassaFiltrosDoDashboard(lead, opts));
+  }, [leads, users, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter, dashboardFollowUpFilter]);
+
+  // A base acima, agora com o recorte de data. E o que alimenta os cartoes de
+  // numero e todo grafico que NAO e de evolucao mensal — comportamento igual
+  // ao de antes desta separacao.
   const dashboardFilteredLeads = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -2015,8 +2121,7 @@ const App = () => {
       '12m': 365,
     };
 
-    return leads.filter((lead) => {
-      if (normalizeOptionValue(lead.segment) === 'concorrente') return false;
+    return dashboardLeadsBase.filter((lead) => {
       const baseDate = parseLeadDate(lead.created_at || lead.first_contact || lead.next_contact);
       if (dashboardPeriod === 'custom') {
         if (!baseDate) return false;
@@ -2031,56 +2136,9 @@ const App = () => {
         const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
         if (diffDays > periodDays) return false;
       }
-
-      if (dashboardSegmentFilter !== 'all') {
-        const norm = normalizeOptionValue(lead.segment);
-        if (dashboardSegmentFilter === 'montador') {
-          if (!norm.includes('montador')) return false;
-        } else if (dashboardSegmentFilter === 'usuario_final') {
-          if (norm !== 'usuario final') return false;
-        } else if (norm !== dashboardSegmentFilter) {
-          return false;
-        }
-      }
-
-      if (dashboardOwnerFilter !== 'all') {
-        const targetUser = users.find((u) => String(u.id) === String(dashboardOwnerFilter));
-        const targetName = normalizeOptionValue(targetUser?.name);
-        const oid = String(lead.ownerId || lead.user_id || lead.userId || lead.owner_id || '');
-        const oname = normalizeOptionValue(lead.owner || lead.responsible_name);
-        if (oid) {
-          if (oid !== String(dashboardOwnerFilter)) return false;
-        } else if (targetName) {
-          if (!(oname === targetName || oname.includes(targetName) || targetName.includes(oname))) {
-            return false;
-          }
-        } else {
-          return false;
-        }
-      }
-
-      if (dashboardChannelFilter !== 'all' && String(lead.channel_id || '') !== String(dashboardChannelFilter)) {
-        return false;
-      }
-
-      if (dashboardCampaignFilter.trim()) {
-        const term = dashboardCampaignFilter.toLowerCase();
-        const campaign = String(lead.campaign || '').toLowerCase();
-        if (!campaign.includes(term)) return false;
-      }
-
-      if (dashboardFollowUpFilter === 'overdue') {
-        const nextDate = parseLeadDate(lead.next_contact);
-        if (!nextDate) return false;
-        const leadDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate()).getTime();
-        const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const diffDays = (leadDate - todayDate) / (1000 * 60 * 60 * 24);
-        if (diffDays >= 0) return false;
-      }
-
       return true;
     });
-  }, [leads, users, dashboardPeriod, dashboardStartDate, dashboardEndDate, dashboardOwnerFilter, dashboardSegmentFilter, dashboardChannelFilter, dashboardCampaignFilter, dashboardFollowUpFilter]);
+  }, [dashboardLeadsBase, dashboardPeriod, dashboardStartDate, dashboardEndDate]);
 
   const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
 
@@ -2122,7 +2180,6 @@ const App = () => {
       const temperatureNormalized = normalizeOptionValue(temperature) || 'frio';
       const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
       const nextDate = parseLeadDate(lead.next_contact);
-      const leadValue = Number(lead.value || 0);
 
       channelMap.set(channel, (channelMap.get(channel) || 0) + 1);
       campaignMap.set(campaign, (campaignMap.get(campaign) || 0) + 1);
@@ -2133,22 +2190,33 @@ const App = () => {
       temperatureMap.set(temperatureNormalized, (temperatureMap.get(temperatureNormalized) || 0) + 1);
 
       if (lead.is_customer) customers += 1;
-      if (createdDate) {
-        if (createdDate >= monthStart) leadsThisMonth += 1;
-        const key = monthKey(createdDate);
-        if (monthlyMap.has(key)) {
-          monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
-          if (statusNormalized === 'ganho') {
-            convertedMonthlyMap.set(key, (convertedMonthlyMap.get(key) || 0) + leadValue);
-          }
-          if (['negociacao', 'proposta'].includes(statusNormalized)) {
-            pipelineMonthlyMap.set(key, (pipelineMonthlyMap.get(key) || 0) + leadValue);
-          }
-        }
-      }
+      // Os tres mapas mensais NAO sao preenchidos aqui: saem do laco de baixo,
+      // que roda sobre a base sem recorte de data.
+      if (createdDate && createdDate >= monthStart) leadsThisMonth += 1;
       if (nextDate && nextDate < today) overdueFollowups += 1;
       if (normalizeOptionValue(lead.sla_status) === 'overdue') {
         overdueByOwnerMap.set(lead.owner || lead.responsible_name || 'Sem responsável', (overdueByOwnerMap.get(lead.owner || lead.responsible_name || 'Sem responsável') || 0) + 1);
+      }
+    });
+
+    // Evolucao mensal: seis meses cheios, a partir da base SEM recorte de data.
+    // O balde `has(key)` ja limita aos seis meses, entao nao ha filtro de data
+    // aqui — e exatamente esse o ponto. Os demais filtros do Dashboard
+    // (vendedor, canal, segmento, campanha, follow-up) continuam valendo,
+    // porque `dashboardLeadsBase` ja os aplicou.
+    dashboardLeadsBase.forEach((lead) => {
+      const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
+      if (!createdDate) return;
+      const key = monthKey(createdDate);
+      if (!monthlyMap.has(key)) return;
+      const statusNormalized = normalizeOptionValue(lead.status || 'sem_status');
+      const leadValue = Number(lead.value || 0);
+      monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
+      if (statusNormalized === 'ganho') {
+        convertedMonthlyMap.set(key, (convertedMonthlyMap.get(key) || 0) + leadValue);
+      }
+      if (['negociacao', 'proposta'].includes(statusNormalized)) {
+        pipelineMonthlyMap.set(key, (pipelineMonthlyMap.get(key) || 0) + leadValue);
       }
     });
 
@@ -2223,8 +2291,22 @@ const App = () => {
       convertedEvolution,
       pipelineEvolution,
     };
-  }, [dashboardFilteredLeads, dashboardLocalStats]);
+  }, [dashboardFilteredLeads, dashboardLeadsBase, dashboardLocalStats]);
 
+  // Mesma separacao dos leads: base sem data para os graficos mensais...
+  const dashboardBudgetsBase = useMemo(() => {
+    const selectedChannelName = channels.find((c) => String(c.id) === String(dashboardChannelFilter))?.name || '';
+    const opts = {
+      segmentFilter: dashboardSegmentFilter,
+      ownerFilter: dashboardOwnerFilter,
+      campaignFilter: dashboardCampaignFilter,
+      channelFilter: dashboardChannelFilter,
+      selectedChannelName,
+    };
+    return budgets.filter((budget) => orcamentoPassaFiltrosDoDashboard(budget, opts));
+  }, [budgets, channels, dashboardSegmentFilter, dashboardOwnerFilter, dashboardCampaignFilter, dashboardChannelFilter]);
+
+  // ...e a mesma base com o recorte de data para os cartoes e os demais graficos.
   const dashboardMediaBudgets = useMemo(() => {
     const now = new Date();
     const daysByPeriod = {
@@ -2233,9 +2315,8 @@ const App = () => {
       '6m': 183,
       '12m': 365,
     };
-    const selectedChannelName = channels.find((c) => String(c.id) === String(dashboardChannelFilter))?.name || '';
 
-    return budgets.filter((budget) => {
+    return dashboardBudgetsBase.filter((budget) => {
       const baseDate = parseLeadDate(budget.requested_at || budget.created_at || budget.sent_at || budget.closed_at);
       if (dashboardPeriod === 'custom') {
         if (!baseDate) return false;
@@ -2250,34 +2331,9 @@ const App = () => {
         const diffDays = (now.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24);
         if (diffDays > periodDays) return false;
       }
-
-      if (dashboardSegmentFilter !== 'all' && normalizeOptionValue(budget.segment) !== normalizeOptionValue(dashboardSegmentFilter)) {
-        return false;
-      }
-      if (dashboardOwnerFilter !== 'all' && String(budget.owner_id || '') !== String(dashboardOwnerFilter)) {
-        return false;
-      }
-      if (dashboardCampaignFilter.trim()) {
-        const term = dashboardCampaignFilter.toLowerCase();
-        if (!String(budget.campaign || '').toLowerCase().includes(term)) return false;
-      }
-      if (dashboardChannelFilter !== 'all' && selectedChannelName) {
-        const haystack = `${budget.channel_name || ''} ${budget.campaign || ''}`.toLowerCase();
-        if (!haystack.includes(selectedChannelName.toLowerCase())) return false;
-      }
       return true;
     });
-  }, [
-    budgets,
-    channels,
-    dashboardPeriod,
-    dashboardStartDate,
-    dashboardEndDate,
-    dashboardSegmentFilter,
-    dashboardOwnerFilter,
-    dashboardCampaignFilter,
-    dashboardChannelFilter,
-  ]);
+  }, [dashboardBudgetsBase, dashboardPeriod, dashboardStartDate, dashboardEndDate]);
 
   const dashboardBudgetStats = useMemo(
     () => buildBudgetStatsSummary(dashboardMediaBudgets),
@@ -2838,9 +2894,6 @@ const App = () => {
       const lossReason = budget.loss_reason || 'sem_motivo';
       const owner = budget.owner_name || 'Sem vendedor';
       const estimator = budget.estimator_name || 'Sem orçamentista';
-      const createdDate = parseLeadDate(budget.requested_at || budget.created_at);
-      const closedDate = parseLeadDate(budget.closed_at || budget.updated_at);
-
       const statusNorm = normalizeOptionValue(status);
       const aprovado = statusNorm === 'aprovado';
       const valorOrcado = Number(budget.budget_value || 0);
@@ -2867,6 +2920,17 @@ const App = () => {
       acumularDesempenho(desempenhoOwner, owner, aprovado, valorOrcado, valorFechado);
       acumularDesempenho(desempenhoEstimator, estimator, aprovado, valorOrcado, valorFechado);
       acumularDesempenho(desempenhoRepresentante, representante, aprovado, valorOrcado, valorFechado);
+
+      // Os tres mapas mensais saem do laco de baixo, sobre a base sem data.
+    });
+
+    // Evolucao mensal do orcamento: mesma regra dos leads. Seis meses cheios,
+    // demais filtros aplicados, recorte de data ignorado de proposito.
+    dashboardBudgetsBase.forEach((budget) => {
+      const createdDate = parseLeadDate(budget.requested_at || budget.created_at);
+      const closedDate = parseLeadDate(budget.closed_at || budget.updated_at);
+      const aprovado = normalizeOptionValue(budget.status || 'sem_status') === 'aprovado';
+      const valorOrcado = Number(budget.budget_value || 0);
 
       if (createdDate) {
         const key = monthKey(createdDate);
@@ -2930,7 +2994,7 @@ const App = () => {
       estimatedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: estimatedMonthlyMap.get(key) || 0 })),
       closedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: closedMonthlyMap.get(key) || 0 })),
     };
-  }, [dashboardMediaBudgets]);
+  }, [dashboardMediaBudgets, dashboardBudgetsBase]);
 
   const exportDashboardExcel = () => {
     const workbook = buildExcelWorkbook([
@@ -5017,18 +5081,21 @@ const App = () => {
                   </div>
                 </div>
                 <MiniLineChart data={dashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
+                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
 
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Evolução do valor convertido</h3>
                 <MiniLineChart data={dashboardData.convertedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
+                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
 
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Evolução do pipeline ativo</h3>
                 <MiniLineChart data={dashboardData.pipelineEvolution} color={CHART_COLORS.atencao} formatValue={formatCurrencyBR} />
+                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -5095,9 +5162,11 @@ const App = () => {
               <h3 className={UI_H2}>Valor orçado e valor fechado por mês</h3>
               <ChartSeriesLabel color={CHART_COLORS.volume} text="Valor orçado (mês da solicitação)" />
               <MiniLineChart data={budgetDashboardData.estimatedEvolution} color={CHART_COLORS.volume} formatValue={formatCurrencyBR} />
+              <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               <div className="mt-4">
                 <ChartSeriesLabel color={CHART_COLORS.positivo} text="Valor fechado (mês do fechamento)" />
                 <MiniLineChart data={budgetDashboardData.closedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
+                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
             </div>
             <div className={UI_CARD}>
@@ -5163,6 +5232,7 @@ const App = () => {
               <p className={UI_EYEBROW}>Evolução</p>
               <h3 className={UI_H2}>Solicitações por mês</h3>
               <MiniLineChart data={budgetDashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
+              <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
             </div>
             <div className={UI_CARD}>
               <p className={UI_EYEBROW}>Time Comercial</p>
