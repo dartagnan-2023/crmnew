@@ -15,6 +15,68 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-08 — Claude (via Cowork) — A reimportação de orçamentos parou de apagar o trabalho manual
+
+**O quê:** a rota `POST /api/budgets/import` deixou de sobrescrever, num orçamento que já existe, os campos que a planilha do ERP não carrega. Arquivo: `backend/server.js`.
+
+### O defeito, reproduzido
+
+Até esta data, reimportar um `external_id` já existente fazia `{ ...registroAtual, ...payload }` com um payload que trazia **todos** os campos preenchidos com `''` quando o ERP não os mandava. Resultado, medido num teste que reproduziu o caso do zero:
+
+| campo | antes | depois de reimportar |
+|---|---|---|
+| `status` | `aprovado` | `em_orcamento` |
+| `lead_id`, `segment`, `owner_id`, `owner_name`, `estimator_id`, `estimator_name`, `channel_name`, `campaign`, `sent_at`, `closed_at`, `notes` | preenchidos | **apagados** |
+| `closed_value` | R$ 12.345,67 | **R$ 0,00** |
+| `representante` | Carlos Rep | mantido |
+
+O `representante` sobrevivia porque foi excluído do payload em 01/09/2026, com comentário explicando exatamente este risco. **Os outros onze campos nunca receberam a mesma proteção.**
+
+### O que isso explicava na base de produção
+
+Medido em 08/09/2026, sobre 1.158 orçamentos:
+
+- **`lead_id` vazio em 1.158 de 1.158.** Não é que ninguém vinculava — era apagado a cada importação. Isso também derruba, por um segundo motivo, a ideia de casar orçamento com lead: mesmo que casasse, a importação seguinte desfaria.
+- **`channel_name` e `campaign` vazios em 1.158 de 1.158.**
+- **1.087 de 1.158 (94%) em "Em orçamento"**, porque o status era resetado toda vez.
+- **Os 36 "aprovado" só existiam por terem sido marcados depois da última importação** — e sumiriam na próxima. Isso liga ao "0 ganhos" que o usuário viu na tela nesta mesma data.
+- `owner_name` preenchido em apenas 140, `estimator_name` em 218 — os sobreviventes desde a última importação.
+- Naquele dia houve importação: **465 orçamentos atualizados em 08/09**.
+
+### A correção
+
+O payload foi partido em dois:
+
+- **`doErp`** — o que a planilha realmente carrega: `external_id`, `client_name`, `company`, `stage`, `raw_status`, `raw_loss_reason`, `budget_value`, `branch`, `customer_order`, `payment_terms`. Únicos campos que uma reimportação sobrescreve.
+- **`doCrm`** — o que pertence ao CRM e o ERP nunca envia: `lead_id`, `segment`, `owner_id`, `owner_name`, `estimator_id`, `estimator_name`, `closed_value`, `sent_at`, `closed_at`, `channel_name`, `campaign` e `notes`. Usados **apenas na criação**; num update ficam de fora e sobrevivem.
+
+`requested_at` só é sobrescrito quando a planilha manda a data; antes, sem data, virava a data da importação.
+
+`notes` entrou no grupo protegido por decisão registrada com o usuário: é o campo "Observações", editável na tela, e o que a importação escrevia nele (Filial, Vendedor ERP, Pedido do cliente, Plano de pagamento) já está guardado em colunas próprias.
+
+**Regra de quem manda no status**, escolhida pelo dono do produto: *o ERP manda, exceto se a pessoa mexeu depois*. Implementada **sem coluna nova** — a comparação do `raw_status` já responde:
+
+- status cru que chega **igual** ao gravado → o ERP não tem novidade → o que a pessoa marcou permanece;
+- status cru **diferente** → o ERP mudou de opinião → o status e o motivo de perda dele passam a valer.
+
+A alternativa seria uma coluna "status editado à mão" na aba `budgets`, o que obrigaria o `ensureHeaders` a **reescrever a aba inteira** no próximo boot. A comparação evita isso. Ela normaliza `&nbsp;` e espaços repetidos, porque 84 registros da base trazem `&nbsp;` literal no status cru, vindo do ERP.
+
+**Efeito colateral desejado:** com o `lead_id` sobrevivendo, as chamadas `markLeadAsCustomer` e `updateLeadFromBudgetEvent`, que já existiam na rota e nunca podiam disparar (o `lead_id` era sempre apagado antes de serem lidas), passam a funcionar quando houver vínculo.
+
+**Impacto:** nenhuma alteração em dado existente — só no comportamento das próximas importações. Orçamento novo continua sendo criado com todos os campos, como antes.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação executada** (backend real, camada do Sheets substituída por duplo em memória):
+
+- **Reimportação com o mesmo status cru:** os **12 campos protegidos sobreviveram**, incluindo `status: aprovado` e as Observações escritas à mão. Ao mesmo tempo, o ERP atualizou o que devia — valor de 15.000 para 19.999, pedido do cliente e plano de pagamento. `requested_at` seguiu em 01/08 porque a planilha não mandou data.
+- **Variante `"&nbsp; Pendente  Prospeccao"`**, com `&nbsp;` e espaço duplo, foi corretamente reconhecida como o **mesmo** status — a normalização funciona.
+- **Reimportação com status cru diferente** (`Perdido Fechamento`): status virou `reprovado` e o motivo `concorrente`, vindos do ERP, **e os 12 campos do CRM continuaram intactos**.
+- **Criação pela importação:** orçamento novo veio completo, com os campos do CRM vazios, como esperado.
+- `node --check`: OK.
+
+**Um ramo não testado, declarado:** existe uma condição `semStatusGravado` que aplica o status do ERP quando o registro está com status em branco. Não consegui exercitá-la pela API, porque as duas rotas de criação já gravam `'novo'` como padrão — ela é rede de segurança para linhas antigas da planilha, não caminho normal.
+
 ## 2026-09-08 — Claude (via Cowork) — Rota para corrigir status de lead fora da lista
 
 **O quê:** rota nova `POST /api/leads/normalizar-status`, só para admin. Arquivo: `backend/server.js`. Nenhuma linha existente foi alterada — a mudança é 100% adição.

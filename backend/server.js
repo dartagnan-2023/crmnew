@@ -4909,47 +4909,87 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
       }
 
       const now = new Date().toISOString();
-      const payload = {
+
+      // O payload foi partido em DOIS porque, ate 08/09/2026, a reimportacao
+      // apagava trabalho manual. Medido e reproduzido naquela data: reimportar
+      // um external_id existente zerava lead_id, segment, owner_id, owner_name,
+      // estimator_id, estimator_name, closed_value, sent_at, closed_at,
+      // channel_name, campaign e notes, e devolvia o status de "aprovado" para
+      // o que a planilha dissesse. Em producao: lead_id vazio em 1.158 de 1.158
+      // orcamentos, canal e campanha idem, e os 36 "aprovado" so existiam
+      // porque tinham sido marcados DEPOIS da ultima importacao.
+      //
+      // O `representante` ja escapava disso desde 01/09/2026, por estar fora do
+      // payload. Esta mudanca estende a mesma protecao aos demais campos.
+
+      // 1. O que a planilha do ERP realmente carrega. Unicos campos que uma
+      //    reimportacao pode sobrescrever num orcamento que ja existe.
+      const doErp = {
         external_id: externalId,
-        lead_id: rawItem.lead_id || '',
         client_name: clientName,
         company,
-        segment: rawItem.segment || '',
         stage: rawItem.stage || '',
-        status: rawItem.status || 'novo',
-        loss_reason: rawItem.loss_reason || '',
         raw_status: rawItem.raw_status || '',
         raw_loss_reason: rawItem.raw_loss_reason || '',
+        budget_value: parseMoneyValue(rawItem.budget_value),
+        branch: rawItem.branch || '',
+        customer_order: rawItem.customer_order || '',
+        payment_terms: rawItem.payment_terms || '',
+      };
+
+      // 2. O que pertence ao CRM. O ERP nao envia nenhum destes, entao eles so
+      //    valem na CRIACAO. Num update ficam de fora e sobrevivem.
+      //    `notes` esta aqui porque e o campo "Observacoes", editavel na tela;
+      //    o que a importacao escrevia nele (Filial, Vendedor ERP, Pedido do
+      //    cliente, Plano de pagamento) ja esta guardado em colunas proprias.
+      const doCrm = {
+        lead_id: rawItem.lead_id || '',
+        segment: rawItem.segment || '',
         owner_id: rawItem.owner_id || '',
         owner_name: rawItem.owner_name || '',
         estimator_id: rawItem.estimator_id || '',
         estimator_name: rawItem.estimator_name || '',
-        budget_value: parseMoneyValue(rawItem.budget_value),
         closed_value: parseMoneyValue(rawItem.closed_value),
-        branch: rawItem.branch || '',
-        customer_order: rawItem.customer_order || '',
-        payment_terms: rawItem.payment_terms || '',
-        requested_at: rawItem.requested_at || now,
         sent_at: rawItem.sent_at || '',
         closed_at: rawItem.closed_at || '',
         channel_name: rawItem.channel_name || '',
         campaign: rawItem.campaign || '',
         notes: rawItem.notes || '',
-        // ATENCAO: `representante` fica DE FORA de proposito.
-        // O payload sobrescreve o registro existente logo abaixo
-        // ({ ...budgets[existingIdx], ...payload }). Como o ERP nao envia essa
-        // coluna, inclui-la aqui apagaria silenciosamente o que o orcamentista
-        // digitou, a cada reimportacao. Deixando fora, o valor manual sobrevive.
       };
+      // `representante` continua fora dos dois, como sempre esteve.
+
+      const statusDoErp = rawItem.status || 'novo';
+      const lossReasonDoErp = rawItem.loss_reason || '';
+      const requestedAtDoErp = rawItem.requested_at || '';
 
       const existingIdx = budgets.findIndex((budget) => String(budget.external_id || '').trim() === externalId);
 
       if (existingIdx >= 0) {
+        const atual = budgets[existingIdx];
+
+        // Quem manda no status: o ERP, mas so quando ele tem novidade.
+        // Se o status cru que chega e o mesmo que ja estava gravado, a planilha
+        // nao mudou de opiniao — entao o que a pessoa marcou no CRM permanece.
+        // Se mudou, o ERP passa a valer.
+        //
+        // Esta comparacao dispensa uma coluna nova de "status editado a mao",
+        // que obrigaria o ensureHeaders a REESCREVER a aba de orcamentos
+        // inteira no proximo boot. A limpeza de &nbsp; e de espacos repetidos
+        // existe porque 84 registros da base trazem "&nbsp;" literal no status
+        // cru, vindo do ERP.
+        const cru = (valor) => normalizeName(String(valor || '').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' '));
+        const erpMudouDeOpiniao = cru(doErp.raw_status) !== cru(atual.raw_status);
+        const semStatusGravado = !String(atual.status || '').trim();
+
         budgets[existingIdx] = {
-          ...budgets[existingIdx],
-          ...payload,
-          id: budgets[existingIdx].id,
-          created_at: budgets[existingIdx].created_at || now,
+          ...atual,
+          ...doErp,
+          ...(requestedAtDoErp ? { requested_at: requestedAtDoErp } : {}),
+          ...(erpMudouDeOpiniao || semStatusGravado
+            ? { status: statusDoErp, loss_reason: lossReasonDoErp }
+            : {}),
+          id: atual.id,
+          created_at: atual.created_at || now,
           updated_at: now,
         };
         updated += 1;
@@ -4965,7 +5005,11 @@ app.post('/api/budgets/import', authMiddleware, async (req, res) => {
 
       const budget = {
         id: nextId(budgets),
-        ...payload,
+        ...doErp,
+        ...doCrm,
+        status: statusDoErp,
+        loss_reason: lossReasonDoErp,
+        requested_at: requestedAtDoErp || now,
         created_at: now,
         updated_at: now,
       };
