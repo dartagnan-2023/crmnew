@@ -15,6 +15,49 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-09 — Claude (via Cowork) — Vínculo automático orçamento↔lead: medido, reprovado e NÃO construído
+
+**O quê:** um aviso calculado no topo da sub-aba Mídia paga. Arquivo: `frontend/src/App.js`. Mais importante que o código é o que foi **decidido não construir**, e por quê.
+
+### O que se tentou
+
+O dono do produto pediu vínculo **automático** entre orçamento e lead — explicitamente sem depender de alguém clicar ("se depende de alguém lembrar, não existe"), com alerta na tela nos casos duvidosos. A ideia era boa. Foi medida antes de virar código, e reprovou.
+
+**Régua frouxa** (qualquer palavra distintiva em comum, descontadas as genéricas do ramo): 152 "vínculos únicos" em 1.189 orçamentos. Inspecionando os primeiros seis: **cinco estavam errados.** "STAR SEIKI BRASIL" casava com "Star metal"; "TECNOLEV TECNOLOGIA EM ELEVADORES" com "Atual Elevadores"; "ANGAFLON" com "MRC Soluções Elétricas". O balde ambíguo tinha 553 orçamentos, um deles com **136 candidatos**.
+
+**Régua estrita** (nome do lead inteiro contido no do orçamento, lead com no mínimo duas palavras próprias): **13 de 1.189 — 1%.** E mesmo entre os treze havia erro: "TOCANTINS CASA & CONSTRUÇÃO" casava com "RMC Casa & Construção"; "ENERGY TECH" com "SH-Tech". Sobravam três ou quatro corretos.
+
+### Por que não se conserta afinando o algoritmo
+
+**Não existe chave em comum entre os dois lados.** O orçamento chega do ERP com **razão social** e sem telefone, e-mail ou CNPJ; o lead traz **nome fantasia ou nome de pessoa**, vindo de anúncio ou WhatsApp. Nome de empresa não é chave.
+
+E o custo do erro subiu: desde 08/09 o `lead_id` sobrevive à importação, então `markLeadAsCustomer` e `updateLeadFromBudgetEvent` finalmente disparam. **Um vínculo errado marcaria o lead errado como cliente.** Acertar 1% e errar o resto seria pior que não ligar.
+
+**Decisão registrada: não construir.** Vinte minutos medindo evitaram três horas construindo algo que corromperia dado.
+
+### O que foi feito no lugar
+
+Aceitar que orçamento e lead são dois mundos separados neste CRM, e fazer a tela dizer isso.
+
+A sub-aba Mídia paga ganhou um aviso **calculado, não escrito na pedra**: o CRM conta quantos orçamentos do período de fato entraram naquela conta (`orcamentosNaConta`). Enquanto for zero e houver orçamento no período, o aviso aparece com o número real. **No dia em que orçamento voltar a ter canal, o aviso some sozinho** — ninguém precisa lembrar de removê-lo.
+
+Texto: *"Os números desta aba cobrem apenas leads — nenhum orçamento entra aqui. Dos N orçamentos do período, nenhum pôde ser atribuído a uma mídia: o orçamento chega do ERP sem canal e sem campanha. Enquanto for assim, o ROAS e o valor por lead medem o que foi registrado no lead, e não a venda faturada."*
+
+**Contexto que justifica o aviso:** os grupos de mídia são montados **apenas** a partir dos lançamentos de gasto, e há um único canal com gasto. `channel_name` e `campaign` estão vazios nos 1.189 orçamentos — apagados pelas importações anteriores a 08/09 e sem de onde voltar.
+
+**Também ficou decidido que NÃO se muda o processo de importação.** O pessoal baixa o arquivo do ERP e sobe no CRM, e vai continuar assim. Pedir coluna nova na exportação foi descartado pelo dono do produto: processo que depende de alguém mudar hábito não se sustenta. Portanto o motivo de perda continuará chegando em 3 de cada 21 reprovados, e o vínculo com lead continuará inexistente — ambos declarados na tela, não escondidos.
+
+**Impacto:** nenhuma mudança de cálculo, de dado, de rota ou de schema.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação executada:**
+
+- `npm run build`: exit 0, os mesmos 4 warnings pré-existentes.
+- **Teste de ponta a ponta pelo navegador**, com backend real e 12 orçamentos sem canal: o aviso apareceu com o número correto ("Dos 12 orçamentos do período").
+- **Teste do auto-desligamento:** preenchido `channel_name` em um único orçamento, o aviso **sumiu**; removido o canal, o aviso **voltou**. É a prova de que ele não vai envelhecer na tela.
+- Zero erros de console nos três cenários.
+
 ## 2026-09-09 — Claude (via Cowork) — Auditoria do Dashboard e os números que enganam sem estar errados
 
 **O quê:** auditoria dos indicadores depois das correções de 08 e 09/09, e três ajustes de honestidade na tela. Arquivo: `frontend/src/App.js`. **Nenhum cálculo foi alterado.**

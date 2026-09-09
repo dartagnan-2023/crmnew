@@ -2428,6 +2428,7 @@ const App = () => {
     const groupMap = new Map();
     let leadsComValor = 0;
     let leadsGanhos = 0;
+    let orcamentosNaConta = 0;
     const spendByMonth = new Map();
     const leadsByMonth = new Map();
     const estimatedByMonth = new Map();
@@ -2513,6 +2514,11 @@ const App = () => {
         'sem-canal';
       const group = groupMap.get(key);
       if (!group) return;
+      // Quantos orcamentos de fato entram nesta aba. Medido em 09/09/2026:
+      // ZERO de 1.189. Os grupos de midia sao montados apenas a partir dos
+      // lancamentos de gasto, e o orcamento chega do ERP sem canal e sem
+      // campanha. Sem canal, nao ha a que atribuir.
+      orcamentosNaConta += 1;
       const status = normalize(budget.status);
       const budgetValue = Number(budget.budget_value || 0);
       const closedValue = Number(budget.closed_value || budget.budget_value || 0);
@@ -2565,6 +2571,8 @@ const App = () => {
       closedPerLead: leadsGenerated ? closedReturn / leadsGenerated : 0,
       leadsComValor,
       leadsGanhos,
+      orcamentosNaConta,
+      orcamentosNoPeriodo: dashboardMediaBudgets.length,
       topPlatform: rows[0]?.platform || '-',
       spendVsLeads: sixMonths.map((key) => ({
         label: monthLabel(key),
@@ -5328,6 +5336,21 @@ const App = () => {
 
           {dashboardPane === 'midia' && (
           <div className="space-y-5">
+            {/* Aviso CALCULADO, nao escrito na pedra: aparece enquanto nenhum
+                orcamento do periodo entrar na conta desta aba. No dia em que
+                orcamento voltar a ter canal, ele some sozinho — ninguem precisa
+                lembrar de remover. */}
+            {(dashboardMediaData.orcamentosNoPeriodo || 0) > 0 &&
+             (dashboardMediaData.orcamentosNaConta || 0) === 0 ? (
+              <div className="rounded-xl border border-info-line bg-info px-4 py-3">
+                <p className="text-sm font-semibold text-info-ink">
+                  Os números desta aba cobrem apenas leads — nenhum orçamento entra aqui.
+                </p>
+                <p className="mt-1 text-xs text-info-ink">
+                  {`Dos ${dashboardMediaData.orcamentosNoPeriodo} orçamentos do período, nenhum pôde ser atribuído a uma mídia: o orçamento chega do ERP sem canal e sem campanha. Enquanto for assim, o ROAS e o valor por lead medem o que foi registrado no lead, e não a venda faturada.`}
+                </p>
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
               <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
