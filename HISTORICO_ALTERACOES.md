@@ -15,6 +15,46 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-09 — Claude (via Cowork) — Auditoria do Dashboard e os números que enganam sem estar errados
+
+**O quê:** auditoria dos indicadores depois das correções de 08 e 09/09, e três ajustes de honestidade na tela. Arquivo: `frontend/src/App.js`. **Nenhum cálculo foi alterado.**
+
+### O que a auditoria mediu (produção, 09/09/2026)
+
+**Funil de orçamentos, últimos 30 dias:** 448 orçamentos, 7% de aprovação, 31 aprovados, 21 reprovados, R$ 1.745.057 orçados contra R$ 63.862 fechados. Os números estão corretos. Dois gráficos, porém, cobrem quase nada:
+
+1. **"Perdas por motivo" desenha 3 de 21 reprovados.** Causa apurada e estrutural: **o ERP manda a situação e o motivo de perda na MESMA coluna** ("Lib"). Quando ele escreve "Perdido Prospecção", o motivo não vem; quando escreve o motivo por extenso, a situação não vem. Um exclui o outro. **Nenhum código conserta isso** — depende de o ERP exportar o motivo em coluna própria.
+
+2. **Os três gráficos de aprovação por pessoa são dominados por uma barra vazia:** "Sem vendedor" com 379 dos 448, "Sem orçamentista" com 311, "Sem representante" com 426. **Isto NÃO precisa de conserto:** é consequência do bug corrigido em 08/09, que apagava `owner_name` e `estimator_name` a cada importação. Agora que sobrevivem, os gráficos se preenchem sozinhos conforme a equipe usar. Os que já têm dado dizem coisa: Osnil com 38 orçamentos e 37% de aprovação, ines com 18 e 50%.
+
+**Aba Mídia paga:** confirmado que a metade "orçamento" está morta. Os grupos de mídia são montados **apenas a partir dos lançamentos de gasto**, e há um único canal com gasto (Meta Ads). Como `channel_name` e `campaign` estão vazios nos **1.189** orçamentos — apagados pelas importações anteriores a 08/09 —, **zero orçamentos entram em qualquer cálculo dessa aba**. Só corrigível quando o orçamento voltar a ter canal, o que depende do vínculo com o lead.
+
+O que sobra vem dos leads, e aí está o achado: **o "ROAS estimado" de 11,85 estava apoiado em 9 leads de 147** — os únicos com valor preenchido. O "ROAS fechado" oscila entre 2,01, 0,75 e 0,96 conforme o período porque a base tem de 1 a 4 leads ganhos. Os cálculos estão certos; o que faltava era dizer sobre o que eles foram feitos.
+
+### O que foi alterado
+
+1. **"Evolução do valor convertido" virou "Valor convertido por mês de entrada"**, com a explicação embaixo. O valor é lançado no mês em que o lead **entrou**, não em que fechou — e **o lead não guarda a data em que virou ganho**, esse campo não existe. Chamar de "evolução" fazia parecer linha de faturamento mensal. Com o nome certo, o gráfico mede safra de captação, que é o que ele de fato é. O rótulo da exportação em Excel acompanhou.
+
+2. **Os cartões de ROAS passaram a declarar a base:** "Base: N de M leads com valor" e "Base: N ganho(s) de M leads". Idem em "Estimado por lead" e "Fechado por lead".
+
+3. **O gráfico de perdas declara a cobertura:** "Base: N de M reprovados têm motivo registrado", com a explicação de que os demais não aparecem porque o ERP não envia o motivo junto com a situação.
+
+**Decisão registrada:** entre esconder o indicador fraco e mostrá-lo com a base à vista, o dono do produto escolheu mostrar com a base. Motivo: esconder tira a referência parcial e gera a pergunta "por que o cartão sumiu".
+
+**Impacto:** nenhuma mudança de cálculo, de dado, de rota ou de schema. Só texto e três contadores novos derivados do que já era calculado.
+
+**Rollback:** `git revert <commit>`.
+
+**Validação executada:**
+
+- `npm run build`: exit 0, os mesmos 4 warnings pré-existentes, nenhum novo.
+- **Teste de ponta a ponta pelo navegador**, com backend real e base semeada com números conhecidos: 20 leads (3 com valor, 1 ganho), 12 orçamentos (5 reprovados, 2 com motivo), R$ 1.600 de gasto. A tela mostrou exatamente: "Base: 3 de 20 leads com valor", "Base: 1 ganho(s) de 20 leads", "valor vem de 3 lead(s)", "1 ganho(s) na base" e "Base: 2 de 5 reprovados têm motivo registrado". Título antigo: **zero ocorrências**; título novo presente. Zero erros de console.
+
+**Fica pendente, e depende do ERP, não de código:**
+
+- exportar o **motivo de perda em coluna própria**, separado da situação;
+- exportar **CNPJ ou telefone** no orçamento, única forma de ligar orçamento a lead — e, por consequência, única forma de a aba Mídia paga voltar a enxergar orçamento.
+
 ## 2026-09-09 — Claude (via Cowork) — O CRM passou a entender todos os status que o ERP manda
 
 **O quê:** `mapBudgetImportStatus` reescrita. Arquivo: `frontend/src/App.js`.

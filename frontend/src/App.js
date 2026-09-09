@@ -2426,6 +2426,8 @@ const App = () => {
   const dashboardMediaData = useMemo(() => {
     const normalize = (value) => normalizeOptionValue(value);
     const groupMap = new Map();
+    let leadsComValor = 0;
+    let leadsGanhos = 0;
     const spendByMonth = new Map();
     const leadsByMonth = new Map();
     const estimatedByMonth = new Map();
@@ -2497,6 +2499,11 @@ const App = () => {
         if (closedByMonth.has(month)) closedByMonth.set(month, (closedByMonth.get(month) || 0) + leadValue);
       }
       if (leadsByMonth.has(month)) leadsByMonth.set(month, (leadsByMonth.get(month) || 0) + 1);
+      // Base do calculo, para o rodape do cartao. Medido em 09/09/2026: apenas
+      // 9 dos 147 leads de Meta Ads em 30 dias tinham valor preenchido, e o
+      // ROAS estimado saia em 11,85 sem dizer isso a ninguem.
+      if (leadValue > 0) leadsComValor += 1;
+      if (status === 'ganho') leadsGanhos += 1;
     });
 
     dashboardMediaBudgets.forEach((budget) => {
@@ -2556,6 +2563,8 @@ const App = () => {
       roasClosed: investment ? closedReturn / investment : 0,
       estimatedPerLead: leadsGenerated ? estimatedReturn / leadsGenerated : 0,
       closedPerLead: leadsGenerated ? closedReturn / leadsGenerated : 0,
+      leadsComValor,
+      leadsGanhos,
       topPlatform: rows[0]?.platform || '-',
       spendVsLeads: sixMonths.map((key) => ({
         label: monthLabel(key),
@@ -2899,6 +2908,8 @@ const App = () => {
 
   const budgetDashboardData = useMemo(() => {
     const statusMap = new Map();
+    let reprovados = 0;
+    let reprovadosComMotivo = 0;
     const lossReasonMap = new Map();
     const ownerMap = new Map();
     const estimatorMap = new Map();
@@ -2942,6 +2953,10 @@ const App = () => {
       const representante = String(budget.representante || '').trim() || 'Sem representante';
 
       statusMap.set(statusNorm || 'sem_status', (statusMap.get(statusNorm || 'sem_status') || 0) + 1);
+      if (statusNorm === 'reprovado') {
+        reprovados += 1;
+        if (!['sem_motivo', 'sem motivo', ''].includes(normalizeOptionValue(lossReason))) reprovadosComMotivo += 1;
+      }
       // BUG CORRIGIDO (mesma familia do 'nao_feito' e do 'sem_perfil'):
       // o fallback usado acima e 'sem_motivo' com underscore, e a comparacao
       // era contra 'sem motivo' com espaco. normalizeOptionValue nao troca
@@ -3026,6 +3041,11 @@ const App = () => {
           value: lossValueMap.get(chave) || 0,
         }))
         .sort((a, b) => b.value - a.value),
+      // Base do grafico de perdas. Medido em 09/09/2026: 3 de 21 reprovados em
+      // 30 dias tinham motivo. O ERP manda situacao e motivo na MESMA coluna,
+      // entao quando ele diz "Perdido Prospeccao" o motivo nao vem junto.
+      reprovadosTotal: reprovados,
+      reprovadosComMotivo: reprovadosComMotivo,
       byOwner: sortEntries(ownerMap),
       byEstimator: sortEntries(estimatorMap),
       aprovacaoPorVendedor: taxaPorPessoa(desempenhoOwner),
@@ -3073,7 +3093,7 @@ const App = () => {
           ['Mês', 'Entradas'],
           ...dashboardData.monthlyEvolution.map((item) => [item.label, item.value]),
           [],
-          ['Mês', 'Valor convertido'],
+          ['Mês', 'Valor convertido (por mês de entrada do lead)'],
           ...dashboardData.convertedEvolution.map((item) => [item.label, item.value]),
           [],
           ['Mês', 'Pipeline ativo'],
@@ -5127,9 +5147,17 @@ const App = () => {
 
               <div className={UI_CARD}>
                 <p className={UI_EYEBROW}>Comercial</p>
-                <h3 className={UI_H2}>Evolução do valor convertido</h3>
+                {/* O titulo diz "de entrada" porque o valor e lancado no mes em que o
+                    lead ENTROU, nao no mes em que fechou: o lead nao guarda a data em
+                    que virou ganho. Chamar isso de "evolucao do valor convertido"
+                    fazia o grafico parecer uma linha de faturamento por mes, que ele
+                    nao e. Do jeito certo ele mede safra de captacao: quanto rendeu,
+                    ate hoje, o que entrou naquele mes. */}
+                <h3 className={UI_H2}>Valor convertido por mês de entrada</h3>
                 <MiniLineChart data={dashboardData.convertedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
-                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
+                <p className="mt-1 text-[11px] text-ink-faint">
+                  Valor dos leads ganhos, somado no mês em que o lead <strong>entrou</strong> — não no mês em que fechou. {NOTA_SEIS_MESES}
+                </p>
               </div>
 
               <div className={UI_CARD}>
@@ -5222,6 +5250,15 @@ const App = () => {
               <p className="mt-3 text-[11px] text-ink-faint">
                 Barra = valor orçado perdido. Entre parênteses, a quantidade de orçamentos.
               </p>
+              {/* Declara quantos reprovados o grafico realmente cobre. O ERP manda
+                  situacao e motivo na MESMA coluna: quando ele diz "Perdido
+                  Prospeccao", o motivo nao vem. Medido em 09/09/2026: 3 de 21. */}
+              <p className="mt-1 text-[11px] text-ink-faint">
+                {`Base: ${budgetDashboardData.reprovadosComMotivo || 0} de ${budgetDashboardData.reprovadosTotal || 0} reprovados têm motivo registrado.`}
+                {(budgetDashboardData.reprovadosTotal || 0) > (budgetDashboardData.reprovadosComMotivo || 0)
+                  ? ' Os demais não aparecem aqui — o ERP não envia o motivo junto com a situação.'
+                  : ''}
+              </p>
             </div>
           </div>
 
@@ -5294,21 +5331,48 @@ const App = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <StatCard label="Investimento" value={formatCurrencyBR(dashboardMediaData.investment || 0)} helper={`${dashboardMediaData.campaignsWithSpend || 0} campanha(s) com gasto`} tone="rose" />
               <StatCard label="Leads gerados" value={dashboardMediaData.leadsGenerated || 0} helper={`CPL ${formatCurrencyBR(dashboardMediaData.cpl || 0)}`} tone="slate" />
-              <StatCard label="ROAS estimado" value={formatRatio(dashboardMediaData.roasEstimated)} helper={formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)} tone="blue" />
-              <StatCard label="ROAS fechado" value={formatRatio(dashboardMediaData.roasClosed)} helper={formatCurrencyBR(dashboardMediaData.closedReturn || 0)} tone="emerald" />
+              {/* O rodape declara a BASE do calculo. Sem isso o numero engana sem
+                  estar errado: medido em 09/09/2026, o ROAS estimado saia em 11,85
+                  apoiado em 9 leads de 147 — os unicos com valor preenchido. */}
+              <StatCard
+                label="ROAS estimado"
+                value={formatRatio(dashboardMediaData.roasEstimated)}
+                helper={(
+                  <>
+                    <span className="block">{formatCurrencyBR(dashboardMediaData.estimatedReturn || 0)}</span>
+                    <span className="block">
+                      {`Base: ${dashboardMediaData.leadsComValor || 0} de ${dashboardMediaData.leadsGenerated || 0} leads com valor`}
+                    </span>
+                  </>
+                )}
+                tone="blue"
+              />
+              <StatCard
+                label="ROAS fechado"
+                value={formatRatio(dashboardMediaData.roasClosed)}
+                helper={(
+                  <>
+                    <span className="block">{formatCurrencyBR(dashboardMediaData.closedReturn || 0)}</span>
+                    <span className="block">
+                      {`Base: ${dashboardMediaData.leadsGanhos || 0} ganho(s) de ${dashboardMediaData.leadsGenerated || 0} leads`}
+                    </span>
+                  </>
+                )}
+                tone="emerald"
+              />
               {/* Os cards "CPL" e "Orçamento estimado" foram removidos por duplicidade:
                   CPL ja aparece no rodape de "Leads gerados" e o orcamento estimado
                   ja e o rodape de "ROAS estimado". Nenhum calculo foi alterado. */}
               <StatCard
                 label="Estimado por lead"
                 value={formatCurrencyBR(dashboardMediaData.estimatedPerLead || 0)}
-                helper="Orçado ÷ leads gerados"
+                helper={`Orçado ÷ leads gerados · valor vem de ${dashboardMediaData.leadsComValor || 0} lead(s)`}
                 tone="blue"
               />
               <StatCard
                 label="Fechado por lead"
                 value={formatCurrencyBR(dashboardMediaData.closedPerLead || 0)}
-                helper="Fechado ÷ leads gerados"
+                helper={`Fechado ÷ leads gerados · ${dashboardMediaData.leadsGanhos || 0} ganho(s) na base`}
                 tone="emerald"
               />
             </div>
