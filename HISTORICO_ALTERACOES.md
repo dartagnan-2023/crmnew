@@ -54,6 +54,23 @@ As duas partes passaram a ser lidas separadamente, contra duas listas (`BUDGET_S
 
 **Rollback:** `git revert <commit>`.
 
+### Execução: os 17 registros que já estavam errados
+
+Pela regra criada em 08/09 — o ERP só manda quando o status cru muda — a tradução nova **não corrigia sozinha** o que já estava na base. Os registros errados foram tratados à parte, com `PUT /api/budgets/:id`, um por vez, só o campo `status`.
+
+**Filtro, conforme regra dada pelo dono do produto** ("o que o usuário mexeu prevalece; mexa no que o ERP exportou e o CRM não soube interpretar"): entraram apenas os registros com status exatamente `novo` — a saída de "não entendi" do mapeamento antigo — e `raw_status` indicando Perdido ou Conluído. Dos 1.189 orçamentos, 17 se enquadraram.
+
+Três deles tinham ajuste manual em **outros** campos (representante, orçamentista, data de envio, observações). Foram separados e apresentados à parte; decisão do dono do produto foi corrigir o status também, já que o ajuste não estava no status. Conferido depois: os campos preenchidos por essas pessoas continuam intactos.
+
+| status | antes | depois |
+|---|---|---|
+| `novo` | 23 | **6** (−17) |
+| `aprovado` | 37 | **39** (+2) |
+| `reprovado` | 7 | **22** (+15) |
+| `em_orcamento` / `enviado` / `nao_feito` | 1.113 / 5 / 4 | idênticos |
+
+As 17 chamadas devolveram HTTP 200. A releitura encontrou **zero** divergências entre o que o ERP diz e o que o CRM mostra. Lista completa, ressalvas e rollback em `correcao-status-orcamentos-2026-09-09.md`.
+
 **Validação executada:**
 
 - **18 casos de status/etapa**, todos passando: as 6 combinações reais da base, as mesmas com `&nbsp;`, a grafia "Concluído" corrigida, três combinações que ainda não existem (`Concluído Negociação`, `Pendente Fechamento`, `Perdido Qualificação`), caixa alta com espaços repetidos, valor vazio, e duas situações desconhecidas.
