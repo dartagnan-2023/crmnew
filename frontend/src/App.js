@@ -248,8 +248,44 @@ const excelDateToIso = (value) => {
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 };
 
+// A coluna "Lib" do ERP carrega DUAS coisas diferentes no mesmo lugar:
+//   1. um motivo de perda por extenso, ou
+//   2. "situacao + etapa" grudadas: "Pendente Prospeccao", "Perdido
+//      Fechamento", "Conluido Fechamento".
+//
+// Valores reais, medidos na base em 08/09/2026 sobre 1.158 orcamentos:
+//   Pendente Prospeccao 1.137 | Perdido Prospeccao 10 | Pendente Qualificacao 6
+//   Perdido Fechamento 2 | Conluido Fechamento 2 | Perdido Negociacao 1
+//
+// Ate 09/09/2026 este mapeamento entendia UMA combinacao — pendente mais
+// prospeccao — e jogava todo o resto em "novo". Consequencia medida: os 11
+// orcamentos que o ERP da como PERDIDOS e os 2 que ele da como CONCLUIDOS
+// estavam no CRM como "Novo". O CRM nunca enxergava uma venda vinda do ERP,
+// e isso alimentava o "0 ganhos" que aparecia no Dashboard.
+//
+// Agora as duas partes sao lidas separadamente, entao qualquer combinacao
+// funciona, inclusive as que ainda nao apareceram na base.
+//
+// "Conluido", sem o segundo C, e erro de digitacao do proprio ERP. As duas
+// grafias sao aceitas DE PROPOSITO: no dia em que o ERP corrigir, ninguem vai
+// precisar lembrar de voltar aqui — e o erro seria silencioso justamente nos
+// ganhos, que sao o dado mais caro de perder.
+const BUDGET_SITUACOES = [
+  { chaves: ['conluido', 'concluido'], status: 'aprovado' },
+  { chaves: ['perdido'], status: 'reprovado' },
+  { chaves: ['pendente'], status: 'em_orcamento' },
+];
+const BUDGET_ETAPAS = ['prospeccao', 'qualificacao', 'negociacao', 'fechamento'];
+
 const mapBudgetImportStatus = (rawLib) => {
-  const normalized = normalizeOptionValue(String(rawLib || '').replace(/&nbsp;/gi, ' '));
+  // O texto limpo serve so para INTERPRETAR. O que vai gravado em raw_status
+  // continua sendo o valor original, com &nbsp; e tudo: a importacao no
+  // backend compara o raw que chega com o raw ja gravado para decidir se o
+  // ERP tem novidade, e limpar o valor aqui faria 84 registros da base
+  // parecerem alterados de uma vez, sobrescrevendo status marcados a mao.
+  const limpo = String(rawLib || '').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = normalizeOptionValue(limpo);
+  const original = String(rawLib || '').trim();
   const lossMap = {
     'cliente nao retornou os contatos': 'sem_retorno',
     'cliente desistiu da compra': 'cliente_desistiu',
@@ -269,25 +305,30 @@ const mapBudgetImportStatus = (rawLib) => {
       status: 'reprovado',
       loss_reason: lossMap[normalized],
       raw_status: '',
-      raw_loss_reason: String(rawLib || '').trim(),
+      raw_loss_reason: original,
     };
   }
 
-  if (normalized.includes('pendente') && normalized.includes('prospeccao')) {
+  const etapa = BUDGET_ETAPAS.find((item) => normalized.includes(item)) || '';
+  const situacao = BUDGET_SITUACOES.find((item) => item.chaves.some((chave) => normalized.includes(chave)));
+
+  if (situacao) {
     return {
-      stage: 'prospeccao',
-      status: 'em_orcamento',
+      stage: etapa,
+      status: situacao.status,
       loss_reason: '',
-      raw_status: String(rawLib || '').trim(),
+      raw_status: original,
       raw_loss_reason: '',
     };
   }
 
+  // Situacao que o CRM nao conhece. Nao inventa: cai em "novo", como antes,
+  // mas a etapa e o valor cru ficam gravados para alguem poder decidir.
   return {
-    stage: '',
+    stage: etapa,
     status: 'novo',
     loss_reason: '',
-    raw_status: String(rawLib || '').trim(),
+    raw_status: original,
     raw_loss_reason: '',
   };
 };

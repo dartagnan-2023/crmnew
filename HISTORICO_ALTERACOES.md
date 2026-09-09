@@ -15,6 +15,52 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-09 — Claude (via Cowork) — O CRM passou a entender todos os status que o ERP manda
+
+**O quê:** `mapBudgetImportStatus` reescrita. Arquivo: `frontend/src/App.js`.
+
+### O defeito
+
+A coluna "Lib" do ERP carrega **situação + etapa** grudadas — e, às vezes, um motivo de perda por extenso no lugar disso. A tradução entendia **uma única combinação**, `pendente` + `prospeccao`, e jogava todo o resto em `novo`.
+
+Valores reais medidos em 08/09/2026, sobre 1.158 orçamentos:
+
+| situação | etapa | qtd | virava | passa a virar |
+|---|---|---|---|---|
+| Pendente | Prospecção | 1.137 | Em orçamento ✔ | Em orçamento |
+| Perdido | Prospecção | 10 | **Novo** ✗ | Reprovado |
+| Pendente | Qualificação | 6 | **Novo** ✗ | Em orçamento |
+| Perdido | Fechamento | 2 | **Novo** ✗ | Reprovado |
+| **Conluído** | Fechamento | 2 | **Novo** ✗ | **Aprovado** |
+| Perdido | Negociação | 1 | **Novo** ✗ | Reprovado |
+
+Ou seja: **o CRM nunca enxergava uma venda vinda do ERP**, e orçamentos que o ERP dava como perdidos entravam como novos. Isso alimentava diretamente o "0 ganhos" que aparecia no Dashboard.
+
+### A correção
+
+As duas partes passaram a ser lidas separadamente, contra duas listas (`BUDGET_SITUACOES` e `BUDGET_ETAPAS`), então **qualquer combinação funciona**, inclusive as que ainda não apareceram na base.
+
+- Situação **Pendente** → `em_orcamento`
+- Situação **Perdido** → `reprovado`
+- Situação **Conluído / Concluído** → `aprovado`
+- Etapa reconhecida vira `stage` (`prospeccao`, `qualificacao`, `negociacao`, `fechamento`)
+- Situação desconhecida → continua caindo em `novo`, **mas agora grava a etapa e o valor cru**, para alguém poder decidir depois. Não inventa.
+
+**"Conluído", sem o segundo C, é erro de digitação do próprio ERP.** As duas grafias são aceitas de propósito: no dia em que o ERP corrigir, ninguém vai precisar lembrar de voltar aqui — e a falha seria silenciosa justamente nos ganhos, que são o dado mais caro de perder. Decisão de que "Conluído" significa negócio ganho foi do dono do produto.
+
+**Detalhe que evitou um estrago:** o `raw_status` continua sendo gravado **exatamente como veio**, com `&nbsp;` e tudo. A limpeza serve só para interpretar. Se o valor gravado fosse limpo, os 84 registros que trazem `&nbsp;` literal apareceriam como "alterados" na importação seguinte, e a regra criada em 08/09 — o ERP só manda quando o status cru muda — sobrescreveria status que foram marcados à mão.
+
+**Impacto:** nenhuma alteração em dado existente. Vale para importações daqui pra frente. E, pela regra de 08/09, **os registros já importados não se corrigem sozinhos**: o status cru deles não mudou, então o status gravado é preservado. Os que estavam errados foram tratados à parte (ver entrada seguinte).
+
+**Rollback:** `git revert <commit>`.
+
+**Validação executada:**
+
+- **18 casos de status/etapa**, todos passando: as 6 combinações reais da base, as mesmas com `&nbsp;`, a grafia "Concluído" corrigida, três combinações que ainda não existem (`Concluído Negociação`, `Pendente Fechamento`, `Perdido Qualificação`), caixa alta com espaços repetidos, valor vazio, e duas situações desconhecidas.
+- **6 motivos de perda**, todos ainda mapeando para `reprovado` com o motivo certo e `raw_status` vazio, como antes.
+- **`raw_status` preservado byte a byte**, incluindo o `&nbsp;` — conferido explicitamente.
+- `npm run build`: exit 0, os mesmos 4 warnings pré-existentes, nenhum novo.
+
 ## 2026-09-08 — Claude (via Cowork) — A reimportação de orçamentos parou de apagar o trabalho manual
 
 **O quê:** a rota `POST /api/budgets/import` deixou de sobrescrever, num orçamento que já existe, os campos que a planilha do ERP não carrega. Arquivo: `backend/server.js`.
