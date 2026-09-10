@@ -1067,10 +1067,6 @@ const orcamentoPassaFiltrosDoDashboard = (budget, opts) => {
   return true;
 };
 
-// Aviso curto embaixo de todo grafico que ignora o recorte de data. Sem ele, o
-// operador ve abril na linha e abril fora dos cartoes e nao sabe em quem confiar.
-const NOTA_SEIS_MESES = 'Sempre os últimos 6 meses. Este gráfico não segue o filtro de período; os demais filtros valem.';
-
 const emptyBudget = {
   external_id: '',
   representante: '',
@@ -2240,12 +2236,18 @@ const App = () => {
       }
     });
 
-    // Evolucao mensal: seis meses cheios, a partir da base SEM recorte de data.
-    // O balde `has(key)` ja limita aos seis meses, entao nao ha filtro de data
-    // aqui — e exatamente esse o ponto. Os demais filtros do Dashboard
-    // (vendedor, canal, segmento, campanha, follow-up) continuam valendo,
-    // porque `dashboardLeadsBase` ja os aplicou.
-    dashboardLeadsBase.forEach((lead) => {
+    // Evolucao mensal. Em 09/09/2026 este laco rodava sobre `dashboardLeadsBase`,
+    // ou seja, IGNORAVA o recorte de data — mudanca feita para resolver os quatro
+    // meses zerados que apareciam com o padrao de 30 dias.
+    //
+    // REVERTIDO em 10/09/2026, por decisao do dono do produto. Ignorar a data
+    // trazia para dentro do grafico os 1.700 leads herdados de um vendedor que
+    // nao trabalha mais na empresa (origens "Ferramenta de Captura" e "Planilha
+    // Victor", 78% da base, importados entre janeiro e julho). Medido: o grafico
+    // "Entradas por mes" mostrava 323 em abril contra 31 reais, e desenhava uma
+    // captacao DESPENCANDO de 323 para 58 quando ela na verdade SUBIU de 31 para
+    // 176. Mes zerado e um problema menor do que grafico com o sinal invertido.
+    dashboardFilteredLeads.forEach((lead) => {
       const createdDate = parseLeadDate(lead.created_at || lead.first_contact);
       if (!createdDate) return;
       const key = monthKey(createdDate);
@@ -2332,7 +2334,7 @@ const App = () => {
       convertedEvolution,
       pipelineEvolution,
     };
-  }, [dashboardFilteredLeads, dashboardLeadsBase, dashboardLocalStats]);
+  }, [dashboardFilteredLeads, dashboardLocalStats]);
 
   // Mesma separacao dos leads: base sem data para os graficos mensais...
   const dashboardBudgetsBase = useMemo(() => {
@@ -2988,9 +2990,9 @@ const App = () => {
       // Os tres mapas mensais saem do laco de baixo, sobre a base sem data.
     });
 
-    // Evolucao mensal do orcamento: mesma regra dos leads. Seis meses cheios,
-    // demais filtros aplicados, recorte de data ignorado de proposito.
-    dashboardBudgetsBase.forEach((budget) => {
+    // Evolucao mensal do orcamento: mesma regra dos leads, e revertida junto
+    // em 10/09/2026 — volta a respeitar o recorte de data.
+    dashboardMediaBudgets.forEach((budget) => {
       const createdDate = parseLeadDate(budget.requested_at || budget.created_at);
       const closedDate = parseLeadDate(budget.closed_at || budget.updated_at);
       const aprovado = normalizeOptionValue(budget.status || 'sem_status') === 'aprovado';
@@ -3063,7 +3065,7 @@ const App = () => {
       estimatedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: estimatedMonthlyMap.get(key) || 0 })),
       closedEvolution: sixMonths.map((key) => ({ label: monthLabel(key), value: closedMonthlyMap.get(key) || 0 })),
     };
-  }, [dashboardMediaBudgets, dashboardBudgetsBase]);
+  }, [dashboardMediaBudgets]);
 
   const exportDashboardExcel = () => {
     const workbook = buildExcelWorkbook([
@@ -5150,7 +5152,6 @@ const App = () => {
                   </div>
                 </div>
                 <MiniLineChart data={dashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
-                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
 
               <div className={UI_CARD}>
@@ -5164,7 +5165,7 @@ const App = () => {
                 <h3 className={UI_H2}>Valor convertido por mês de entrada</h3>
                 <MiniLineChart data={dashboardData.convertedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
                 <p className="mt-1 text-[11px] text-ink-faint">
-                  Valor dos leads ganhos, somado no mês em que o lead <strong>entrou</strong> — não no mês em que fechou. {NOTA_SEIS_MESES}
+                  Valor dos leads ganhos, somado no mês em que o lead <strong>entrou</strong> — não no mês em que fechou.
                 </p>
               </div>
 
@@ -5172,7 +5173,6 @@ const App = () => {
                 <p className={UI_EYEBROW}>Comercial</p>
                 <h3 className={UI_H2}>Evolução do pipeline ativo</h3>
                 <MiniLineChart data={dashboardData.pipelineEvolution} color={CHART_COLORS.atencao} formatValue={formatCurrencyBR} />
-                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
@@ -5239,11 +5239,9 @@ const App = () => {
               <h3 className={UI_H2}>Valor orçado e valor fechado por mês</h3>
               <ChartSeriesLabel color={CHART_COLORS.volume} text="Valor orçado (mês da solicitação)" />
               <MiniLineChart data={budgetDashboardData.estimatedEvolution} color={CHART_COLORS.volume} formatValue={formatCurrencyBR} />
-              <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               <div className="mt-4">
                 <ChartSeriesLabel color={CHART_COLORS.positivo} text="Valor fechado (mês do fechamento)" />
                 <MiniLineChart data={budgetDashboardData.closedEvolution} color={CHART_COLORS.positivo} formatValue={formatCurrencyBR} />
-                <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
               </div>
             </div>
             <div className={UI_CARD}>
@@ -5318,7 +5316,6 @@ const App = () => {
               <p className={UI_EYEBROW}>Evolução</p>
               <h3 className={UI_H2}>Solicitações por mês</h3>
               <MiniLineChart data={budgetDashboardData.monthlyEvolution} color={CHART_COLORS.volume} />
-              <p className="mt-1 text-[11px] text-ink-faint">{NOTA_SEIS_MESES}</p>
             </div>
             <div className={UI_CARD}>
               <p className={UI_EYEBROW}>Time Comercial</p>
