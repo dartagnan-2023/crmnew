@@ -15,6 +15,61 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-10 — Claude (via Cowork) — REVERSÃO: os gráficos de evolução voltam a obedecer o filtro de período
+
+**O quê:** desfeita a mudança de 09/09 que fazia os seis gráficos de evolução mensal ignorarem o recorte de data. Arquivo: `frontend/src/App.js`.
+
+### Por que a mudança de ontem estava errada
+
+A mudança de 09/09 resolvia um problema real — quatro meses zerados no padrão de 30 dias — mas trouxe um problema pior, que só apareceu quando se investigou de onde vem a base de leads.
+
+**Medido em 10/09/2026:** 1.700 dos 2.192 leads — **78% da base** — vêm de duas origens que são a mesma coisa: `Ferramenta de Captura` (1.385) e `Planilha Victor` (315). São a exportação em Excel de um vendedor que **não trabalha mais na empresa**, importada entre janeiro e julho de 2026. Não é demanda: dos 1.385 da "Ferramenta de Captura", **1 tem valor preenchido e 2 têm interação registrada**.
+
+Ao ignorar o recorte de data, os gráficos passaram a somar essa base. O resultado, medido:
+
+| mês | o gráfico mostrava | entrada real |
+|---|---|---|
+| abril | **323** | **31** |
+| maio | **207** | **54** |
+| junho | 63 | 32 |
+| julho | 105 | 81 |
+| agosto | 182 | 176 |
+| setembro | 58 | 49 |
+
+Em abril, **dez vezes** o número real. E o efeito grave não é a escala: o gráfico desenhava uma captação **despencando** de 323 para 58, quando ela na verdade **subiu** de 31 para ~176 em agosto. **O sinal estava invertido.**
+
+**Decisão do dono do produto:** mês zerado é um problema menor do que gráfico contando a história ao contrário. Reverter.
+
+### O que foi revertido, e o que ficou
+
+- Os laços de evolução mensal voltaram a rodar sobre `dashboardFilteredLeads` e `dashboardMediaBudgets` — as bases **com** recorte de data.
+- **Os avisos "Sempre os últimos 6 meses…" saíram dos seis cartões**, e a constante `NOTA_SEIS_MESES` foi removida. Depois da reversão aquela frase seria mentira, e deixá-la seria pior do que nunca tê-la posto.
+- **Fica de pé** a separação `leadPassaFiltrosDoDashboard` / `dashboardLeadsBase`, porque `dashboardFilteredLeads` é construído a partir dela. E ficam de pé a renomeação "Valor convertido por mês de entrada" e os rótulos de base do ROAS e das perdas — nada disso dependia do filtro.
+
+**Volta a valer a limitação conhecida:** com o padrão de 30 dias, quatro dos seis meses aparecem zerados. Não são zero de verdade, são mês filtrado para fora. Foi aceito conscientemente.
+
+### O que a investigação revelou e não foi tratado
+
+Fica registrado, porque é o achado maior e continua em aberto:
+
+- **O valor é preenchido onde existe proposta: 28 de 29 leads em "proposta" têm valor (97%).** O "6% dos leads têm valor" era leitura enganosa — o processo funciona onde é usado.
+- **Mas só 6 de 28 leads "ganho" têm valor.** Os 22 sem valor vêm 19 da "Ferramenta de Captura", têm **zero interações** e 20 estão marcados como cliente — perfil de importação de carteira, não de venda ganha.
+- **Todo o valor convertido (R$ 9.701) vem da demanda real. O legado do Victor contribuiu R$ 0**, com 19 "ganhos".
+- **Ticket médio:** R$ 346 na base inteira contra **R$ 1.078** só na demanda — três vezes.
+- Foi cogitado marcar os 1.700 como `is_out_of_scope`. **Não serve:** conferido no código, essa marcação só esconde o lead dos representantes; não tira de nenhum indicador. E sumiria com 1.241 contatos com telefone da vista de quem pode querer trabalhá-los.
+
+A opção de excluir o legado dos indicadores do Dashboard foi apresentada e **não** foi a escolhida nesta data.
+
+**Impacto:** nenhuma mudança de dado, rota ou schema. `npm run build` ficou 95 bytes menor.
+
+**Rollback:** `git revert <commit>` traz de volta o comportamento de 09/09.
+
+**Validação executada:**
+
+- `npm run build`: exit 0, os mesmos 4 warnings pré-existentes.
+- **Teste de ponta a ponta pelo navegador**, com backend real e 49 leads distribuídos em 6 meses: com **30 dias** o gráfico de pipeline mostra R$ 0,00 em abr–ago e R$ 12.000 em setembro; com **12 meses** mostra os seis meses com valor real (2.000, 4.000, 6.000, 8.000, 10.000, 12.000). Os gráficos voltaram a responder ao filtro. Zero erros de console.
+- Conferido que não sobrou nenhuma referência a `NOTA_SEIS_MESES`, `dashboardLeadsBase.forEach` ou `dashboardBudgetsBase.forEach`.
+
 ## 2026-09-09 — Claude (via Cowork) — Vínculo automático orçamento↔lead: medido, reprovado e NÃO construído
 
 **O quê:** um aviso calculado no topo da sub-aba Mídia paga. Arquivo: `frontend/src/App.js`. Mais importante que o código é o que foi **decidido não construir**, e por quê.
