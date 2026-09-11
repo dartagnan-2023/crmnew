@@ -202,9 +202,21 @@ const PISTAS_DE_CANAL = [
   { canal: 'E-mail Marketing', padrao: /\be-?mail\s+marketing\b/i },
 ];
 
+const canalExiste = (channelId, channels = []) => {
+  const id = String(channelId || '').trim();
+  if (!id) return false;
+  return channels.some((item) => String(item?.id || '').trim() === id);
+};
+
 const inferirCanalDoLead = (lead, channels = []) => {
-  if (String(lead?.channel_id || '').trim()) return null;
+  // Nome preenchido manda: nao se encosta no que a pessoa escreveu.
   if (String(lead?.channel_name || '').trim()) return null;
+  // Id que aponta para canal cadastrado tambem manda.
+  if (canalExiste(lead?.channel_id, channels)) return null;
+  // Sobra o caso que gerou isto: id ORFAO, apontando para canal que nao existe
+  // mais no cadastro. Na tela vira "-" igual a campo vazio, e e tratado como
+  // vazio aqui. Medido em 11/09/2026: 38 leads com channel_id = 3, e o canal 3
+  // nao existe na aba channels.
 
   const bruto = [lead?.source, lead?.campaign, lead?.notes]
     .map((valor) => String(valor || ''))
@@ -4208,9 +4220,12 @@ app.post('/api/leads/normalizar-canal', authMiddleware, async (req, res) => {
     const alvos = [];
     const semPista = [];
     rows.forEach((row, i) => {
-      if (pega(row, idxCanalId).trim() || pega(row, idxCanalNome).trim()) return;
+      const canalIdAtual = pega(row, idxCanalId).trim();
+      const canalNomeAtual = pega(row, idxCanalNome).trim();
+      if (canalNomeAtual) return;
+      if (canalExiste(canalIdAtual, channels)) return;
       const lead = {
-        channel_id: '',
+        channel_id: canalIdAtual,
         channel_name: '',
         source: pega(row, idxSource),
         campaign: pega(row, idxCampaign),
@@ -4222,6 +4237,7 @@ app.post('/api/leads/normalizar-canal', authMiddleware, async (req, res) => {
         id: pega(row, idxId),
         nome: pega(row, idxNome).slice(0, 60),
         source: lead.source.slice(0, 40),
+        canal_id_antigo: canalIdAtual || '(vazio)',
       };
       if (!canal) {
         semPista.push(item);
