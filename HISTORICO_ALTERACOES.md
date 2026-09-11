@@ -15,6 +15,57 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-11 — Claude (via Cowork) — Dashboard: indicadores de leads quebrados por origem (PRONTO, NÃO PUBLICADO)
+
+**Situação:** alteração implementada, testada e validada. **Não foi para produção** — a pedido do Osnil, fica esperando a equipe terminar de mexer no CRM. Produção segue no commit da reversão de 10/09.
+
+**O quê:** novo bloco "Por origem" no Dashboard, aba Leads, logo abaixo da primeira fileira de cartões. Mostra os mesmos indicadores dos cartões separados em duas colunas — **Demanda de entrada** e **Prospecção e carteira** — para Leads, Ganhos, Taxa de conversão, Valor convertido, Em negociação e Perdidos. Arquivo: `frontend/src/App.js`.
+
+**Nenhum lead é excluído de nenhum indicador.** Os cartões de cima continuam idênticos, com a base inteira. O bloco novo só separa.
+
+### CORREÇÃO DE LEITURA — a entrada de 10/09 está errada em um ponto
+
+A entrada de 10/09 afirma que os 1.700 leads de `Ferramenta de Captura` + `Planilha Victor` "não são demanda" e que quase ninguém os trabalhou. **Isso está errado e a culpa é minha.** Eu baseei a afirmação no campo `interactions_count`, que marca zero nesses registros — mas esse campo só conta o histórico de interações da tela que construímos em 09/09, que a equipe não usa. A Inês registra o trabalho dela em **status e anotação**.
+
+Medido nos campos certos, na base de produção em 11/09/2026 (2.200 leads):
+
+| origem | total | fora de "novo" | com anotação | 1º contato | ganhos |
+|---|---|---|---|---|---|
+| Ferramenta de Captura | 1.385 | **1.016 (73%)** | **1.176** | 749 | 19 |
+| Planilha Victor | 315 | 109 (35%) | **0** | 147 | 0 |
+| Demanda de entrada | 500 | 474 (95%) | 478 | 471 | 10 |
+
+A Ferramenta de Captura **é carteira trabalhada**, não lista morta. E a planilha do Victor é a carteira de clientes dele, subida para ser trabalhada depois que ele saiu — o CRM é hoje o único ponto de contato dessa gente. Chamar as duas de "legado descartável" foi impreciso e ofende quem trabalhou a base.
+
+### Por que quebrar em vez de excluir
+
+Duas medições mataram a ideia original de tirar os 1.700 dos indicadores:
+
+1. **Não conserta o ticket médio.** Com tudo: R$ 4.419. Sem a planilha: R$ 4.475. Sem planilha e sem captura: R$ 4.498. Mexe 1,8% — porque o ticket roda sobre quem tem valor, e o bolo de 1.700 tem valor em 2 registros.
+2. **Custa caro.** Excluir derrubaria os ganhos de 29 para 10 e os clientes de 116 para 14. Saem da conta Multipack, STEMAC, Kopron e Indiana Máquinas — clientes reais que entraram pela captura.
+
+O que restava de verdadeiro: prospecção ativa e demanda de entrada convertem em ritmos diferentes, e somar as duas num percentual só produz uma média que esconde as duas. Daí a quebra.
+
+### Como a origem é decidida
+
+`FONTES_DE_PROSPECCAO_ATIVA = ['ferramenta de captura', 'planilha victor']` (comparação sem acento e sem caixa, via `normalizeOptionValue`, sobre `source` com `channel_name` como reserva). O que **não** estiver na lista conta como demanda de entrada.
+
+A direção é proposital: **origem nova de entrada passa a contar sozinha**, sem ninguém precisar cadastrar nada. O preço é o inverso — se um dia subir **outra lista de prospecção**, ela precisa ser somada à constante à mão, senão entra como demanda. Está escrito no comentário em cima da constante.
+
+**Impacto:** nenhum número existente muda. O bloco é aditivo — três inserções em `App.js` (a constante + classificador em escopo de módulo, o memo `dashboardStatsPorOrigem`, e o bloco visual). Nenhum arquivo de backend tocado. Segue o filtro de período e todos os outros filtros do Dashboard, porque parte de `dashboardFilteredLeads`.
+
+**Rollback:** remover as três inserções. Não há dado gravado, migração nem coluna nova — é só leitura.
+
+**Validação:**
+
+- Sandbox com origem misturada de propósito (10 Ferramenta de Captura, 5 Planilha Victor, 8 Meta Ads). Esperado x obtido, **bateu exato**: demanda 8 leads / 3 ganhos / 38% / R$ 6.000 / R$ 3.000 em negociação / 0 perdidos; prospecção 15 / 2 / 13% / R$ 1.000 / R$ 0 / 3 perdidos.
+- **As duas colunas somam o total dos cartões de cima:** 8 + 15 = 23 leads, 3 + 2 = 5 ganhos, R$ 6.000 + R$ 1.000 = R$ 7.000. Os cartões continuam mostrando 23, 22% e R$ 7.000.
+- Zero erro de console nos dois temas.
+- Tema escuro conferido nas cores reais: fundo rgb(26,31,37), número rgb(231,236,241), rótulo rgb(135,148,161) — contraste ~5:1, sem roxo.
+- `npm run build` com saída 0 e os mesmos 4 avisos pré-existentes. Bundle `main.f7873e3c.js`, +523 B.
+
+---
+
 ## 2026-09-10 — Claude (via Cowork) — REVERSÃO: os gráficos de evolução voltam a obedecer o filtro de período
 
 **O quê:** desfeita a mudança de 09/09 que fazia os seis gráficos de evolução mensal ignorarem o recorte de data. Arquivo: `frontend/src/App.js`.
@@ -24,6 +75,8 @@ Ordem: mais recente primeiro.
 A mudança de 09/09 resolvia um problema real — quatro meses zerados no padrão de 30 dias — mas trouxe um problema pior, que só apareceu quando se investigou de onde vem a base de leads.
 
 **Medido em 10/09/2026:** 1.700 dos 2.192 leads — **78% da base** — vêm de duas origens que são a mesma coisa: `Ferramenta de Captura` (1.385) e `Planilha Victor` (315). São a exportação em Excel de um vendedor que **não trabalha mais na empresa**, importada entre janeiro e julho de 2026. Não é demanda: dos 1.385 da "Ferramenta de Captura", **1 tem valor preenchido e 2 têm interação registrada**.
+
+> **CORRIGIDO EM 11/09/2026:** esta leitura está errada. O campo `interactions_count` não mede o trabalho da equipe — 1.016 desses 1.385 já saíram de "novo" e 1.176 têm anotação escrita. Ver a entrada de 11/09.
 
 Ao ignorar o recorte de data, os gráficos passaram a somar essa base. O resultado, medido:
 
