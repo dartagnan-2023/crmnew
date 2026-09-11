@@ -15,6 +15,20 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-11 — Claude (via Cowork) — EXECUTADO: canal corrigido em 40 leads na produção
+
+**O quê:** rodada a rota `POST /api/leads/normalizar-canal` na base de produção, depois do deploy #214. Simulação primeiro, gravação com `esperado: 40` conferido na hora.
+
+**Resultado:** 80 células escritas, só nas colunas L (`channel_id`) e M (`channel_name`). 38 leads para Meta Ads, 2 para Planilha Victor. Quatro sem prova ficaram em branco: DAC PAINEIS, Rodolfo, OMEGATEC e Renan.
+
+**Conferido depois:** leads sem canal caíram de 44 para 4; Meta Ads foi de 330 para 368; Planilha Victor de 315 para 317; rodando a rota de novo, 0 com prova.
+
+**Detalhe dos IDs e regra de rollback:** `correcao-canal-2026-09-11.md`.
+
+**Histórico de deploy desta entrega:** #212 falhou no passo "Aguardar SSH do VPS responder" (quarta falha da porta 22 em pouco mais de uma semana) e o deploy foi pulado; #213 passou e levou junto o que estava em `main`; #214 subiu a correção do id órfão. Produção conferida no #214.
+
+---
+
 ## 2026-09-11 — Claude (via Cowork) — Canal deduzido da prova quando a integração não manda
 
 **O quê:** duas coisas em `backend/server.js`.
@@ -32,6 +46,18 @@ Ordem: mais recente primeiro.
 | Backfill Manual - 01/06/2026 | 6 | mesma anotação de origem |
 | `planilha_victor` (minúsculo) | 2 | o próprio source/campanha |
 | sem pista nenhuma | 4 | — |
+
+### CORREÇÃO NO MESMO DIA — a causa era outra, e maior
+
+O diagnóstico acima está incompleto. Ao rodar a simulação em produção, a rota achou **6** leads sem canal, não 44. Investigando a diferença:
+
+**38 dos 44 têm `channel_id = 3`, e o canal 3 não existe na aba `channels`.** Os canais cadastrados hoje são 1, 4, 6, 7, 8, 9, 10, 11, 12, 13 e 14. O id 3 é órfão — provavelmente um canal antigo de Meta (Instagram Ads ou Facebook Ads) que foi apagado do cadastro numa consolidação anterior, deixando os leads apontando para o vazio.
+
+Na leitura, `hydrateLeads` resolve o nome do canal pelo id (`channels.find(...)`); id órfão devolve `undefined` e o nome sai em branco. Na tela vira "-", idêntico a campo vazio. Por isso a contagem batia de fora e não batia por dentro.
+
+Ou seja: **a integração manda sim um canal — manda um id que aponta para canal que não existe mais.** E continua mandando: leads novos do ADS chegam com `channel_id = 3`.
+
+**O que mudou no código por causa disso:** a dedução passa a tratar id órfão como campo vazio. Um id que resolve para canal cadastrado continua mandando e não é tocado; nome de canal preenchido continua mandando. O relatório da rota passa a devolver `canal_id_antigo` em cada linha, para o conserto ficar rastreável.
 
 ### As três travas da dedução
 
@@ -62,6 +88,7 @@ Segundo efeito, menor: como o `source` exibido é derivado do canal na leitura, 
 - Lead novo do ADS via API: entrou com `channel_name: Meta Ads`, `temperature: quente`, `sla_minutes: 30`.
 - Lead novo sem prova: canal vazio, morno, 240 min — igual a antes.
 - Lead novo com canal informado e anotação de Meta: manteve o canal informado.
+- **Órfão (segunda rodada):** lead com `channel_id = 3` e prova na anotação virou Meta Ads (id 3 → 11); lead com `channel_id = 3` e sem prova ficou em branco; lead novo criado com `channel_id = 3` entrou já corrigido como Meta Ads, quente, 30 min; lead com `channel_id = 10` (válido) e anotação de Meta na frente não foi tocado.
 
 ---
 
