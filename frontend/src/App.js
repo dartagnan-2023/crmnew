@@ -917,6 +917,33 @@ const normalizeOptionValue = (value) =>
     .trim()
     .toLowerCase();
 
+// ---------------------------------------------------------------------------
+// Origem do lead: prospeccao ativa x demanda de entrada.
+//
+// A BHS trabalha duas frentes que convertem em ritmos diferentes e por isso nao
+// podem ser somadas dentro de um mesmo percentual:
+//   - prospeccao ativa: listas que a propria BHS subiu para a equipe trabalhar
+//     (a Ferramenta de Captura e a carteira importada do Victor);
+//   - demanda de entrada: quem procurou a BHS (Meta Ads, Instagram, site,
+//     e-mail marketing, prospeccao manual e qualquer origem nova).
+//
+// A lista abaixo nomeia SO a prospeccao; o que nao estiver nela conta como
+// demanda de entrada. Feito nessa direcao de proposito: uma origem nova de
+// entrada passa a contar sozinha, sem ninguem precisar cadastrar nada. Se um
+// dia subir OUTRA lista de prospeccao, ela precisa ser somada aqui a mao.
+//
+// Medido na base de producao em 11/09/2026: 1.385 leads da Ferramenta de
+// Captura (1.016 ja fora de "novo", 1.176 com anotacao escrita) e 315 da
+// carteira do Victor (206 ainda em "novo", nenhuma anotacao) contra 500 de
+// demanda de entrada. As duas frentes sao trabalhadas; a classificacao existe
+// para comparar uma com a outra, e NAO exclui nenhum lead de nenhum indicador.
+const FONTES_DE_PROSPECCAO_ATIVA = ['ferramenta de captura', 'planilha victor'];
+
+const classificarOrigemDoLead = (lead) => {
+  const fonte = normalizeOptionValue(lead?.source || lead?.channel_name || '');
+  return FONTES_DE_PROSPECCAO_ATIVA.includes(fonte) ? 'prospeccao' : 'demanda';
+};
+
 const containsNormalized = (items, option) => {
   const normalizedOption = normalizeOptionValue(option);
   return items.some((item) => normalizeOptionValue(item) === normalizedOption);
@@ -2178,6 +2205,22 @@ const App = () => {
   }, [dashboardLeadsBase, dashboardPeriod, dashboardStartDate, dashboardEndDate]);
 
   const dashboardLocalStats = useMemo(() => buildStatsSummary(dashboardFilteredLeads), [dashboardFilteredLeads]);
+
+  // Os mesmos numeros dos cartoes acima, separados por origem. Nao substitui e
+  // nao esconde nada: o total continua sendo o total. Serve para nao comparar
+  // prospeccao ativa com quem levantou a mao dentro de um percentual so.
+  const dashboardStatsPorOrigem = useMemo(() => {
+    const demanda = [];
+    const prospeccao = [];
+    dashboardFilteredLeads.forEach((lead) => {
+      if (classificarOrigemDoLead(lead) === 'prospeccao') prospeccao.push(lead);
+      else demanda.push(lead);
+    });
+    return {
+      demanda: buildStatsSummary(demanda),
+      prospeccao: buildStatsSummary(prospeccao),
+    };
+  }, [dashboardFilteredLeads]);
 
   const dashboardData = useMemo(() => {
     const channelMap = new Map();
@@ -5117,6 +5160,42 @@ const App = () => {
               <StatCard label="Taxa de Conversão" value={`${dashboardLocalStats.taxaConversao || 0}%`} helper={`${dashboardLocalStats.ganhos || 0} ganhos`} tone="blue" />
               <StatCard label="Valor Convertido" value={formatCurrencyBR(dashboardLocalStats.valorTotal || 0)} helper={`Ticket médio ${formatCurrencyBR(dashboardData.avgTicket || 0)}`} tone="emerald" />
               <StatCard label="Pipeline Ativo" value={formatCurrencyBR(dashboardLocalStats.valorNegociacao || 0)} helper={`${dashboardLocalStats.qtdNegociacao || 0} em negociação`} tone="amber" />
+            </div>
+            <div className={UI_CARD}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className={UI_EYEBROW}>Por origem</p>
+                <p className="text-xs text-ink-faint">Os mesmos números dos cartões acima, separados — nenhum lead sai da conta.</p>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-ink-faint">
+                      <th className="pb-2 font-semibold">Indicador</th>
+                      <th className="pb-2 text-right font-semibold">Demanda de entrada</th>
+                      <th className="pb-2 text-right font-semibold">Prospecção e carteira</th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums">
+                    {[
+                      ['Leads', (s) => (s.total || 0).toLocaleString('pt-BR')],
+                      ['Ganhos', (s) => (s.ganhos || 0).toLocaleString('pt-BR')],
+                      ['Taxa de conversão', (s) => `${s.taxaConversao || 0}%`],
+                      ['Valor convertido', (s) => formatCurrencyBR(s.valorTotal || 0)],
+                      ['Em negociação', (s) => formatCurrencyBR(s.valorNegociacao || 0)],
+                      ['Perdidos', (s) => (s.perdidos || 0).toLocaleString('pt-BR')],
+                    ].map(([rotulo, formatar]) => (
+                      <tr key={rotulo} className="border-t border-line">
+                        <td className="py-2 pr-3 text-ink-faint">{rotulo}</td>
+                        <td className="py-2 text-right font-semibold text-ink">{formatar(dashboardStatsPorOrigem.demanda)}</td>
+                        <td className="py-2 text-right font-semibold text-ink">{formatar(dashboardStatsPorOrigem.prospeccao)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-ink-faint">
+                Prospecção e carteira = as listas que a BHS subiu para a equipe trabalhar (Ferramenta de Captura e a carteira importada do Victor). Demanda de entrada = todo o resto, quem procurou a BHS. As duas seguem o filtro de período escolhido acima.
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className={UI_CARD}>
