@@ -176,6 +176,54 @@ const deriveLeadSource = (lead, channels = []) => {
   return '';
 };
 
+// ---------------------------------------------------------------------------
+// Canal deduzido da prova que o proprio lead traz.
+//
+// A integracao externa que cadastra os leads de anuncio (POST /api/leads com
+// chave de API) manda o `source` ("ADS - 11/09/2026") e escreve a origem na
+// anotacao ("Origem: Instagram/Facebook Ad (Click-to-WhatsApp)"), mas NAO
+// manda canal. O lead entrava com o campo vazio e sumia de todo recorte por
+// canal. Medido na producao em 11/09/2026: 44 leads sem canal, 38 deles com a
+// origem escrita na propria anotacao.
+//
+// Tres travas, de proposito:
+//   1. so preenche quando o registro traz a prova — sem prova, fica vazio;
+//   2. so usa canal que JA existe cadastrado — nao cria canal sozinho;
+//   3. nunca toca em canal que ja esteja preenchido.
+// "prospeccao de internet google" numa anotacao NAO vira Google Ads: o padrao
+// exige "google ads" escrito, porque busca organica e anuncio sao coisas
+// diferentes e chutar aqui vira numero errado em relatorio.
+const PISTAS_DE_CANAL = [
+  { canal: 'Meta Ads', padrao: /(instagram\s*\/\s*facebook|click[\s-]?to[\s-]?whats|facebook\s*ads?\b|instagram\s*ads?\b|\bmeta\s*ads?\b)/i },
+  { canal: 'Google Ads', padrao: /\bgoogle\s*ads\b/i },
+  { canal: 'LinkedIn Ads', padrao: /\blinkedin\s*ads\b/i },
+  { canal: 'Planilha Victor', padrao: /planilha[\s_-]*victor/i },
+  { canal: 'Ferramenta de Captura', padrao: /ferramenta\s+de\s+captura/i },
+  { canal: 'E-mail Marketing', padrao: /\be-?mail\s+marketing\b/i },
+];
+
+const inferirCanalDoLead = (lead, channels = []) => {
+  if (String(lead?.channel_id || '').trim()) return null;
+  if (String(lead?.channel_name || '').trim()) return null;
+
+  const bruto = [lead?.source, lead?.campaign, lead?.notes]
+    .map((valor) => String(valor || ''))
+    .join(' \n ');
+  if (!bruto.trim()) return null;
+  const semAcento = normalizeName(bruto);
+
+  const achado = PISTAS_DE_CANAL.find(
+    ({ padrao }) => padrao.test(bruto) || padrao.test(semAcento)
+  );
+  if (!achado) return null;
+
+  const canal = channels.find(
+    (item) => normalizeName(item?.name) === normalizeName(achado.canal)
+  );
+  if (!canal) return null;
+  return { id: String(canal.id || ''), name: canal.name };
+};
+
 const TEMPERATURE_ORDER = {
   frio: 0,
   morno: 1,
@@ -4124,6 +4172,119 @@ app.post('/api/leads/normalizar-status', authMiddleware, async (req, res) => {
   });
 });
 
+// Preenche o canal dos leads que estao com ele vazio, usando a mesma deducao
+// por prova de `inferirCanalDoLead`. Escreve SO as duas colunas de canal, uma
+// celula por vez. Nunca toca em lead que ja tem canal. Sem `aplicar`, e
+// simulacao: devolve o que faria e nao grava nada.
+app.post('/api/leads/normalizar-canal', authMiddleware, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
+
+  const aplicar = req.body?.aplicar === true;
+  const esperado = Number(req.body?.esperado);
+
+  return withTableLock('leads', async () => {
+    const [{ headers, rows }, { items: channels }] = await Promise.all([
+      readSheet(SHEET_LEADS, true),
+      loadTable('channels', true),
+    ]);
+    if (!headers.length) return res.status(500).json({ error: 'Planilha de leads sem cabecalho' });
+
+    const acha = (nome) => headers.findIndex((h) => normalizeName(h) === nome);
+    const idxCanalId = acha('channel_id');
+    const idxCanalNome = acha('channel_name');
+    if (idxCanalId === -1 || idxCanalNome === -1) {
+      return res.status(500).json({ error: 'Colunas de canal nao encontradas na planilha' });
+    }
+    const idxId = acha('id');
+    const idxNome = acha('name');
+    const idxSource = acha('source');
+    const idxCampaign = acha('campaign');
+    const idxNotes = acha('notes');
+    const colId = columnLetter(idxCanalId);
+    const colNome = columnLetter(idxCanalNome);
+
+    const pega = (row, idx) => (idx === -1 ? '' : String(row[headers[idx]] ?? ''));
+
+    const alvos = [];
+    const semPista = [];
+    rows.forEach((row, i) => {
+      if (pega(row, idxCanalId).trim() || pega(row, idxCanalNome).trim()) return;
+      const lead = {
+        channel_id: '',
+        channel_name: '',
+        source: pega(row, idxSource),
+        campaign: pega(row, idxCampaign),
+        notes: pega(row, idxNotes),
+      };
+      const canal = inferirCanalDoLead(lead, channels);
+      const item = {
+        linha: i + 2, // a linha 1 e o cabecalho
+        id: pega(row, idxId),
+        nome: pega(row, idxNome).slice(0, 60),
+        source: lead.source.slice(0, 40),
+      };
+      if (!canal) {
+        semPista.push(item);
+        return;
+      }
+      alvos.push({ ...item, canal_id: canal.id, canal_nome: canal.name });
+    });
+
+    const porCanal = {};
+    alvos.forEach((item) => {
+      porCanal[item.canal_nome] = (porCanal[item.canal_nome] || 0) + 1;
+    });
+
+    const relatorio = {
+      colunas: `${colId} (${headers[idxCanalId]}) e ${colNome} (${headers[idxCanalNome]})`,
+      total_de_linhas_na_planilha: rows.length,
+      sem_canal: alvos.length + semPista.length,
+      com_prova: alvos.length,
+      sem_prova: semPista.length,
+      por_canal: porCanal,
+      ids: alvos.map((item) => item.id),
+      amostra: alvos.slice(0, 10),
+      deixados_em_branco: semPista,
+    };
+
+    if (alvos.length > LIMITE_LOTE_STATUS) {
+      return res.status(400).json({
+        error: `Lote grande demais: ${alvos.length} linhas, limite ${LIMITE_LOTE_STATUS}. Nada foi gravado.`,
+        ...relatorio,
+      });
+    }
+
+    if (!aplicar) {
+      return res.json({ simulacao: true, gravado: false, ...relatorio });
+    }
+
+    if (!Number.isInteger(esperado) || esperado !== alvos.length) {
+      return res.status(409).json({
+        error: `Para gravar, envie "esperado" igual ao total com prova agora (${alvos.length}). Recebido: ${JSON.stringify(req.body?.esperado)}. Nada foi gravado.`,
+        ...relatorio,
+      });
+    }
+
+    if (!alvos.length) {
+      return res.json({ simulacao: false, gravado: false, ...relatorio });
+    }
+
+    const data = [];
+    alvos.forEach((item) => {
+      data.push({ range: `${SHEET_LEADS}!${colId}${item.linha}`, values: [[item.canal_id]] });
+      data.push({ range: `${SHEET_LEADS}!${colNome}${item.linha}`, values: [[item.canal_nome]] });
+    });
+
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: { valueInputOption: 'RAW', data },
+    });
+    delete cache[SHEET_LEADS];
+
+    return res.json({ simulacao: false, gravado: true, celulas_gravadas: data.length, ...relatorio });
+  });
+});
+
 app.post('/api/leads/recalculate-automation', authMiddleware, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Apenas admin' });
 
@@ -4221,6 +4382,18 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       }
     }
     const channelName = req.body.channel_name || resolveChannelName({ channel_id }, channels) || '';
+    // Canal vazio: tenta deduzir da prova que veio no proprio lead. Se nao
+    // houver prova, segue vazio — nao se inventa canal.
+    let canalId = channel_id;
+    let canalNome = channelName;
+    const canalDeduzido = inferirCanalDoLead(
+      { channel_id, channel_name: channelName, source: req.body.source, campaign, notes },
+      channels
+    );
+    if (canalDeduzido) {
+      canalId = canalDeduzido.id;
+      canalNome = canalDeduzido.name;
+    }
     const now = new Date().toISOString();
 
     const normalizedPhone = normalizePhone(phone);
@@ -4250,14 +4423,14 @@ app.post('/api/leads', apiKeyLeadsMiddleware, async (req, res) => {
       owner: ownerUser?.name || owner || '',
       ownerId: ownerUser?.id || ownerId || '',
       campaign,
-      channel_id,
-      channel_name: channelName,
+      channel_id: canalId,
+      channel_name: canalNome,
       value: parseMoneyValue(value),
       first_contact: first_contact || '',
       next_contact: next_contact || '',
       notes: notes || '',
       operator_notes: operator_notes || '',
-      source: req.body.source || deriveLeadSource({ channel_id, channel_name: channelName, campaign }, channels),
+      source: req.body.source || deriveLeadSource({ channel_id: canalId, channel_name: canalNome, campaign }, channels),
       interactions_count: '0',
       last_interaction_at: '',
       last_interaction_channel: '',
