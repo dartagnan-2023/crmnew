@@ -15,6 +15,56 @@ Ordem: mais recente primeiro.
 
 ---
 
+## 2026-09-11 — Claude (via Cowork) — Canal deduzido da prova quando a integração não manda
+
+**O quê:** duas coisas em `backend/server.js`.
+
+1. **Para frente:** ao criar lead (`POST /api/leads`), se o canal vier vazio, o CRM deduz o canal da prova que veio no próprio registro — a anotação de origem, o `source` e a campanha — e preenche. Sem prova, fica vazio.
+2. **Para trás:** nova rota admin `POST /api/leads/normalizar-canal`, que aplica a mesma dedução nos leads que já estão na base com o canal em branco.
+
+**Por quê:** os leads de anúncio são criados por uma integração externa (chave de API), que manda o `source` ("ADS - 11/09/2026") e escreve a origem na anotação ("Origem: Instagram/Facebook Ad (Click-to-WhatsApp)"), mas **não manda canal**. O lead entrava com o campo vazio e sumia de todo recorte por canal — sem parâmetro nenhum para medir o anúncio.
+
+**Medido na produção em 11/09/2026** (2.200 leads): 44 sem canal.
+
+| grupo | qtd | prova |
+|---|---|---|
+| ADS de 04 a 11/09 | 32 | "Origem: Instagram/Facebook Ad (Click-to-WhatsApp)" na anotação |
+| Backfill Manual - 01/06/2026 | 6 | mesma anotação de origem |
+| `planilha_victor` (minúsculo) | 2 | o próprio source/campanha |
+| sem pista nenhuma | 4 | — |
+
+### As três travas da dedução
+
+1. **Só preenche com prova no próprio registro.** Sem prova, fica vazio — não se inventa canal.
+2. **Só usa canal que já existe cadastrado.** A função não cria canal sozinha.
+3. **Nunca toca em canal preenchido.** O que a pessoa pôs, fica.
+
+Um caso que decidiu o desenho: a anotação do lead OMEGATEC diz *"prospecção de internet google"*. O padrão do Google Ads exige `google ads` escrito, então esse lead **não** virou Google Ads — busca orgânica e anúncio são coisas diferentes, e chutar aqui viraria número errado em relatório. Ele está entre os 4 que ficam em branco.
+
+### Efeito colateral, aceito com decisão do Osnil
+
+Preencher o canal como Meta Ads aciona a regra de temperatura que já existia: o lead de anúncio passa a entrar como **quente (SLA de 30 min)** em vez de morno (4 h). Isso foi levantado **antes** de codar e o Osnil escolheu deixar virar quente — lead de clique-para-WhatsApp precisa de resposta na hora. Vale só para leads novos; os corrigidos mantêm a temperatura que já tinham.
+
+Segundo efeito, menor: como o `source` exibido é derivado do canal na leitura, o lead do ADS passa a aparecer com origem **"Meta Ads"** em vez de "ADS - 11/09/2026". **A data não se perde** — ela continua no campo campanha, que já trazia o mesmo texto.
+
+**Impacto:** a criação de lead ganha uma dedução a mais quando o canal vem vazio; nenhum caminho existente muda quando o canal vem preenchido. A rota nova é de leitura e de escrita restrita a duas colunas, e só admin chama.
+
+**Rollback:** remover as três inserções em `server.js`. Para desfazer dados, a resposta da rota devolve os IDs e as linhas gravadas — dá para limpar as duas colunas dessas linhas.
+
+**Validação (sandbox com 7 leads montados para o caso):**
+
+- Simulação antes de gravar: 6 sem canal, 4 com prova (3 Meta Ads + 1 Planilha Victor), 2 sem prova, listados nominalmente.
+- Guarda de segurança: `esperado: 99` recusado com HTTP 409 e **nada gravado**.
+- Gravação com `esperado: 4`: 8 células escritas, só as duas colunas de canal.
+- Lead que já tinha canal (`Site - Contato`) com anotação de Meta na frente: **não foi tocado**.
+- "prospecção de internet google": ficou em branco, como projetado.
+- Rodando a rota de novo: 0 com prova. Idempotente.
+- Lead novo do ADS via API: entrou com `channel_name: Meta Ads`, `temperature: quente`, `sla_minutes: 30`.
+- Lead novo sem prova: canal vazio, morno, 240 min — igual a antes.
+- Lead novo com canal informado e anotação de Meta: manteve o canal informado.
+
+---
+
 ## 2026-09-11 — Claude (via Cowork) — Dashboard: indicadores de leads quebrados por origem (PRONTO, NÃO PUBLICADO)
 
 **Situação:** alteração implementada, testada e validada. **Não foi para produção** — a pedido do Osnil, fica esperando a equipe terminar de mexer no CRM. Produção segue no commit da reversão de 10/09.
